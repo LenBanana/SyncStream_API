@@ -7,7 +7,8 @@ namespace SyncStreamAPI.Models
 {
     public class Server
     {
-        public double currenttime { get; set; }
+        public double _currenttime { get; set; }
+        public double currenttime { get { return (ytURLs.Count > 0 ? _currenttime : 0); } set { _currenttime = value; } }
         public bool isplaying { get; set; }
         public string title { get; set; }
         YTVideo _ytURL { get; set; }
