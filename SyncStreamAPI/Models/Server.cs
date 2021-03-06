@@ -10,7 +10,8 @@ namespace SyncStreamAPI.Models
         public double currenttime { get; set; }
         public bool isplaying { get; set; }
         public string title { get; set; }
-        public YTVideo ytURL { get; set; }
+        YTVideo _ytURL { get; set; }
+        public YTVideo ytURL { get { return _ytURL; } set { _ytURL = value; currenttime = 0; } }
         public List<YTVideo> ytURLs { get; set; } = new List<YTVideo>();
         public List<Member> members { get; set; } = new List<Member>();
         public List<Member> bannedMembers { get; set; } = new List<Member>();
