@@ -116,7 +116,10 @@ namespace SyncStreamAPI.Hubs
         {
             if (url.Contains("twitch.tv"))
             {
-                return url.Split('/').Last();
+                if ((url.ToLower().StartsWith("http") && url.Count(x => x == '/') == 3) || url.Count(x => x == '/') == 1)
+                    return url.Split('/').Last();
+                else
+                    return "v" + url.Split('/').Last();
             }
             string title = "";
             Uri uri = new Uri(url);
@@ -125,36 +128,38 @@ namespace SyncStreamAPI.Hubs
                 videokey = System.Web.HttpUtility.ParseQueryString(uri.Query).Get("list");
 
 
-            try
+            if (title.Length == 0)
             {
-                string infoUrl = "http://youtube.com/get_video_info?video_id=" + videokey;
-                using (WebClient client = new WebClient())
+                try
                 {
-                    string source = "";
-                    int i = 0;
-                    while ((title.Length == 0 || title.ToLower().Trim() == "youtube") && i < 10)
+                    string infoUrl = "http://youtube.com/get_video_info?video_id=" + videokey;
+                    using (WebClient client = new WebClient())
                     {
-                        source = client.DownloadString(infoUrl);
-                        if (source.Length > 0)
+                        string source = "";
+                        int i = 0;
+                        while ((title.Length == 0 || title.ToLower().Trim() == "youtube") && i < 10)
                         {
-                            List<string> attributes = source.Split('&').Select(x => HttpUtility.UrlDecode(x)).ToList();
-                            int idx = attributes.FindIndex(x => x.StartsWith("player_response="));
-                            if (idx != -1)
+                            source = client.DownloadString(infoUrl);
+                            if (source.Length > 0)
                             {
-                                YtVideoInfo videoInfo = new YtVideoInfo().FromJson(attributes[idx].Split(new[] { '=' }, 2)[1]);
-                                return videoInfo.VideoDetails.Title + " - " + videoInfo.VideoDetails.Author;
+                                List<string> attributes = source.Split('&').Select(x => HttpUtility.UrlDecode(x)).ToList();
+                                int idx = attributes.FindIndex(x => x.StartsWith("player_response="));
+                                if (idx != -1)
+                                {
+                                    YtVideoInfo videoInfo = new YtVideoInfo().FromJson(attributes[idx].Split(new[] { '=' }, 2)[1]);
+                                    return videoInfo.VideoDetails.Title + " - " + videoInfo.VideoDetails.Author;
+                                }
                             }
+                            await Task.Delay(50);
+                            i++;
                         }
-                        await Task.Delay(50);
-                        i++;
                     }
                 }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-            }
-
             if (title.Length == 0)
             {
                 try
@@ -252,7 +257,7 @@ namespace SyncStreamAPI.Hubs
             if (room.server.ytURL.url.Length == 0 || room.server.ytURL.ended == true)
             {
                 room.server.ytURL = key;
-                await Clients.Group(UniqueId).SendAsync("videoupdate", key); ;
+                await Clients.Group(UniqueId).SendAsync("videoupdate", key);
             }
             await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.ytURLs);
             await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
@@ -337,7 +342,10 @@ namespace SyncStreamAPI.Hubs
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
-            await Clients.Group(UniqueId).SendAsync("timeupdate", time);
+            if (room.server.ytURL.url.Contains("twitch.tv"))
+                await Clients.Group(UniqueId).SendAsync("twitchTimeUpdate", time);
+            else
+                await Clients.Group(UniqueId).SendAsync("timeupdate", time);
             room.server.currenttime = time;
         }
 
@@ -347,8 +355,12 @@ namespace SyncStreamAPI.Hubs
             if (room == null)
                 return;
             lastPlayPause = DateTime.Now;
-            await Clients.Group(UniqueId).SendAsync("isplayingupdate", isplaying);
             room.server.isplaying = isplaying;
+            if (room.server.ytURL.url.Contains("twitch.tv"))
+                await Clients.Group(UniqueId).SendAsync("twitchPlaying", isplaying);
+            else
+                await Clients.Group(UniqueId).SendAsync("isplayingupdate", isplaying);
+
             await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
         }
 
