@@ -15,6 +15,7 @@ namespace SyncStreamAPI.Models
         public bool ishost { get; set; }
         public bool kick { get; set; }
         private int ConsecutiveAFK { get; set; }
+        public List<Drawing> drawings { get; set; } = new List<Drawing>();
 
         public Member()
         {

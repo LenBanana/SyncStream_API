@@ -560,10 +560,11 @@ namespace SyncStreamAPI.Hubs
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
-            if (room.server.drawings.Count > 0)
+            var drawings = room.server.members.SelectMany(x => x.drawings).ToList();
+            if (drawings.Count > 0)
             {
-                room.server.drawings.ForEach(x => x.Uuid = room.server.drawings.First().Uuid);
-                await Clients.Caller.SendAsync("whiteboardjoin", room.server.drawings);
+                drawings.ForEach(x => x.Uuid = drawings.First().Uuid);
+                await Clients.Caller.SendAsync("whiteboardjoin", drawings);
             }
         }
 
@@ -572,7 +573,7 @@ namespace SyncStreamAPI.Hubs
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
-            room.server.drawings.AddRange(updates);
+            room.server.members.First(x => x.ip == Context.ConnectionId).drawings.AddRange(updates);
             await Clients.GroupExcept(UniqueId, Context.ConnectionId).SendAsync("whiteboardupdate", updates);
         }
 
@@ -581,7 +582,7 @@ namespace SyncStreamAPI.Hubs
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
-            room.server.drawings.Clear();
+            room.server.members.ForEach(x => x.drawings.Clear());
             await Clients.GroupExcept(UniqueId, Context.ConnectionId).SendAsync("whiteboardclear", true);
         }
 
