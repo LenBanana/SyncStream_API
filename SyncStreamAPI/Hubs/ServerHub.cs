@@ -555,25 +555,40 @@ namespace SyncStreamAPI.Hubs
             }
             await Clients.Caller.SendAsync("dlUpdate" + listeningId, "Download started");
         }
-
-        public async Task SendWhiteBoardUpdate(List<object> updates, string UniqueId)
+        public async Task WhiteBoardJoin(string UniqueId)
         {
-            await Clients.All.SendAsync("whiteboardupdate", updates);
+            Room room = GetRoom(UniqueId);
+            if (room == null)
+                return;
+            await Clients.Caller.SendAsync("whiteboardjoin", room.server.drawings);
+        }
+
+        public async Task WhiteBoardUpdate(List<object> updates, string UniqueId)
+        {
+            Room room = GetRoom(UniqueId);
+            if (room == null)
+                return;
+            room.server.drawings.AddRange(updates);
+            await Clients.Group(UniqueId).SendAsync("whiteboardupdate", updates);
         }
 
         public async Task WhiteBoardClear(string UniqueId)
         {
-            await Clients.All.SendAsync("whiteboardclear");
+            Room room = GetRoom(UniqueId);
+            if (room == null)
+                return;
+            room.server.drawings.Clear();
+            await Clients.Group(UniqueId).SendAsync("whiteboardclear");
         }
 
         public async Task WhiteBoardUndo(string UniqueId, string UUID)
         {
-            await Clients.All.SendAsync("whiteboardundo", UUID);
+            await Clients.Group(UniqueId).SendAsync("whiteboardundo", UUID);
         }
 
         public async Task WhiteBoardRedo(string UniqueId, string UUID)
         {
-            await Clients.All.SendAsync("whiteboardredo", UUID);
+            await Clients.Group(UniqueId).SendAsync("whiteboardredo", UUID);
         }
     }
 }

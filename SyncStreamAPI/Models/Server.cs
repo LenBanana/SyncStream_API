@@ -17,6 +17,7 @@ namespace SyncStreamAPI.Models
         public List<Member> members { get; set; } = new List<Member>();
         public List<Member> bannedMembers { get; set; } = new List<Member>();
         public List<ChatMessage> chatmessages { get; set; } = new List<ChatMessage>();
+        public List<object> drawings { get; set; } = new List<object>();
 
         public Server()
         {
