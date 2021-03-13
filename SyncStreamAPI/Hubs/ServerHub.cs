@@ -560,7 +560,11 @@ namespace SyncStreamAPI.Hubs
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
-            await Clients.Caller.SendAsync("whiteboardjoin", room.server.drawings);
+            if (room.server.drawings.Count > 0)
+            {
+                room.server.drawings.ForEach(x => x.Uuid = room.server.drawings.First().Uuid);
+                await Clients.Caller.SendAsync("whiteboardjoin", room.server.drawings);
+            }
         }
 
         public async Task WhiteBoardUpdate(List<Drawing> updates, string UniqueId)
