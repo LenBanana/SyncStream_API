@@ -557,43 +557,78 @@ namespace SyncStreamAPI.Hubs
         }
         public async Task WhiteBoardJoin(string UniqueId)
         {
-            Room room = GetRoom(UniqueId);
-            if (room == null)
-                return;
-            var drawings = room.server.members.SelectMany(x => x.drawings).ToList();
-            if (drawings.Count > 0)
+            try
             {
-                drawings.ForEach(x => x.Uuid = drawings.First().Uuid);
-                await Clients.Caller.SendAsync("whiteboardjoin", drawings);
+                Room room = GetRoom(UniqueId);
+                if (room == null)
+                    return;
+                var drawings = room.server.members.SelectMany(x => x.drawings).ToList();
+                if (drawings.Count > 0)
+                {
+                    drawings.ForEach(x => x.Uuid = drawings.First().Uuid);
+                    await Clients.Caller.SendAsync("whiteboardjoin", drawings);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
             }
         }
 
         public async Task WhiteBoardUpdate(List<Drawing> updates, string UniqueId)
         {
-            Room room = GetRoom(UniqueId);
-            if (room == null)
-                return;
-            room.server.members.First(x => x.ip == Context.ConnectionId).drawings.AddRange(updates);
-            await Clients.GroupExcept(UniqueId, Context.ConnectionId).SendAsync("whiteboardupdate", updates);
+            try
+            {
+                Room room = GetRoom(UniqueId);
+                if (room == null)
+                    return;
+                room.server.members.First(x => x.ip == Context.ConnectionId).drawings.AddRange(updates);
+                await Clients.GroupExcept(UniqueId, Context.ConnectionId).SendAsync("whiteboardupdate", updates);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
         }
 
         public async Task WhiteBoardClear(string UniqueId)
         {
-            Room room = GetRoom(UniqueId);
-            if (room == null)
-                return;
-            room.server.members.ForEach(x => x.drawings.Clear());
-            await Clients.GroupExcept(UniqueId, Context.ConnectionId).SendAsync("whiteboardclear", true);
+            try
+            {
+                Room room = GetRoom(UniqueId);
+                if (room == null)
+                    return;
+                room.server.members.ForEach(x => x.drawings.Clear());
+                await Clients.GroupExcept(UniqueId, Context.ConnectionId).SendAsync("whiteboardclear", true);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
         }
 
         public async Task WhiteBoardUndo(string UniqueId, string UUID)
         {
-            await Clients.GroupExcept(UniqueId, Context.ConnectionId).SendAsync("whiteboardundo", UUID);
+            try
+            {
+                await Clients.GroupExcept(UniqueId, Context.ConnectionId).SendAsync("whiteboardundo", UUID);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
         }
 
         public async Task WhiteBoardRedo(string UniqueId, string UUID)
         {
-            await Clients.GroupExcept(UniqueId, Context.ConnectionId).SendAsync("whiteboardredo", UUID);
+            try
+            {
+                await Clients.GroupExcept(UniqueId, Context.ConnectionId).SendAsync("whiteboardredo", UUID);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
         }
     }
 }
