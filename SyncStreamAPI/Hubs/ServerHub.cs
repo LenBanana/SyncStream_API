@@ -563,13 +563,13 @@ namespace SyncStreamAPI.Hubs
             await Clients.Caller.SendAsync("whiteboardjoin", room.server.drawings);
         }
 
-        public async Task WhiteBoardUpdate(List<object> updates, string UniqueId)
+        public async Task WhiteBoardUpdate(List<Drawing> updates, string UniqueId)
         {
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
             room.server.drawings.AddRange(updates);
-            await Clients.Group(UniqueId).SendAsync("whiteboardupdate", updates);
+            await Clients.GroupExcept(UniqueId, Context.ConnectionId).SendAsync("whiteboardupdate", updates);
         }
 
         public async Task WhiteBoardClear(string UniqueId)
@@ -578,17 +578,17 @@ namespace SyncStreamAPI.Hubs
             if (room == null)
                 return;
             room.server.drawings.Clear();
-            await Clients.Group(UniqueId).SendAsync("whiteboardclear");
+            await Clients.GroupExcept(UniqueId, Context.ConnectionId).SendAsync("whiteboardclear", true);
         }
 
         public async Task WhiteBoardUndo(string UniqueId, string UUID)
         {
-            await Clients.Group(UniqueId).SendAsync("whiteboardundo", UUID);
+            await Clients.GroupExcept(UniqueId, Context.ConnectionId).SendAsync("whiteboardundo", UUID);
         }
 
         public async Task WhiteBoardRedo(string UniqueId, string UUID)
         {
-            await Clients.Group(UniqueId).SendAsync("whiteboardredo", UUID);
+            await Clients.GroupExcept(UniqueId, Context.ConnectionId).SendAsync("whiteboardredo", UUID);
         }
     }
 }
