@@ -562,7 +562,7 @@ namespace SyncStreamAPI.Hubs
                 Room room = GetRoom(UniqueId);
                 if (room == null)
                     return;
-                var drawings = room.server.members.SelectMany(x => x.drawings).GroupBy(x => x.Uuid).ToList();
+                var drawings = room.server.members.SelectMany(x => x.drawings).OrderBy(x => x.Uuid).ToList();
                 if (drawings.Count > 0)
                 {
                     //drawings.ForEach(x => x.Uuid = drawings.First().Uuid);
