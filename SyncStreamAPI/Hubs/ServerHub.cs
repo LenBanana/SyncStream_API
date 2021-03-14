@@ -562,10 +562,10 @@ namespace SyncStreamAPI.Hubs
                 Room room = GetRoom(UniqueId);
                 if (room == null)
                     return;
-                var drawings = room.server.members.SelectMany(x => x.drawings).ToList();
+                var drawings = room.server.members.SelectMany(x => x.drawings).GroupBy(x => x.Uuid).ToList();
                 if (drawings.Count > 0)
                 {
-                    drawings.ForEach(x => x.Uuid = drawings.First().Uuid);
+                    //drawings.ForEach(x => x.Uuid = drawings.First().Uuid);
                     await Clients.Caller.SendAsync("whiteboardjoin", drawings);
                 }
             }
