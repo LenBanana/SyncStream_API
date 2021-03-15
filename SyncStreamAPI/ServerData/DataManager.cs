@@ -58,10 +58,14 @@ namespace SyncStreamAPI.ServerData
                         try
                         {
                             room.server.members.Remove(member);
-                            if (member.ishost && room.server.members.Count > 0)
+                            if (room.server.members.Count > 0)
                             {
-                                room.server.members[0].ishost = true;
-                                await _hub.Clients.Group(room.uniqueId).SendAsync("hostupdate" + room.server.members[0].username, true);
+                                room.server.members[0].drawings.AddRange(member.drawings);
+                                if (member.ishost)
+                                {
+                                    room.server.members[0].ishost = true;
+                                    await _hub.Clients.Group(room.uniqueId).SendAsync("hostupdate" + room.server.members[0].username, true);
+                                }
                             }
                             await _hub.Clients.Group(room.uniqueId).SendAsync("userupdate", room.server.members);
                             await _hub.Clients.All.SendAsync("getrooms", Rooms);
