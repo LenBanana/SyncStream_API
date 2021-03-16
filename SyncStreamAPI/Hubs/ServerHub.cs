@@ -112,112 +112,6 @@ namespace SyncStreamAPI.Hubs
             await Clients.Group(UniqueId).SendAsync("sendserver", server);
         }
 
-        private async Task<string> ResolveURL(string url, string UniqueId)
-        {
-            if (url.Contains("twitch.tv"))
-            {
-                if ((url.ToLower().StartsWith("http") && url.Count(x => x == '/') == 3) || url.Count(x => x == '/') == 1)
-                    return url.Split('/').Last();
-                else
-                    return "v" + url.Split('/').Last();
-            }
-            string title = "";
-            Uri uri = new Uri(url);
-            string videokey = System.Web.HttpUtility.ParseQueryString(uri.Query).Get("v");
-            if (videokey == null)
-                videokey = System.Web.HttpUtility.ParseQueryString(uri.Query).Get("list");
-
-
-            if (title.Length == 0)
-            {
-                try
-                {
-                    string infoUrl = "http://youtube.com/get_video_info?video_id=" + videokey;
-                    using (WebClient client = new WebClient())
-                    {
-                        string source = "";
-                        int i = 0;
-                        while ((title.Length == 0 || title.ToLower().Trim() == "youtube") && i < 10)
-                        {
-                            source = client.DownloadString(infoUrl);
-                            if (source.Length > 0)
-                            {
-                                List<string> attributes = source.Split('&').Select(x => HttpUtility.UrlDecode(x)).ToList();
-                                int idx = attributes.FindIndex(x => x.StartsWith("player_response="));
-                                if (idx != -1)
-                                {
-                                    YtVideoInfo videoInfo = new YtVideoInfo().FromJson(attributes[idx].Split(new[] { '=' }, 2)[1]);
-                                    return videoInfo.VideoDetails.Title + " - " + videoInfo.VideoDetails.Author;
-                                }
-                            }
-                            await Task.Delay(50);
-                            i++;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.Message);
-                }
-            }
-            if (title.Length == 0)
-            {
-                try
-                {
-                    var section = Configuration.GetSection("YTKey");
-                    string key = section.Value;
-                    string Url = "https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + videokey + "&key=" + key;
-                    Ytapi apiResult;
-                    HttpWebRequest request = (HttpWebRequest)WebRequest.Create(Url);
-                    request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-
-                    using (HttpWebResponse response = (HttpWebResponse)await request.GetResponseAsync())
-                    using (System.IO.Stream stream = response.GetResponseStream())
-                    using (System.IO.StreamReader reader = new System.IO.StreamReader(stream))
-                    {
-                        apiResult = new Ytapi().FromJson(await reader.ReadToEndAsync());
-                    }
-                    if (apiResult != null && apiResult.Items.Count > 0)
-                        title = apiResult.Items.First().Snippet.Title + " - " + apiResult.Items.First().Snippet.ChannelTitle;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.Message);
-                }
-            }
-            if (title.Length == 0)
-            {
-                try
-                {
-                    string source = "";
-                    (title, source) = await General.ResolveTitle(url, 8);
-                    if (source.Length > 0)
-                    {
-                        HtmlDocument doc = new HtmlDocument();
-                        doc.LoadHtml(source);
-                        HtmlNode vids = doc.DocumentNode.ChildNodes[1].ChildNodes[2].ChildNodes[3];
-                        string json = vids.InnerText.Split(new[] { '=' }, 2)[1].Split(new[] { ';' }, 2)[0];
-                        PlaylistInfo playlistInfo = new PlaylistInfo().FromJson(json);
-                        var playlist = playlistInfo.Contents.TwoColumnBrowseResultsRenderer.Tabs[0].TabRenderer.Content.SectionListRenderer.Contents[0].ItemSectionRenderer.Contents[0].PlaylistVideoListRenderer.Contents;
-                        foreach (var video in playlist)
-                        {
-                            YTVideo vid = new YTVideo();
-                            vid.ended = false;
-                            vid.title = video.PlaylistVideoRenderer.Title.Runs[0].Text;
-                            vid.url = "https://www.youtube.com/watch?v=" + video.PlaylistVideoRenderer.VideoId;
-                            await AddVideo(vid, UniqueId).ConfigureAwait(false);
-                            await Task.Delay(50);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.Message);
-                }
-            }
-            return title;
-        }
-
         private Room GetRoom(string UniqueId)
         {
             List<Room> Rooms = DataManager.GetRooms();
@@ -250,7 +144,12 @@ namespace SyncStreamAPI.Hubs
                 }
                 else
                 {
-                    key.title = await ResolveURL(key.url, UniqueId);
+                    if (key.url.Split('?')[0].ToLower().EndsWith("playlist"))
+                    {
+                        await AddPlaylist(key.url, UniqueId);
+                        return;
+                    }
+                    key.title = await General.ResolveURL(key.url, UniqueId, Configuration);
                 }
                 room.server.ytURLs.Add(key);
             }
@@ -261,6 +160,38 @@ namespace SyncStreamAPI.Hubs
             }
             await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.ytURLs);
             await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
+        }
+
+        public async Task AddPlaylist(string url, string UniqueId)
+        {
+            try
+            {
+                string title, source;
+                (title, source) = await General.ResolveTitle(url, 8);
+                if (source.Length > 0)
+                {
+                    HtmlDocument doc = new HtmlDocument();
+                    doc.LoadHtml(source);
+                    HtmlNode vids = doc.DocumentNode.ChildNodes[1].ChildNodes[2].ChildNodes[3];
+                    string json = vids.InnerText.Split(new[] { '=' }, 2)[1].Split(new[] { ';' }, 2)[0];
+                    PlaylistInfo playlistInfo = new PlaylistInfo().FromJson(json);
+                    var playlist = playlistInfo.Contents.TwoColumnBrowseResultsRenderer.Tabs[0].TabRenderer.Content.SectionListRenderer.Contents[0].ItemSectionRenderer.Contents[0].PlaylistVideoListRenderer.Contents;
+                    foreach (var video in playlist)
+                    {
+                        YTVideo vid = new YTVideo();
+                        vid.ended = false;
+                        vid.title = video.PlaylistVideoRenderer.Title.Runs[0].Text;
+                        vid.url = "https://www.youtube.com/watch?v=" + video.PlaylistVideoRenderer.VideoId;
+                        await AddVideo(vid, UniqueId).ConfigureAwait(false);
+                        await Task.Delay(50);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Error", Question = "There has been an error trying to add the playlist", Answer1 = "Ok" });
+            }
         }
 
         public async Task RemoveVideo(string key, string UniqueId)
