@@ -48,6 +48,11 @@ namespace SyncStreamAPI.Hubs
             User user = null;
             if (!_maria.Users.Any(x => x.username == requestUser.username))
             {
+                if (requestUser.username.Length < 2 || requestUser.username.Length > 20)
+                {
+                    await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Error", Question = "Username must be between 2 and 20 characters", Answer1 = "Ok" });
+                    return;
+                }
                 await _maria.Users.AddAsync(requestUser);
                 await _maria.SaveChangesAsync();
                 user = requestUser;
@@ -109,6 +114,41 @@ namespace SyncStreamAPI.Hubs
             else
             {
 
+            }
+        }
+
+        public async Task ChangeUser(User user, string password)
+        {
+            User changeUser = _maria.Users.FirstOrDefault(x => x.ID == user.ID && password == x.password);
+            if (changeUser != null)
+            {
+                string endMsg = "";
+                if (changeUser.username != user.username)
+                {
+                    if (changeUser.username.Length < 2 || changeUser.username.Length > 20)
+                    {
+                        await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Error", Question = "Username must be between 2 and 20 characters", Answer1 = "Ok" });
+                    } else
+                    {
+                        changeUser.username = user.username;
+                        endMsg += "Username";
+                    }
+                }
+                if (user.password.Length > 2 && changeUser.password != user.password)
+                {
+                    changeUser.password = user.password;
+                    endMsg += endMsg.Length > 0 ? " & " : "";
+                    endMsg += "Password";
+                }
+                if (endMsg.Length > 0)
+                    endMsg += " successfully changed";
+                else
+                    endMsg = "Nothing changed.";
+                await _maria.SaveChangesAsync();
+                await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Error", Question = endMsg, Answer1 = "Ok" });
+            } else
+            {
+                await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Error", Question = "You password was not correct", Answer1 = "Ok" });
             }
         }
 
