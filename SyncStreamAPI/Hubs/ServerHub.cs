@@ -91,6 +91,123 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
+        public async Task GetUsers(string token, int userID)
+        {
+            RememberToken Token = _maria.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
+            if (Token != null)
+            {
+                User user = _maria.Users.FirstOrDefault(x => x.ID == Token.userID);
+                if (user != null)
+                    user.password = "";
+                if (user.userprivileges >= 3)
+                {
+                    List<User> users = _maria.Users.ToList();
+                    users.ForEach(x => x.password = "");
+                    await Clients.Caller.SendAsync("getusers", users);
+                }
+            }
+            else
+            {
+
+            }
+        }
+
+        public async Task DeleteUser(string token, int userID, int removeID)
+        {
+            if (userID == removeID)
+            {
+                await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Error", Question = "Unable to delete own user", Answer1 = "Ok" });
+                return;
+            }
+            RememberToken Token = _maria.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
+            if (Token != null)
+            {
+                User user = _maria.Users.FirstOrDefault(x => x.ID == Token.userID);
+                if (user == null)
+                    return;
+                if (user.userprivileges >= 3)
+                {
+                    var removeUser = _maria.Users.ToList().FirstOrDefault(x => x.ID == removeID);
+                    if (removeUser != null)
+                    {
+                        _maria.Users.Remove(removeUser);
+                        await _maria.SaveChangesAsync();
+                    }
+                    List<User> users = _maria.Users.ToList();
+                    users.ForEach(x => x.password = "");
+                    await Clients.Caller.SendAsync("getusers", users);
+                }
+            }
+            else
+            {
+
+            }
+        }
+
+        public async Task ApproveUser(string token, int userID, int approveID, bool prove)
+        {
+            if (userID == approveID)
+            {
+                await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Error", Question = "Unable to change approve status of own user", Answer1 = "Ok" });
+                return;
+            }
+            RememberToken Token = _maria.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
+            if (Token != null)
+            {
+                User user = _maria.Users.FirstOrDefault(x => x.ID == Token.userID);
+                if (user == null)
+                    return;
+                if (user.userprivileges >= 3)
+                {
+                    var approveUser = _maria.Users.ToList().FirstOrDefault(x => x.ID == approveID);
+                    if (approveUser != null)
+                    {
+                        approveUser.approved = prove ? 1 : 0;
+                        await _maria.SaveChangesAsync();
+                    }
+                    List<User> users = _maria.Users.ToList();
+                    users.ForEach(x => x.password = "");
+                    await Clients.Caller.SendAsync("getusers", users);
+                }
+            }
+            else
+            {
+
+            }
+        }
+
+        public async Task SetUserPrivileges(string token, int userID, int changeID, int privileges)
+        {
+            if (userID == changeID)
+            {
+                await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Error", Question = "Unable to change privileges of own user", Answer1 = "Ok" });
+                return;
+            }
+            RememberToken Token = _maria.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
+            if (Token != null)
+            {
+                User user = _maria.Users.FirstOrDefault(x => x.ID == Token.userID);
+                if (user == null)
+                    return;
+                if (user.userprivileges >= 3)
+                {
+                    var changeUser = _maria.Users.ToList().FirstOrDefault(x => x.ID == changeID);
+                    if (changeUser != null)
+                    {
+                        changeUser.userprivileges = privileges;
+                        await _maria.SaveChangesAsync();
+                    }
+                    List<User> users = _maria.Users.ToList();
+                    users.ForEach(x => x.password = "");
+                    await Clients.Caller.SendAsync("getusers", users);
+                }
+            }
+            else
+            {
+
+            }
+        }
+
         public async Task ValidateToken(string token, int userID)
         {
             RememberToken Token = _maria.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
