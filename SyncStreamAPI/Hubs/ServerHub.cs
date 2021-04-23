@@ -111,10 +111,6 @@ namespace SyncStreamAPI.Hubs
                     await Clients.Caller.SendAsync("getusers", users);
                 }
             }
-            else
-            {
-
-            }
         }
 
         public async Task ChangeUser(User user, string password)
@@ -145,7 +141,10 @@ namespace SyncStreamAPI.Hubs
                 else
                     endMsg = "Nothing changed.";
                 await _maria.SaveChangesAsync();
-                await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Error", Question = endMsg, Answer1 = "Ok" });
+                await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Success", Question = endMsg, Answer1 = "Ok" });
+                List<User> users = _maria.Users.ToList();
+                users.ForEach(x => x.password = "");
+                await Clients.All.SendAsync("getusers", users);
             } else
             {
                 await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Error", Question = "You password was not correct", Answer1 = "Ok" });
@@ -175,12 +174,8 @@ namespace SyncStreamAPI.Hubs
                     }
                     List<User> users = _maria.Users.ToList();
                     users.ForEach(x => x.password = "");
-                    await Clients.Caller.SendAsync("getusers", users);
+                    await Clients.All.SendAsync("getusers", users);
                 }
-            }
-            else
-            {
-
             }
         }
 
@@ -207,12 +202,8 @@ namespace SyncStreamAPI.Hubs
                     }
                     List<User> users = _maria.Users.ToList();
                     users.ForEach(x => x.password = "");
-                    await Clients.Caller.SendAsync("getusers", users);
+                    await Clients.All.SendAsync("getusers", users);
                 }
-            }
-            else
-            {
-
             }
         }
 
@@ -239,12 +230,8 @@ namespace SyncStreamAPI.Hubs
                     }
                     List<User> users = _maria.Users.ToList();
                     users.ForEach(x => x.password = "");
-                    await Clients.Caller.SendAsync("getusers", users);
+                    await Clients.All.SendAsync("getusers", users);
                 }
-            }
-            else
-            {
-
             }
         }
 
