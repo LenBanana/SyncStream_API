@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using HtmlAgilityPack;
+using Microsoft.Extensions.Configuration;
 using SyncStreamAPI.Models;
 using System;
 using System.Collections.Generic;
@@ -26,35 +27,48 @@ namespace SyncStreamAPI.Helper
             string videokey = System.Web.HttpUtility.ParseQueryString(uri.Query).Get("v");
             if (videokey == null)
                 videokey = System.Web.HttpUtility.ParseQueryString(uri.Query).Get("list");
-
             try
             {
-                string infoUrl = "http://youtube.com/get_video_info?video_id=" + videokey;
-                using (WebClient client = new WebClient())
-                {
-                    string source = "";
-                    int i = 0;
-                    while ((title.Length == 0 || title.ToLower().Trim() == "youtube") && i < 10)
-                    {
-                        source = client.DownloadString(infoUrl);
-                        if (source.Length > 0)
-                        {
-                            List<string> attributes = source.Split('&').Select(x => HttpUtility.UrlDecode(x)).ToList();
-                            int idx = attributes.FindIndex(x => x.StartsWith("player_response="));
-                            if (idx != -1)
-                            {
-                                YtVideoInfo videoInfo = new YtVideoInfo().FromJson(attributes[idx].Split(new[] { '=' }, 2)[1]);
-                                return videoInfo.VideoDetails.Title + " - " + videoInfo.VideoDetails.Author;
-                            }
-                        }
-                        await Task.Delay(50);
-                        i++;
-                    }
-                }
+                var webGet = new HtmlWeb();
+                var document = webGet.Load(url);
+                title = document.DocumentNode.SelectSingleNode("html/head/title").InnerText;
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
+            }
+
+            if (title.Length == 0)
+            {
+                try
+                {
+                    string infoUrl = "http://youtube.com/get_video_info?video_id=" + videokey;
+                    using (WebClient client = new WebClient())
+                    {
+                        string source = "";
+                        int i = 0;
+                        while ((title.Length == 0 || title.ToLower().Trim() == "youtube") && i < 10)
+                        {
+                            source = client.DownloadString(infoUrl);
+                            if (source.Length > 0)
+                            {
+                                List<string> attributes = source.Split('&').Select(x => HttpUtility.UrlDecode(x)).ToList();
+                                int idx = attributes.FindIndex(x => x.StartsWith("player_response="));
+                                if (idx != -1)
+                                {
+                                    YtVideoInfo videoInfo = new YtVideoInfo().FromJson(attributes[idx].Split(new[] { '=' }, 2)[1]);
+                                    return videoInfo.VideoDetails.Title + " - " + videoInfo.VideoDetails.Author;
+                                }
+                            }
+                            await Task.Delay(50);
+                            i++;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
             }
             if (title.Length == 0)
             {

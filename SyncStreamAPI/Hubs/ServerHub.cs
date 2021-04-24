@@ -293,7 +293,8 @@ namespace SyncStreamAPI.Hubs
                         await AddPlaylist(key.url, UniqueId);
                         return;
                     }
-                    key.title = await General.ResolveURL(key.url, UniqueId, Configuration);
+                    if (key.title == null || key.title.Length == 0)
+                        key.title = await General.ResolveURL(key.url, UniqueId, Configuration);
                 }
                 room.server.ytURLs.Add(key);
             }
@@ -316,7 +317,7 @@ namespace SyncStreamAPI.Hubs
                 {
                     HtmlDocument doc = new HtmlDocument();
                     doc.LoadHtml(source);
-                    HtmlNode vids = doc.DocumentNode.ChildNodes[1].ChildNodes[2].ChildNodes[3];
+                    HtmlNode vids = doc.DocumentNode.ChildNodes[1].ChildNodes[1].ChildNodes[15];
                     string json = vids.InnerText.Split(new[] { '=' }, 2)[1].Split(new[] { ';' }, 2)[0];
                     PlaylistInfo playlistInfo = new PlaylistInfo().FromJson(json);
                     var playlist = playlistInfo.Contents.TwoColumnBrowseResultsRenderer.Tabs[0].TabRenderer.Content.SectionListRenderer.Contents[0].ItemSectionRenderer.Contents[0].PlaylistVideoListRenderer.Contents;
@@ -324,10 +325,9 @@ namespace SyncStreamAPI.Hubs
                     {
                         YTVideo vid = new YTVideo();
                         vid.ended = false;
-                        vid.title = video.PlaylistVideoRenderer.Title.Runs[0].Text;
-                        vid.url = "https://www.youtube.com/watch?v=" + video.PlaylistVideoRenderer.VideoId;
+                        vid.title = video.PlaylistVideoRenderer?.Title.Runs[0].Text;
+                        vid.url = "https://www.youtube.com/watch?v=" + video.PlaylistVideoRenderer?.VideoId;
                         await AddVideo(vid, UniqueId).ConfigureAwait(false);
-                        await Task.Delay(50);
                     }
                 }
             }
