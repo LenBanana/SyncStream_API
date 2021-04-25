@@ -12,13 +12,14 @@ namespace SyncStreamAPI.Models
         public string username { get; set; }
         public string RoomId { get; set; }
         public string ip { get; set; }
-        public string uptime { get; set; }
+        private string _uptime { get; set; } = DateTime.Now.ToString("MM.dd.yyyy HH:mm:ss");
+        public string uptime { get { return _uptime; } set { _uptime = value; ConsecutiveAFK = 0; } }
         public bool ishost { get; set; }
-        public bool kick { get; set; }
-        private int ConsecutiveAFK { get; set; }
+        private int _ConsecutiveAFK { get; set; } = 0;
+        private int ConsecutiveAFK { get { return _ConsecutiveAFK; } set { _ConsecutiveAFK = value; if (value >= 10) { Kicked?.Invoke(this); } } }
         public List<Drawing> drawings { get; set; } = new List<Drawing>();
 
-        public delegate void KickEvent(bool kick, Member e);
+        public delegate void KickEvent(Member e);
         public event KickEvent Kicked;
 
         public Member()
@@ -26,25 +27,10 @@ namespace SyncStreamAPI.Models
             CountDown();
         }
 
-        string _uptime = "";
         private async void CountDown()
         {
             await Task.Delay(1000);
-            if (_uptime == uptime)
-            {
-                ConsecutiveAFK += 1;
-                if (ConsecutiveAFK >= 10)
-                {
-                    kick = true;
-                    Kicked?.Invoke(kick, this);
-                    return;
-                }
-            }
-            else
-            {
-                _uptime = uptime;
-                ConsecutiveAFK = 0;
-            }
+            ConsecutiveAFK += 1;
             CountDown();
         }
     }

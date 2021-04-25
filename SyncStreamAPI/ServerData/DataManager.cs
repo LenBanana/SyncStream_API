@@ -47,9 +47,9 @@ namespace SyncStreamAPI.ServerData
             member.Kicked += Member_Kicked;
         }
 
-        private async void Member_Kicked(bool kick, Member e)
+        private async void Member_Kicked(Member e)
         {
-            if (e != null && kick == true)
+            if (e != null)
             {
                 try
                 {
