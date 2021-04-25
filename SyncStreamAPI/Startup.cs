@@ -45,7 +45,6 @@ namespace SyncStreamAPI
             {
                 var hubContext = provider.GetService<IHubContext<ServerHub>>();
                 DataManager manager = new DataManager(hubContext);
-                //manager.CheckMembers();
                 return manager;
             });
             services.AddControllers();
@@ -61,7 +60,6 @@ namespace SyncStreamAPI
                 app.UseDeveloperExceptionPage();
             }
             app.UseHttpsRedirection();
-            manager.CheckMembers();
             app.UseRouting();
             app.UseCors("MyPolicy");
             app.UseAuthentication();

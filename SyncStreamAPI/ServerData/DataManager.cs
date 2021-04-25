@@ -31,7 +31,6 @@ namespace SyncStreamAPI.ServerData
             Rooms.Add(new Room() { name = "MovieRoom 2", server = new Server(), uniqueId = "movie2" });
             Rooms.Add(new Room() { name = "MovieRoom 3", server = new Server(), uniqueId = "movie3" });
             Rooms.Add(new Room() { name = "MovieRoom 4", server = new Server(), uniqueId = "movie4" });
-            //CheckMembers();
         }
 
         public static Room GetRoom(string UniqueId)
@@ -43,43 +42,79 @@ namespace SyncStreamAPI.ServerData
             return Rooms;
         }
 
-        public async void CheckMembers()
+        public void AddToMemberCheck(Member member)
         {
-            List<Room> rooms = new List<Room>(Rooms);
-            foreach (Room room in rooms)
+            member.Kicked += Member_Kicked;
+        }
+
+        private async void Member_Kicked(bool kick, Member e)
+        {
+            if (e != null && kick == true)
             {
-                if (room.server.members == null)
-                    room.server.members = new List<Member>();
-                List<Member> tempMembers = new List<Member>(room.server.members);
-                foreach(Member member in tempMembers)
+                try
                 {
-                    if (member != null && member.kick == true)
+                    int idx = Rooms.FindIndex(x => x.uniqueId == e.RoomId);
+                    if (idx > -1)
                     {
-                        try
+                        Room room = Rooms[idx];
+                        room.server.members.Remove(e);
+                        if (room.server.members.Count > 0)
                         {
-                            room.server.members.Remove(member);
-                            if (room.server.members.Count > 0)
+                            room.server.members[0].drawings.AddRange(e.drawings);
+                            if (e.ishost)
                             {
-                                room.server.members[0].drawings.AddRange(member.drawings);
-                                if (member.ishost)
-                                {
-                                    room.server.members[0].ishost = true;
-                                    await _hub.Clients.Group(room.uniqueId).SendAsync("hostupdate" + room.server.members[0].username, true);
-                                }
+                                room.server.members[0].ishost = true;
+                                await _hub.Clients.Group(room.uniqueId).SendAsync("hostupdate" + room.server.members[0].username, true);
                             }
-                            await _hub.Clients.Group(room.uniqueId).SendAsync("userupdate", room.server.members);
-                            await _hub.Clients.All.SendAsync("getrooms", Rooms);
-                        } catch
-                        {
-                            await Task.Delay(2500);
-                            CheckMembers();
                         }
+                        await _hub.Clients.Group(room.uniqueId).SendAsync("userupdate", room.server.members);
+                        await _hub.Clients.All.SendAsync("getrooms", Rooms);
                     }
                 }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
             }
-            await Task.Delay(2500);
-            CheckMembers();
         }
+
+        //public async void CheckMembers()
+        //{
+        //    List<Room> rooms = new List<Room>(Rooms);
+        //    foreach (Room room in rooms)
+        //    {
+        //        if (room.server.members == null)
+        //            room.server.members = new List<Member>();
+        //        List<Member> tempMembers = new List<Member>(room.server.members);
+        //        foreach(Member member in tempMembers)
+        //        {
+        //            if (member != null && member.kick == true)
+        //            {
+        //                try
+        //                {
+        //                    room.server.members.Remove(member);
+        //                    if (room.server.members.Count > 0)
+        //                    {
+        //                        room.server.members[0].drawings.AddRange(member.drawings);
+        //                        if (member.ishost)
+        //                        {
+        //                            room.server.members[0].ishost = true;
+        //                            await _hub.Clients.Group(room.uniqueId).SendAsync("hostupdate" + room.server.members[0].username, true);
+        //                        }
+        //                    }
+        //                    await _hub.Clients.Group(room.uniqueId).SendAsync("userupdate", room.server.members);
+        //                    await _hub.Clients.All.SendAsync("getrooms", Rooms);
+        //                } catch
+        //                {
+        //                    await Task.Delay(2500);
+        //                    CheckMembers();
+        //                }
+        //            }
+        //        }
+        //    }
+        //    await Task.Delay(2500);
+        //    CheckMembers();
+        //}
 
         public async void wc_DownloadProgressChanged(object sender, DownloadProgressChangedEventArgs e, string id)
         {

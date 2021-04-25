@@ -554,7 +554,8 @@ namespace SyncStreamAPI.Hubs
             {
                 MainServer.members = new List<Member>();
             }
-            Member newMember = new Member() { username = username, ishost = MainServer.members.Count == 0 ? true : false, kick = false, uptime = DateTime.Now.ToString("MM.dd.yyyy HH:mm:ss"), ip = ip };
+            Member newMember = new Member() { username = username, ishost = MainServer.members.Count == 0 ? true : false, kick = false, uptime = DateTime.Now.ToString("MM.dd.yyyy HH:mm:ss"), ip = ip, RoomId = UniqueId };
+            _manager.AddToMemberCheck(newMember);
             if (MainServer.bannedMembers.Any(x => x.ip == newMember.ip))
             {
                 await Clients.Caller.SendAsync("adduserupdate", -2);
