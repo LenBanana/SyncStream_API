@@ -706,5 +706,10 @@ namespace SyncStreamAPI.Hubs
                 Console.WriteLine(ex.Message);
             }
         }
+
+        public async Task Ping(DateTime date)
+        {
+            await Clients.Caller.SendAsync("PingTest", date);
+        }
     }
 }

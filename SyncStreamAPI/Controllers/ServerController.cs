@@ -53,13 +53,5 @@ namespace SyncStreamAPI.Controllers
 
             return Ok(new { Message = "Request Completed" });
         }
-
-        [HttpGet("[action]")]
-        public IActionResult GetDBRooms()
-        {
-            
-
-            return Ok(new { Message = "Request Completed" });
-        }
     }
 }
