@@ -57,7 +57,9 @@ namespace SyncStreamAPI.ServerData
                     if (idx > -1)
                     {
                         Room room = Rooms[idx];
+                        e.Kicked -= Member_Kicked;
                         room.server.members.Remove(e);
+                        
                         if (room.server.members.Count > 0)
                         {
                             room.server.members[0].drawings.AddRange(e.drawings);

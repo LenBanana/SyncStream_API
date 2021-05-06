@@ -451,8 +451,8 @@ namespace SyncStreamAPI.Hubs
                 //var address = Context.GetHttpContext().Connection.RemoteIpAddress;
                 //var ip = address.ToString();
                 var ip = Context.ConnectionId;
-                MainServer.members[idx].ip = ip;
-                if (MainServer.bannedMembers.Any(x => x.ip == MainServer.members[idx].ip))
+                MainServer.members[idx].ConnectionId = ip;
+                if (MainServer.bannedMembers.Any(x => x.ConnectionId == MainServer.members[idx].ConnectionId))
                 {
                     MainServer.members.RemoveAt(idx);
                     await Clients.Caller.SendAsync("adduserupdate", -2);
@@ -554,9 +554,9 @@ namespace SyncStreamAPI.Hubs
             {
                 MainServer.members = new List<Member>();
             }
-            Member newMember = new Member() { username = username, ishost = MainServer.members.Count == 0 ? true : false, ip = ip, RoomId = UniqueId };
+            Member newMember = new Member() { username = username, ishost = MainServer.members.Count == 0 ? true : false, ConnectionId = ip, RoomId = UniqueId };
             _manager.AddToMemberCheck(newMember);
-            if (MainServer.bannedMembers.Any(x => x.ip == newMember.ip))
+            if (MainServer.bannedMembers.Any(x => x.ConnectionId == newMember.ConnectionId))
             {
                 await Clients.Caller.SendAsync("adduserupdate", -2);
                 return;
@@ -658,7 +658,7 @@ namespace SyncStreamAPI.Hubs
                 Room room = GetRoom(UniqueId);
                 if (room == null)
                     return;
-                room.server.members.First(x => x.ip == Context.ConnectionId).drawings.AddRange(updates);
+                room.server.members.First(x => x.ConnectionId == Context.ConnectionId).drawings.AddRange(updates);
                 await Clients.GroupExcept(UniqueId, Context.ConnectionId).SendAsync("whiteboardupdate", updates);
             }
             catch (Exception ex)
@@ -710,6 +710,33 @@ namespace SyncStreamAPI.Hubs
         public async Task Ping(DateTime date)
         {
             await Clients.Caller.SendAsync("PingTest", date);
+        }
+
+        public async Task SendPrivateMessage(string UniqueId, string FromUser, string ToUser, string Message)
+        {
+            try
+            {
+                Room room = GetRoom(UniqueId);
+                if (room == null)
+                    return;
+                Server MainServer = room.server;
+                Member FromIdx = MainServer.members.FirstOrDefault(x => x.username == FromUser);
+                Member ToIdx = MainServer.members.FirstOrDefault(x => x.username == ToUser);
+                if (FromIdx != null && ToIdx != null)
+                {
+                    string FullMessage = FromIdx.AddMessage(ToUser, Message);
+                    await Clients.Caller.SendAsync("PrivateMessage", FullMessage);
+                    await Clients.Client(ToIdx.ConnectionId).SendAsync("PrivateMessage", FullMessage);
+                } else
+                {
+                    throw new Exception("User was not found");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Message Error", Question = "There has been an error trying to send your message, please try again.", Answer1 = "Ok" });
+            }
         }
     }
 }
