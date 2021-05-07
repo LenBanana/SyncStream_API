@@ -32,7 +32,8 @@ namespace SyncStreamAPI.Models
         {
             await Task.Delay(1000);
             ConsecutiveAFK += 1;
-            CountDown();
+            if (ConsecutiveAFK < 10)
+                CountDown();
         }
 
         public List<string> GetMessages(string User)

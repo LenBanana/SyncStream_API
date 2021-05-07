@@ -19,10 +19,13 @@ namespace SyncStreamAPI.ServerData
         public DataManager(IHubContext<ServerHub> hub)
         {
             _hub = hub;
-            Random rnd = new Random();
+            AddDefaultRooms();
+        }
+
+        public void AddDefaultRooms()
+        {
             Rooms.Add(new Room() { name = "Dreckroom", server = new Server(), uniqueId = "dreck" });
             Rooms.Add(new Room() { name = "Randomkeller", server = new Server(), uniqueId = "random" });
-            //Rooms.Add(new Room() { name = "PrivateRoom", password = "dreckpass", server = new Server(), uniqueId = id++ });
             Rooms.Add(new Room() { name = "GuestRoom 1", server = new Server(), uniqueId = "guest1" });
             Rooms.Add(new Room() { name = "GuestRoom 2", server = new Server(), uniqueId = "guest2" });
             Rooms.Add(new Room() { name = "GuestRoom 3", server = new Server(), uniqueId = "guest3" });
@@ -58,6 +61,8 @@ namespace SyncStreamAPI.ServerData
                     {
                         Room room = Rooms[idx];
                         e.Kicked -= Member_Kicked;
+                        if (!room.server.members.Contains(e))
+                            return;
                         room.server.members.Remove(e);
                         
                         if (room.server.members.Count > 0)
@@ -80,50 +85,12 @@ namespace SyncStreamAPI.ServerData
             }
         }
 
-        //public async void CheckMembers()
-        //{
-        //    List<Room> rooms = new List<Room>(Rooms);
-        //    foreach (Room room in rooms)
-        //    {
-        //        if (room.server.members == null)
-        //            room.server.members = new List<Member>();
-        //        List<Member> tempMembers = new List<Member>(room.server.members);
-        //        foreach(Member member in tempMembers)
-        //        {
-        //            if (member != null && member.kick == true)
-        //            {
-        //                try
-        //                {
-        //                    room.server.members.Remove(member);
-        //                    if (room.server.members.Count > 0)
-        //                    {
-        //                        room.server.members[0].drawings.AddRange(member.drawings);
-        //                        if (member.ishost)
-        //                        {
-        //                            room.server.members[0].ishost = true;
-        //                            await _hub.Clients.Group(room.uniqueId).SendAsync("hostupdate" + room.server.members[0].username, true);
-        //                        }
-        //                    }
-        //                    await _hub.Clients.Group(room.uniqueId).SendAsync("userupdate", room.server.members);
-        //                    await _hub.Clients.All.SendAsync("getrooms", Rooms);
-        //                } catch
-        //                {
-        //                    await Task.Delay(2500);
-        //                    CheckMembers();
-        //                }
-        //            }
-        //        }
-        //    }
-        //    await Task.Delay(2500);
-        //    CheckMembers();
-        //}
-
         public async void wc_DownloadProgressChanged(object sender, DownloadProgressChangedEventArgs e, string id)
         {
             float received = (e.BytesReceived / 1024f) / 1024f;
             float total = (e.TotalBytesToReceive / 1024f) / 1024f;
             string status = "Download at: " + e.ProgressPercentage + "%. Processed " + received + "mb of " + total + "mb total."; 
-            await _hub.Clients.All.SendAsync("dlUpdate" + id, e);
+            await _hub.Clients.All.SendAsync("dlUpdate" + id, status);
         }
 
         public async void Completed(object o, AsyncCompletedEventArgs args, string id)

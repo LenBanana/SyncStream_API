@@ -26,31 +26,5 @@ namespace SyncStreamAPI.Models
             currenttime = 0;
         }
 
-        //public async void CheckMembers()
-        //{
-        //    try
-        //    {
-        //        List<Member> tempMembers = new List<Member>(members);
-        //        foreach (Member member in tempMembers)
-        //        {
-        //            var time = DateTime.Parse(member.uptime).AddSeconds(30);
-        //            var timenow = DateTime.Now;
-        //            if (time < timenow && time < timenow.AddHours(1))
-        //            {
-        //                Console.WriteLine("Kick " + member.username);
-        //                if (tempMembers.Contains(member))
-        //                    tempMembers.Remove(member);
-        //            }
-        //        }
-        //        members = tempMembers;
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        Console.WriteLine("User error: " + ex.Message);
-        //    }
-        //    await Task.Delay(2500);
-        //    CheckMembers();
-        //}
-
     }
 }
