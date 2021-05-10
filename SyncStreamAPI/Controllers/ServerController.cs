@@ -2,7 +2,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using SyncStreamAPI.DataContext;
+using SyncStreamAPI.Helper;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.ServerData;
@@ -19,8 +21,10 @@ namespace SyncStreamAPI.Controllers
     {
         private IHubContext<ServerHub> _hub;
         MariaContext _maria;
-        public ServerController(IHubContext<ServerHub> hub, MariaContext maria)
+        IConfiguration Configuration { get; }
+        public ServerController(IConfiguration configuration, IHubContext<ServerHub> hub, MariaContext maria)
         {
+            Configuration = configuration;
             _hub = hub;
             _maria = maria;
         }
@@ -52,6 +56,13 @@ namespace SyncStreamAPI.Controllers
             _hub.Clients.All.SendAsync("getrooms", DataManager.GetRooms());
 
             return Ok(new { Message = "Request Completed" });
+        }
+
+        [HttpGet("[action]")]
+        public async Task<IActionResult> TryYTApi(string url)
+        {
+            string info = await General.YTApiInfo(url, Configuration);
+            return Ok(info);
         }
     }
 }

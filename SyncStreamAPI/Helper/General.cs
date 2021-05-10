@@ -13,7 +13,7 @@ namespace SyncStreamAPI.Helper
     public class General
     {
 
-        public static async Task<string> ResolveURL(string url, string UniqueId, IConfiguration Configuration)
+        public static async Task<string> ResolveURL(string url, IConfiguration Configuration)
         {
             if (url.Contains("twitch.tv"))
             {
@@ -23,10 +23,6 @@ namespace SyncStreamAPI.Helper
                     return "v" + url.Split('/').Last();
             }
             string title = "";
-            Uri uri = new Uri(url);
-            string videokey = System.Web.HttpUtility.ParseQueryString(uri.Query).Get("v");
-            if (videokey == null)
-                videokey = System.Web.HttpUtility.ParseQueryString(uri.Query).Get("list");
             try
             {
                 var webGet = new HtmlWeb();
@@ -42,6 +38,7 @@ namespace SyncStreamAPI.Helper
             {
                 try
                 {
+                    string videokey = GetYTVideoKey(url);
                     string infoUrl = "http://youtube.com/get_video_info?video_id=" + videokey;
                     using (WebClient client = new WebClient())
                     {
@@ -72,30 +69,48 @@ namespace SyncStreamAPI.Helper
             }
             if (title.Length == 0)
             {
-                try
-                {
-                    var section = Configuration.GetSection("YTKey");
-                    string key = section.Value;
-                    string Url = "https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + videokey + "&key=" + key;
-                    Ytapi apiResult;
-                    HttpWebRequest request = (HttpWebRequest)WebRequest.Create(Url);
-                    request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-
-                    using (HttpWebResponse response = (HttpWebResponse)await request.GetResponseAsync())
-                    using (System.IO.Stream stream = response.GetResponseStream())
-                    using (System.IO.StreamReader reader = new System.IO.StreamReader(stream))
-                    {
-                        apiResult = new Ytapi().FromJson(await reader.ReadToEndAsync());
-                    }
-                    if (apiResult != null && apiResult.Items.Count > 0)
-                        title = apiResult.Items.First().Snippet.Title + " - " + apiResult.Items.First().Snippet.ChannelTitle;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.Message);
-                }
+                title = await YTApiInfo(url, Configuration);
             }
             return title;
+        }
+
+        public static string GetYTVideoKey(string url)
+        {
+            Uri uri = new Uri(url);
+            string videokey = System.Web.HttpUtility.ParseQueryString(uri.Query).Get("v");
+            if (videokey == null)
+                videokey = System.Web.HttpUtility.ParseQueryString(uri.Query).Get("list");
+            return videokey;
+        }
+
+        public static async Task<string> YTApiInfo(string url, IConfiguration Configuration)
+        {
+            try
+            {
+                string title = "";
+                var section = Configuration.GetSection("YTKey");
+                string key = section.Value;
+                string videokey = GetYTVideoKey(url);
+                string Url = "https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + videokey + "&key=" + key;
+                Ytapi apiResult;
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(Url);
+                request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+
+                using (HttpWebResponse response = (HttpWebResponse)await request.GetResponseAsync())
+                using (System.IO.Stream stream = response.GetResponseStream())
+                using (System.IO.StreamReader reader = new System.IO.StreamReader(stream))
+                {
+                    apiResult = new Ytapi().FromJson(await reader.ReadToEndAsync());
+                }
+                if (apiResult != null && apiResult.Items.Count > 0)
+                    title = apiResult.Items.First().Snippet.Title + " - " + apiResult.Items.First().Snippet.ChannelTitle;
+                return title;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                return "";
+            }
         }
 
         public static async Task<(string title, string source)> ResolveTitle(string url, int maxTries)

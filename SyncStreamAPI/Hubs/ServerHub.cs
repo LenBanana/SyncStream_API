@@ -21,7 +21,6 @@ namespace SyncStreamAPI.Hubs
     [EnableCors("MyPolicy")]
     public class ServerHub : Hub
     {
-        DateTime lastPlayPause = DateTime.Now;
         IConfiguration Configuration { get; }
 
         DataManager _manager;
@@ -294,7 +293,7 @@ namespace SyncStreamAPI.Hubs
                         return;
                     }
                     if (key.title == null || key.title.Length == 0)
-                        key.title = await General.ResolveURL(key.url, UniqueId, Configuration);
+                        key.title = await General.ResolveURL(key.url, Configuration);
                 }
                 room.server.ytURLs.Add(key);
             }
@@ -429,7 +428,6 @@ namespace SyncStreamAPI.Hubs
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
-            lastPlayPause = DateTime.Now;
             room.server.isplaying = isplaying;
             if (room.server.ytURL.url.Contains("twitch.tv"))
                 await Clients.Group(UniqueId).SendAsync("twitchPlaying", isplaying);
