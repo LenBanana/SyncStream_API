@@ -58,11 +58,11 @@ namespace SyncStreamAPI.Controllers
             return Ok(new { Message = "Request Completed" });
         }
 
-        [HttpGet("[action]")]
-        public async Task<IActionResult> TryYTApi(string url)
-        {
-            string info = await General.YTApiInfo(url, Configuration);
-            return Ok(info);
-        }
+        //[HttpGet("[action]")]
+        //public async Task<IActionResult> TryYTApi(string url)
+        //{
+        //    var info = await General.NoEmbedYTApi(url);
+        //    return Ok(info.Title);
+        //}
     }
 }

@@ -23,15 +23,20 @@ namespace SyncStreamAPI.Helper
                     return "v" + url.Split('/').Last();
             }
             string title = "";
-            try
+            title = (await NoEmbedYTApi(url)).Title;
+
+            if (title.Length == 0)
             {
-                var webGet = new HtmlWeb();
-                var document = webGet.Load(url);
-                title = document.DocumentNode.SelectSingleNode("html/head/title").InnerText;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
+                try
+                {
+                    var webGet = new HtmlWeb();
+                    var document = webGet.Load(url);
+                    title = document.DocumentNode.SelectSingleNode("html/head/title").InnerText;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
             }
 
             if (title.Length == 0)
@@ -81,6 +86,26 @@ namespace SyncStreamAPI.Helper
             if (videokey == null)
                 videokey = System.Web.HttpUtility.ParseQueryString(uri.Query).Get("list");
             return videokey;
+        }
+
+        public async static Task<YTApiNoEmbed> NoEmbedYTApi(string url)
+        {
+            YTApiNoEmbed apiResult = new YTApiNoEmbed();
+            try
+            {
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create("https://noembed.com/embed?url=" + url);
+                request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+                using (HttpWebResponse response = (HttpWebResponse)await request.GetResponseAsync())
+                using (System.IO.Stream stream = response.GetResponseStream())
+                using (System.IO.StreamReader reader = new System.IO.StreamReader(stream))
+                {
+                    apiResult = new YTApiNoEmbed().FromJson(await reader.ReadToEndAsync());
+                }
+            } catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+            return apiResult;
         }
 
         public static async Task<string> YTApiInfo(string url, IConfiguration Configuration)
