@@ -28,11 +28,17 @@ namespace SyncStreamAPI
             {
                 options.UseMySql(Configuration.GetConnectionString("SyncStreamDB"));
             });
+#if DEBUG
+            var origins = new string[8] { "https://dreckbu.de", "https://*.dreckbu.de", "https://dreckbu.de/*", "https://drecktu.be", "https://*.drecktu.be", "https://drecktu.be/*", "http://localhost:4200", "https://localhost:4200" };
+#else
+            var origins = new string[6] { "https://dreckbu.de", "https://*.dreckbu.de", "https://dreckbu.de/*","https://drecktu.be", "https://*.drecktu.be", "https://drecktu.be/*" };
+            
+#endif
             services.AddCors(o => o.AddPolicy("MyPolicy", builder =>
             {
                 builder.SetIsOriginAllowedToAllowWildcardSubdomains()
                         .SetIsOriginAllowed(hostname => true)
-                        .WithOrigins(new string[] { "http://localhost:4200", "https://localhost:4200", "https://dreckbu.de", "https://*.dreckbu.de", "https://dreckbu.de/*" })
+                        .WithOrigins(origins)
                        .AllowAnyMethod()
                        .AllowAnyHeader()
                        .AllowCredentials();
