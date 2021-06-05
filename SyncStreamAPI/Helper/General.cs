@@ -25,7 +25,7 @@ namespace SyncStreamAPI.Helper
             string title = "";
             title = (await NoEmbedYTApi(url)).Title;
 
-            if (title.Length == 0)
+            if (title == null || title.Length == 0)
             {
                 try
                 {
