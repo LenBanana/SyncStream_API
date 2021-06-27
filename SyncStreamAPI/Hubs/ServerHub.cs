@@ -264,12 +264,12 @@ namespace SyncStreamAPI.Hubs
             return room;
         }
 
-        public async Task AddVideo(YTVideo key, string UniqueId)
+        public async Task AddVideo(DreckVideo key, string UniqueId)
         {
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
-            if (!room.server.ytURLs.Select(x => x.url).Contains(key.url))
+            if (!room.server.playlist.Select(x => x.url).Contains(key.url))
             {
                 if (!key.url.Contains("youtube") && !key.url.Contains("youtu.be")
                     && !key.url.Contains("twitch.tv"))
@@ -295,14 +295,14 @@ namespace SyncStreamAPI.Hubs
                     if (key.title == null || key.title.Length == 0)
                         key.title = await General.ResolveURL(key.url, Configuration);
                 }
-                room.server.ytURLs.Add(key);
+                room.server.playlist.Add(key);
             }
-            if (room.server.ytURL.url.Length == 0 || room.server.ytURL.ended == true)
+            if (room.server.currentVideo.url.Length == 0 || room.server.currentVideo.ended == true)
             {
-                room.server.ytURL = key;
+                room.server.currentVideo = key;
                 await Clients.Group(UniqueId).SendAsync("videoupdate", key);
             }
-            await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.ytURLs);
+            await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.playlist);
             await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
         }
 
@@ -322,7 +322,7 @@ namespace SyncStreamAPI.Hubs
                     var playlist = playlistInfo.Contents.TwoColumnBrowseResultsRenderer.Tabs[0].TabRenderer.Content.SectionListRenderer.Contents[0].ItemSectionRenderer.Contents[0].PlaylistVideoListRenderer.Contents;
                     foreach (var video in playlist)
                     {
-                        YTVideo vid = new YTVideo();
+                        DreckVideo vid = new DreckVideo();
                         vid.ended = false;
                         vid.title = video.PlaylistVideoRenderer?.Title.Runs[0].Text;
                         vid.url = "https://www.youtube.com/watch?v=" + video.PlaylistVideoRenderer?.VideoId;
@@ -342,11 +342,11 @@ namespace SyncStreamAPI.Hubs
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
-            int idx = room.server.ytURLs.FindIndex(x => x.url == key);
+            int idx = room.server.playlist.FindIndex(x => x.url == key);
             if (idx != -1)
             {
-                room.server.ytURLs.RemoveAt(idx);
-                await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.ytURLs);
+                room.server.playlist.RemoveAt(idx);
+                await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.playlist);
                 await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
             }
         }
@@ -357,23 +357,22 @@ namespace SyncStreamAPI.Hubs
             if (room == null)
                 return;
             Server MainServer = room.server;
-            if (room.server.ytURLs.Count > 1)
+            if (room.server.playlist.Count > 1)
             {
-                MainServer.ytURL = room.server.ytURLs[1];
-                room.server.ytURLs.RemoveAt(0);
-                await Clients.Group(UniqueId).SendAsync("videoupdate", MainServer.ytURL);
-                await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.ytURLs);
+                MainServer.currentVideo = room.server.playlist[1];
+                room.server.playlist.RemoveAt(0);
+                await Clients.Group(UniqueId).SendAsync("videoupdate", MainServer.currentVideo);
+                await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.playlist);
                 await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
                 return;
             }
-            else if (room.server.ytURLs.Count == 1)
+            else if (room.server.playlist.Count == 1)
             {
-                MainServer.ytURL.ended = true;
-                room.server.ytURLs.RemoveAt(0);
+                MainServer.currentVideo.ended = true;
+                room.server.playlist.RemoveAt(0);
                 room.server.isplaying = false;
-                room.server.title = "Nothing playing";
                 await Clients.Group(UniqueId).SendAsync("isplayingupdate", room.server.isplaying);
-                await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.ytURLs);
+                await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.playlist);
                 await Clients.Group(UniqueId).SendAsync("sendserver", room.server);
                 await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
             }
@@ -385,16 +384,16 @@ namespace SyncStreamAPI.Hubs
             if (room == null)
                 return;
             Server MainServer = room.server;
-            int idx = MainServer.ytURLs.FindIndex(x => x.url == key);
+            int idx = MainServer.playlist.FindIndex(x => x.url == key);
             if (idx != -1)
             {
-                YTVideo tempUrl = room.server.ytURLs[idx];
-                room.server.ytURLs.RemoveAt(idx);
-                room.server.ytURLs.RemoveAt(0);
-                room.server.ytURLs.Insert(0, tempUrl);
-                MainServer.ytURL = room.server.ytURLs[0];
-                await Clients.Group(UniqueId).SendAsync("videoupdate", MainServer.ytURL);
-                await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.ytURLs);
+                DreckVideo tempUrl = room.server.playlist[idx];
+                room.server.playlist.RemoveAt(idx);
+                room.server.playlist.RemoveAt(0);
+                room.server.playlist.Insert(0, tempUrl);
+                MainServer.currentVideo = room.server.playlist[0];
+                await Clients.Group(UniqueId).SendAsync("videoupdate", MainServer.currentVideo);
+                await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.playlist);
                 await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
                 return;
             }
@@ -405,10 +404,10 @@ namespace SyncStreamAPI.Hubs
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
-            YTVideo vid = room.server.ytURLs[fromIndex];
-            room.server.ytURLs.RemoveAt(fromIndex);
-            room.server.ytURLs.Insert(toIndex, vid);
-            await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.ytURLs);
+            DreckVideo vid = room.server.playlist[fromIndex];
+            room.server.playlist.RemoveAt(fromIndex);
+            room.server.playlist.Insert(toIndex, vid);
+            await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.playlist);
         }
 
         public async Task SetTime(double time, string UniqueId)
@@ -416,7 +415,7 @@ namespace SyncStreamAPI.Hubs
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
-            if (room.server.ytURL.url.Contains("twitch.tv"))
+            if (room.server.currentVideo.url.Contains("twitch.tv"))
                 await Clients.Group(UniqueId).SendAsync("twitchTimeUpdate", time);
             else
                 await Clients.Group(UniqueId).SendAsync("timeupdate", time);
@@ -429,7 +428,7 @@ namespace SyncStreamAPI.Hubs
             if (room == null)
                 return;
             room.server.isplaying = isplaying;
-            if (room.server.ytURL.url.Contains("twitch.tv"))
+            if (room.server.currentVideo.url.Contains("twitch.tv"))
                 await Clients.Group(UniqueId).SendAsync("twitchPlaying", isplaying);
             else
                 await Clients.Group(UniqueId).SendAsync("isplayingupdate", isplaying);
@@ -568,8 +567,8 @@ namespace SyncStreamAPI.Hubs
             await Clients.Caller.SendAsync("hostupdate" + newMember.username, newMember.ishost);
             await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
             await Clients.Caller.SendAsync("adduserupdate", 1);
-            if (MainServer.ytURLs.Count > 0)
-                await Clients.Caller.SendAsync("playlistupdate", MainServer.ytURLs);
+            if (MainServer.playlist.Count > 0)
+                await Clients.Caller.SendAsync("playlistupdate", MainServer.playlist);
         }
 
         public async Task BanUser(string username, string UniqueId)

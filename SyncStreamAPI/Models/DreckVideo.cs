@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Models
 {
-    public class YTVideo
+    public class DreckVideo
     {
         public string title { get; set; }
         public string url { get; set; }
