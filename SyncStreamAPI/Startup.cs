@@ -34,7 +34,7 @@ namespace SyncStreamAPI
             var origins = new string[6] { "https://dreckbu.de", "https://*.dreckbu.de", "https://dreckbu.de/*","https://drecktu.be", "https://*.drecktu.be", "https://drecktu.be/*" };
             
 #endif
-            services.AddCors(o => o.AddPolicy("MyPolicy", builder =>
+            services.AddCors(o => o.AddPolicy("CORSPolicy", builder =>
             {
                 builder.SetIsOriginAllowedToAllowWildcardSubdomains()
                         .SetIsOriginAllowed(hostname => true)
@@ -67,7 +67,7 @@ namespace SyncStreamAPI
             }
             app.UseHttpsRedirection();
             app.UseRouting();
-            app.UseCors("MyPolicy");
+            app.UseCors("CORSPolicy");
             app.UseAuthentication();
             app.UseAuthorization();
 

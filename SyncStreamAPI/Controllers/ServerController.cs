@@ -1,21 +1,15 @@
 ﻿using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using SyncStreamAPI.DataContext;
-using SyncStreamAPI.Helper;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.ServerData;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Controllers
 {
-    [EnableCors("MyPolicy")]
+    [EnableCors("CORSPolicy")]
     [Route("api/Server")]
     public class ServerController : Controller
     {

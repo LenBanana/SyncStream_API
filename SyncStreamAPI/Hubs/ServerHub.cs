@@ -2,25 +2,21 @@
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
-using SyncStreamAPI.Controllers;
 using SyncStreamAPI.DataContext;
+using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Interfaces;
-using SyncStreamAPI.MariaModels;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.ServerData;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
-using System.Net;
 using System.Threading.Tasks;
-using System.Web;
 
 namespace SyncStreamAPI.Hubs
 {
-    [EnableCors("MyPolicy")]
-    public class ServerHub : Hub<IServerHub>
+    [EnableCors("CORSPolicy")]
+    public partial class ServerHub : Hub<IServerHub>
     {
         IConfiguration Configuration { get; }
 
@@ -49,225 +45,6 @@ namespace SyncStreamAPI.Hubs
             return base.OnDisconnectedAsync(ex);
         }
 #nullable disable
-
-
-        public async Task LoginRequest(User requestUser)
-        {
-            User user = _maria.Users.FirstOrDefault(x => x.username == requestUser.username && x.password == requestUser.password);
-            if (user != null)
-                user.password = "";
-            await Clients.Caller.userlogin(user);
-        }
-
-        public async Task RegisterRequest(User requestUser)
-        {
-            User user = null;
-            if (!_maria.Users.Any(x => x.username == requestUser.username))
-            {
-                if (requestUser.username.Length < 2 || requestUser.username.Length > 20)
-                {
-                    await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "Username must be between 2 and 20 characters", Answer1 = "Ok" });
-                    return;
-                }
-                await _maria.Users.AddAsync(requestUser);
-                await _maria.SaveChangesAsync();
-                user = requestUser;
-                user.password = "";
-            }
-            await Clients.Caller.userRegister(user);
-        }
-
-        public async Task GenerateRememberToken(User requestUser, string userInfo)
-        {
-            if (_maria.Users.Any(x => x.ID == requestUser.ID))
-            {
-                try
-                {
-                    string tokenString = requestUser.ID + requestUser.username + userInfo + DateTime.Now.ToLongTimeString();
-                    string shaToken = Encryption.Sha256(tokenString);
-                    RememberToken token = new RememberToken();
-                    token.ID = 0;
-                    token.Token = shaToken;
-                    token.userID = requestUser.ID;
-                    if (_maria.RememberTokens.Any(x => x.Token == shaToken && x.userID == token.userID))
-                    {
-                        await Clients.Caller.rememberToken(token);
-                        return;
-                    }
-                    if (_maria.RememberTokens.Any(x => x.Token != shaToken && x.userID == token.userID))
-                    {
-                        _maria.RememberTokens.FirstOrDefault(x => x.userID == token.userID).Token = shaToken;
-                        await Clients.Caller.rememberToken(token);
-                        await _maria.SaveChangesAsync();
-                        return;
-                    }
-                    await _maria.RememberTokens.AddAsync(token);
-                    await _maria.SaveChangesAsync();
-                    await Clients.Caller.rememberToken(token);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.Message);
-                }
-            }
-        }
-
-        public async Task GetUsers(string token, int userID)
-        {
-            RememberToken Token = _maria.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
-            if (Token != null)
-            {
-                User user = _maria.Users.FirstOrDefault(x => x.ID == Token.userID);
-                if (user != null)
-                    user.password = "";
-                if (user.userprivileges >= 3)
-                {
-                    List<User> users = _maria.Users.ToList();
-                    users.ForEach(x => x.password = "");
-                    await Clients.Caller.getusers(users);
-                }
-            }
-        }
-
-        public async Task ChangeUser(User user, string password)
-        {
-            User changeUser = _maria.Users.FirstOrDefault(x => x.ID == user.ID && password == x.password);
-            if (changeUser != null)
-            {
-                string endMsg = "";
-                if (changeUser.username != user.username)
-                {
-                    if (changeUser.username.Length < 2 || changeUser.username.Length > 20)
-                    {
-                        await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "Username must be between 2 and 20 characters", Answer1 = "Ok" });
-                    }
-                    else
-                    {
-                        changeUser.username = user.username;
-                        endMsg += "Username";
-                    }
-                }
-                if (user.password.Length > 2 && changeUser.password != user.password)
-                {
-                    changeUser.password = user.password;
-                    endMsg += endMsg.Length > 0 ? " & " : "";
-                    endMsg += "Password";
-                }
-                if (endMsg.Length > 0)
-                    endMsg += " successfully changed";
-                else
-                    endMsg = "Nothing changed.";
-                await _maria.SaveChangesAsync();
-                await Clients.Caller.dialog(new Dialog() { Header = "Success", Question = endMsg, Answer1 = "Ok" });
-                List<User> users = _maria.Users.ToList();
-                users.ForEach(x => x.password = "");
-                await Clients.All.getusers(users);
-            }
-            else
-            {
-                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "You password was not correct", Answer1 = "Ok" });
-            }
-        }
-
-        public async Task DeleteUser(string token, int userID, int removeID)
-        {
-            if (userID == removeID)
-            {
-                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "Unable to delete own user", Answer1 = "Ok" });
-                return;
-            }
-            RememberToken Token = _maria.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
-            if (Token != null)
-            {
-                User user = _maria.Users.FirstOrDefault(x => x.ID == Token.userID);
-                if (user == null)
-                    return;
-                if (user.userprivileges >= 3)
-                {
-                    var removeUser = _maria.Users.ToList().FirstOrDefault(x => x.ID == removeID);
-                    if (removeUser != null)
-                    {
-                        _maria.Users.Remove(removeUser);
-                        await _maria.SaveChangesAsync();
-                    }
-                    List<User> users = _maria.Users.ToList();
-                    users.ForEach(x => x.password = "");
-                    await Clients.All.getusers(users);
-                }
-            }
-        }
-
-        public async Task ApproveUser(string token, int userID, int approveID, bool prove)
-        {
-            if (userID == approveID)
-            {
-                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "Unable to change approve status of own user", Answer1 = "Ok" });
-                return;
-            }
-            RememberToken Token = _maria.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
-            if (Token != null)
-            {
-                User user = _maria.Users.FirstOrDefault(x => x.ID == Token.userID);
-                if (user == null)
-                    return;
-                if (user.userprivileges >= 3)
-                {
-                    var approveUser = _maria.Users.ToList().FirstOrDefault(x => x.ID == approveID);
-                    if (approveUser != null)
-                    {
-                        approveUser.approved = prove ? 1 : 0;
-                        await _maria.SaveChangesAsync();
-                    }
-                    List<User> users = _maria.Users.ToList();
-                    users.ForEach(x => x.password = "");
-                    await Clients.All.getusers(users);
-                }
-            }
-        }
-
-        public async Task SetUserPrivileges(string token, int userID, int changeID, int privileges)
-        {
-            if (userID == changeID)
-            {
-                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "Unable to change privileges of own user", Answer1 = "Ok" });
-                return;
-            }
-            RememberToken Token = _maria.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
-            if (Token != null)
-            {
-                User user = _maria.Users.FirstOrDefault(x => x.ID == Token.userID);
-                if (user == null)
-                    return;
-                if (user.userprivileges >= 3)
-                {
-                    var changeUser = _maria.Users.ToList().FirstOrDefault(x => x.ID == changeID);
-                    if (changeUser != null)
-                    {
-                        changeUser.userprivileges = privileges;
-                        await _maria.SaveChangesAsync();
-                    }
-                    List<User> users = _maria.Users.ToList();
-                    users.ForEach(x => x.password = "");
-                    await Clients.All.getusers(users);
-                }
-            }
-        }
-
-        public async Task ValidateToken(string token, int userID)
-        {
-            RememberToken Token = _maria.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
-            if (Token != null)
-            {
-                User user = _maria.Users.FirstOrDefault(x => x.ID == Token.userID);
-                if (user != null)
-                    user.password = "";
-                await Clients.Caller.userlogin(user);
-            }
-            else
-            {
-                await Clients.Caller.userlogin(new User());
-            }
-        }
 
         public async Task SendServer(Server server, string UniqueId)
         {
@@ -471,7 +248,7 @@ namespace SyncStreamAPI.Hubs
                 if (MainServer.bannedMembers.Any(x => x.ConnectionId == MainServer.members[idx].ConnectionId))
                 {
                     MainServer.members.RemoveAt(idx);
-                    await Clients.Caller.adduserupdate(-2);
+                    await Clients.Caller.adduserupdate((int)UserUpdate.Banned);
                     await Clients.Group(UniqueId).userupdate(MainServer.members);
                     await Groups.RemoveFromGroupAsync(Context.ConnectionId, UniqueId);
                     return;
@@ -521,6 +298,52 @@ namespace SyncStreamAPI.Hubs
             await Clients.All.getrooms(DataManager.GetRooms());
         }
 
+        public async Task RemoveRoom(string UniqueId)
+        {
+            Room room = GetRoom(UniqueId);
+            if (room == null)
+                return;
+            DataManager.GetRooms().Remove(room);
+            await Clients.All.getrooms(DataManager.GetRooms());
+        }
+
+        public async Task AddUser(string username, string UniqueId, string password)
+        {
+            var ip = Context.ConnectionId;
+            Console.WriteLine(ip);
+            Room room = GetRoom(UniqueId);
+            if (room == null)
+                return;
+            if (room.password != null && room.password != password)
+            {
+                await Clients.Caller.adduserupdate((int)UserUpdate.WrongPassword);
+                return;
+            }
+            Server MainServer = room.server;
+            if (MainServer.members == null)
+            {
+                MainServer.members = new List<Member>();
+            }
+            Member newMember = new Member() { username = username, ishost = MainServer.members.Count == 0 ? true : false, ConnectionId = ip, RoomId = UniqueId };
+            _manager.AddToMemberCheck(newMember);
+            if (MainServer.bannedMembers.Any(x => x.ConnectionId == newMember.ConnectionId))
+            {
+                await Clients.Caller.adduserupdate((int)UserUpdate.Banned);
+                return;
+            }
+            if (MainServer.chatmessages == null)
+                MainServer.chatmessages = new List<ChatMessage>();
+            await Groups.AddToGroupAsync(Context.ConnectionId, UniqueId);
+            MainServer.members.Add(newMember);
+            await Clients.Group(UniqueId).userupdate(MainServer.members);
+            await Clients.Caller.isplayingupdate(MainServer.isplaying);
+            await Clients.Caller.hostupdate(newMember.ishost);
+            await Clients.All.getrooms(DataManager.GetRooms());
+            await Clients.Caller.adduserupdate((int)UserUpdate.Success);
+            if (MainServer.playlist.Count > 0)
+                await Clients.Caller.playlistupdate(MainServer.playlist);
+        }
+
         public async Task RemoveUser(string username, string UniqueId)
         {
             Room room = GetRoom(UniqueId);
@@ -540,54 +363,6 @@ namespace SyncStreamAPI.Hubs
             }
             await Clients.Group(UniqueId).userupdate(MainServer.members);
             await Clients.All.getrooms(DataManager.GetRooms());
-        }
-
-        public async Task RemoveRoom(string UniqueId)
-        {
-            Room room = GetRoom(UniqueId);
-            if (room == null)
-                return;
-            DataManager.GetRooms().Remove(room);
-            await Clients.All.getrooms(DataManager.GetRooms());
-        }
-
-        public async Task AddUser(string username, string UniqueId, string password)
-        {
-            //var address = Context.GetHttpContext().Connection.LocalIpAddress;
-            //var ip = address.ToString();
-            var ip = Context.ConnectionId;
-            Console.WriteLine(ip);
-            Room room = GetRoom(UniqueId);
-            if (room == null)
-                return;
-            if (room.password != null && room.password != password)
-            {
-                await Clients.Caller.adduserupdate(-1);
-                return;
-            }
-            Server MainServer = room.server;
-            if (MainServer.members == null)
-            {
-                MainServer.members = new List<Member>();
-            }
-            Member newMember = new Member() { username = username, ishost = MainServer.members.Count == 0 ? true : false, ConnectionId = ip, RoomId = UniqueId };
-            _manager.AddToMemberCheck(newMember);
-            if (MainServer.bannedMembers.Any(x => x.ConnectionId == newMember.ConnectionId))
-            {
-                await Clients.Caller.adduserupdate(-2);
-                return;
-            }
-            if (MainServer.chatmessages == null)
-                MainServer.chatmessages = new List<ChatMessage>();
-            await Groups.AddToGroupAsync(Context.ConnectionId, UniqueId);
-            MainServer.members.Add(newMember);
-            await Clients.Group(UniqueId).userupdate(MainServer.members);
-            await Clients.Caller.isplayingupdate(MainServer.isplaying);
-            await Clients.Caller.hostupdate(newMember.ishost);
-            await Clients.All.getrooms(DataManager.GetRooms());
-            await Clients.Caller.adduserupdate(1);
-            if (MainServer.playlist.Count > 0)
-                await Clients.Caller.playlistupdate(MainServer.playlist);
         }
 
         public async Task BanUser(string username, string UniqueId)
@@ -619,87 +394,6 @@ namespace SyncStreamAPI.Hubs
             await Clients.Group(UniqueId).sendmessage(MainServer.chatmessages);
         }
 
-        public async Task WhiteBoardJoin(string UniqueId)
-        {
-            try
-            {
-                Room room = GetRoom(UniqueId);
-                if (room == null)
-                    return;
-                var drawings = room.server.members.SelectMany(x => x.drawings).OrderBy(x => x.Uuid).ToList();
-                if (drawings.Count > 0)
-                {
-                    //drawings.ForEach(x => x.Uuid = drawings.First().Uuid);
-                    await Clients.Caller.whiteboardjoin(drawings);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-            }
-        }
-
-        public async Task WhiteBoardUpdate(List<Drawing> updates, string UniqueId)
-        {
-            try
-            {
-                Room room = GetRoom(UniqueId);
-                if (room == null)
-                    return;
-                room.server.members.First(x => x.ConnectionId == Context.ConnectionId).drawings.AddRange(updates);
-                await Clients.GroupExcept(UniqueId, Context.ConnectionId).whiteboardupdate(updates);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-            }
-        }
-
-        public async Task WhiteBoardClear(string UniqueId)
-        {
-            try
-            {
-                Room room = GetRoom(UniqueId);
-                if (room == null)
-                    return;
-                room.server.members.ForEach(x => x.drawings.Clear());
-                await Clients.GroupExcept(UniqueId, Context.ConnectionId).whiteboardclear(true);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-            }
-        }
-
-        public async Task WhiteBoardUndo(string UniqueId, string UUID)
-        {
-            try
-            {
-                await Clients.GroupExcept(UniqueId, Context.ConnectionId).whiteboardundo(UUID);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-            }
-        }
-
-        public async Task WhiteBoardRedo(string UniqueId, string UUID)
-        {
-            try
-            {
-                await Clients.GroupExcept(UniqueId, Context.ConnectionId).whiteboardredo(UUID);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-            }
-        }
-
-        public async Task Ping(DateTime date)
-        {
-            await Clients.Caller.PingTest(date);
-        }
-
         public async Task SendPrivateMessage(string UniqueId, string FromUser, string ToUser, string Message)
         {
             try
@@ -726,6 +420,11 @@ namespace SyncStreamAPI.Hubs
                 Console.WriteLine(ex.Message);
                 await Clients.Caller.dialog(new Dialog() { Header = "Message Error", Question = "There has been an error trying to send your message, please try again.", Answer1 = "Ok" });
             }
+        }
+
+        public async Task Ping(DateTime date)
+        {
+            await Clients.Caller.PingTest(date);
         }
     }
 }
