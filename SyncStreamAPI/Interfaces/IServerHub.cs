@@ -31,10 +31,7 @@ namespace SyncStreamAPI.Interfaces
 
         Task hostupdate(bool isHost);
 
-        Task sendmessage(List<ChatMessage> chatMessages);
-
         Task PingTest(DateTime dateSend);
 
-        Task PrivateMessage(string message);
     }
 }
