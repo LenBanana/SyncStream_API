@@ -36,6 +36,11 @@ namespace SyncStreamAPI.Models
                 CountDown();
         }
 
+        public void InvokeKick()
+        {
+            ConsecutiveAFK = 10;
+        }
+
         public List<string> GetMessages(string User)
         {
             return PrivateMessages[User];

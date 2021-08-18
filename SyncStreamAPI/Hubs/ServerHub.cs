@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using SyncStreamAPI.Controllers;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Helper;
+using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.MariaModels;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.ServerData;
@@ -19,7 +20,7 @@ using System.Web;
 namespace SyncStreamAPI.Hubs
 {
     [EnableCors("MyPolicy")]
-    public class ServerHub : Hub
+    public class ServerHub : Hub<IServerHub>
     {
         IConfiguration Configuration { get; }
 
@@ -34,12 +35,28 @@ namespace SyncStreamAPI.Hubs
             _maria = maria;
         }
 
+#nullable enable
+        public override Task OnDisconnectedAsync(Exception? ex)
+        {
+            var Rooms = DataManager.GetRooms();
+            int idx = Rooms.FindIndex(x => x.server.members.FirstOrDefault(y => y.ConnectionId == Context.ConnectionId) != null);
+            if (idx > -1)
+            {
+                Room room = Rooms[idx];
+                Member e = room.server.members.First(x => x.ConnectionId == Context.ConnectionId);
+                e.InvokeKick();
+            }
+            return base.OnDisconnectedAsync(ex);
+        }
+#nullable disable
+
+
         public async Task LoginRequest(User requestUser)
         {
             User user = _maria.Users.FirstOrDefault(x => x.username == requestUser.username && x.password == requestUser.password);
             if (user != null)
                 user.password = "";
-            await Clients.Caller.SendAsync("userlogin", user);
+            await Clients.Caller.userlogin(user);
         }
 
         public async Task RegisterRequest(User requestUser)
@@ -49,7 +66,7 @@ namespace SyncStreamAPI.Hubs
             {
                 if (requestUser.username.Length < 2 || requestUser.username.Length > 20)
                 {
-                    await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Error", Question = "Username must be between 2 and 20 characters", Answer1 = "Ok" });
+                    await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "Username must be between 2 and 20 characters", Answer1 = "Ok" });
                     return;
                 }
                 await _maria.Users.AddAsync(requestUser);
@@ -57,7 +74,7 @@ namespace SyncStreamAPI.Hubs
                 user = requestUser;
                 user.password = "";
             }
-            await Clients.Caller.SendAsync("userRegister", user);
+            await Clients.Caller.userRegister(user);
         }
 
         public async Task GenerateRememberToken(User requestUser, string userInfo)
@@ -74,19 +91,19 @@ namespace SyncStreamAPI.Hubs
                     token.userID = requestUser.ID;
                     if (_maria.RememberTokens.Any(x => x.Token == shaToken && x.userID == token.userID))
                     {
-                        await Clients.Caller.SendAsync("rememberToken", token);
+                        await Clients.Caller.rememberToken(token);
                         return;
                     }
                     if (_maria.RememberTokens.Any(x => x.Token != shaToken && x.userID == token.userID))
                     {
                         _maria.RememberTokens.FirstOrDefault(x => x.userID == token.userID).Token = shaToken;
-                        await Clients.Caller.SendAsync("rememberToken", token);
+                        await Clients.Caller.rememberToken(token);
                         await _maria.SaveChangesAsync();
                         return;
                     }
                     await _maria.RememberTokens.AddAsync(token);
                     await _maria.SaveChangesAsync();
-                    await Clients.Caller.SendAsync("rememberToken", token);
+                    await Clients.Caller.rememberToken(token);
                 }
                 catch (Exception ex)
                 {
@@ -107,7 +124,7 @@ namespace SyncStreamAPI.Hubs
                 {
                     List<User> users = _maria.Users.ToList();
                     users.ForEach(x => x.password = "");
-                    await Clients.Caller.SendAsync("getusers", users);
+                    await Clients.Caller.getusers(users);
                 }
             }
         }
@@ -122,8 +139,9 @@ namespace SyncStreamAPI.Hubs
                 {
                     if (changeUser.username.Length < 2 || changeUser.username.Length > 20)
                     {
-                        await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Error", Question = "Username must be between 2 and 20 characters", Answer1 = "Ok" });
-                    } else
+                        await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "Username must be between 2 and 20 characters", Answer1 = "Ok" });
+                    }
+                    else
                     {
                         changeUser.username = user.username;
                         endMsg += "Username";
@@ -140,13 +158,14 @@ namespace SyncStreamAPI.Hubs
                 else
                     endMsg = "Nothing changed.";
                 await _maria.SaveChangesAsync();
-                await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Success", Question = endMsg, Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog() { Header = "Success", Question = endMsg, Answer1 = "Ok" });
                 List<User> users = _maria.Users.ToList();
                 users.ForEach(x => x.password = "");
-                await Clients.All.SendAsync("getusers", users);
-            } else
+                await Clients.All.getusers(users);
+            }
+            else
             {
-                await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Error", Question = "You password was not correct", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "You password was not correct", Answer1 = "Ok" });
             }
         }
 
@@ -154,7 +173,7 @@ namespace SyncStreamAPI.Hubs
         {
             if (userID == removeID)
             {
-                await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Error", Question = "Unable to delete own user", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "Unable to delete own user", Answer1 = "Ok" });
                 return;
             }
             RememberToken Token = _maria.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
@@ -173,7 +192,7 @@ namespace SyncStreamAPI.Hubs
                     }
                     List<User> users = _maria.Users.ToList();
                     users.ForEach(x => x.password = "");
-                    await Clients.All.SendAsync("getusers", users);
+                    await Clients.All.getusers(users);
                 }
             }
         }
@@ -182,7 +201,7 @@ namespace SyncStreamAPI.Hubs
         {
             if (userID == approveID)
             {
-                await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Error", Question = "Unable to change approve status of own user", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "Unable to change approve status of own user", Answer1 = "Ok" });
                 return;
             }
             RememberToken Token = _maria.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
@@ -201,7 +220,7 @@ namespace SyncStreamAPI.Hubs
                     }
                     List<User> users = _maria.Users.ToList();
                     users.ForEach(x => x.password = "");
-                    await Clients.All.SendAsync("getusers", users);
+                    await Clients.All.getusers(users);
                 }
             }
         }
@@ -210,7 +229,7 @@ namespace SyncStreamAPI.Hubs
         {
             if (userID == changeID)
             {
-                await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Error", Question = "Unable to change privileges of own user", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "Unable to change privileges of own user", Answer1 = "Ok" });
                 return;
             }
             RememberToken Token = _maria.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
@@ -229,7 +248,7 @@ namespace SyncStreamAPI.Hubs
                     }
                     List<User> users = _maria.Users.ToList();
                     users.ForEach(x => x.password = "");
-                    await Clients.All.SendAsync("getusers", users);
+                    await Clients.All.getusers(users);
                 }
             }
         }
@@ -242,17 +261,17 @@ namespace SyncStreamAPI.Hubs
                 User user = _maria.Users.FirstOrDefault(x => x.ID == Token.userID);
                 if (user != null)
                     user.password = "";
-                await Clients.Caller.SendAsync("userlogin", user);
+                await Clients.Caller.userlogin(user);
             }
             else
             {
-                await Clients.Caller.SendAsync("userlogin", new User());
+                await Clients.Caller.userlogin(new User());
             }
         }
 
         public async Task SendServer(Server server, string UniqueId)
         {
-            await Clients.Group(UniqueId).SendAsync("sendserver", server);
+            await Clients.Group(UniqueId).sendserver(server);
         }
 
         private Room GetRoom(string UniqueId)
@@ -300,10 +319,10 @@ namespace SyncStreamAPI.Hubs
             if (room.server.currentVideo.url.Length == 0 || room.server.currentVideo.ended == true)
             {
                 room.server.currentVideo = key;
-                await Clients.Group(UniqueId).SendAsync("videoupdate", key);
+                await Clients.Group(UniqueId).videoupdate(key);
             }
-            await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.playlist);
-            await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
+            await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
+            await Clients.All.getrooms(DataManager.GetRooms());
         }
 
         public async Task AddPlaylist(string url, string UniqueId)
@@ -333,7 +352,7 @@ namespace SyncStreamAPI.Hubs
             catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
-                await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Error", Question = "There has been an error trying to add the playlist", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "There has been an error trying to add the playlist", Answer1 = "Ok" });
             }
         }
 
@@ -346,8 +365,8 @@ namespace SyncStreamAPI.Hubs
             if (idx != -1)
             {
                 room.server.playlist.RemoveAt(idx);
-                await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.playlist);
-                await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
+                await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
+                await Clients.All.getrooms(DataManager.GetRooms());
             }
         }
 
@@ -361,9 +380,9 @@ namespace SyncStreamAPI.Hubs
             {
                 MainServer.currentVideo = room.server.playlist[1];
                 room.server.playlist.RemoveAt(0);
-                await Clients.Group(UniqueId).SendAsync("videoupdate", MainServer.currentVideo);
-                await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.playlist);
-                await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
+                await Clients.Group(UniqueId).videoupdate(MainServer.currentVideo);
+                await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
+                await Clients.All.getrooms(DataManager.GetRooms());
                 return;
             }
             else if (room.server.playlist.Count == 1)
@@ -371,10 +390,10 @@ namespace SyncStreamAPI.Hubs
                 MainServer.currentVideo.ended = true;
                 room.server.playlist.RemoveAt(0);
                 room.server.isplaying = false;
-                await Clients.Group(UniqueId).SendAsync("isplayingupdate", room.server.isplaying);
-                await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.playlist);
-                await Clients.Group(UniqueId).SendAsync("sendserver", room.server);
-                await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
+                await Clients.Group(UniqueId).isplayingupdate(room.server.isplaying);
+                await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
+                await Clients.Group(UniqueId).sendserver(room.server);
+                await Clients.All.getrooms(DataManager.GetRooms());
             }
         }
 
@@ -392,9 +411,9 @@ namespace SyncStreamAPI.Hubs
                 room.server.playlist.RemoveAt(0);
                 room.server.playlist.Insert(0, tempUrl);
                 MainServer.currentVideo = room.server.playlist[0];
-                await Clients.Group(UniqueId).SendAsync("videoupdate", MainServer.currentVideo);
-                await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.playlist);
-                await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
+                await Clients.Group(UniqueId).videoupdate(MainServer.currentVideo);
+                await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
+                await Clients.All.getrooms(DataManager.GetRooms());
                 return;
             }
         }
@@ -407,7 +426,7 @@ namespace SyncStreamAPI.Hubs
             DreckVideo vid = room.server.playlist[fromIndex];
             room.server.playlist.RemoveAt(fromIndex);
             room.server.playlist.Insert(toIndex, vid);
-            await Clients.Group(UniqueId).SendAsync("playlistupdate", room.server.playlist);
+            await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
         }
 
         public async Task SetTime(double time, string UniqueId)
@@ -416,9 +435,9 @@ namespace SyncStreamAPI.Hubs
             if (room == null)
                 return;
             if (room.server.currentVideo.url.Contains("twitch.tv"))
-                await Clients.Group(UniqueId).SendAsync("twitchTimeUpdate", time);
+                await Clients.Group(UniqueId).twitchTimeUpdate(time);
             else
-                await Clients.Group(UniqueId).SendAsync("timeupdate", time);
+                await Clients.Group(UniqueId).timeupdate(time);
             room.server.currenttime = time;
         }
 
@@ -429,11 +448,11 @@ namespace SyncStreamAPI.Hubs
                 return;
             room.server.isplaying = isplaying;
             if (room.server.currentVideo.url.Contains("twitch.tv"))
-                await Clients.Group(UniqueId).SendAsync("twitchPlaying", isplaying);
+                await Clients.Group(UniqueId).twitchPlaying(isplaying);
             else
-                await Clients.Group(UniqueId).SendAsync("isplayingupdate", isplaying);
+                await Clients.Group(UniqueId).isplayingupdate(isplaying);
 
-            await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
+            await Clients.All.getrooms(DataManager.GetRooms());
         }
 
         public async Task UpdateUser(string username, string UniqueId)
@@ -452,8 +471,8 @@ namespace SyncStreamAPI.Hubs
                 if (MainServer.bannedMembers.Any(x => x.ConnectionId == MainServer.members[idx].ConnectionId))
                 {
                     MainServer.members.RemoveAt(idx);
-                    await Clients.Caller.SendAsync("adduserupdate", -2);
-                    await Clients.Group(UniqueId).SendAsync("userupdate", MainServer.members);
+                    await Clients.Caller.adduserupdate(-2);
+                    await Clients.Group(UniqueId).userupdate(MainServer.members);
                     await Groups.RemoveFromGroupAsync(Context.ConnectionId, UniqueId);
                     return;
                 }
@@ -461,8 +480,8 @@ namespace SyncStreamAPI.Hubs
                 if (MainServer.members.Count == 1 && !MainServer.members[idx].ishost)
                 {
                     MainServer.members[idx].ishost = true;
-                    await Clients.Group(UniqueId).SendAsync("hostupdate" + MainServer.members[idx].username, true);
-                    await Clients.Group(UniqueId).SendAsync("userupdate", MainServer.members);
+                    await Clients.Client(MainServer.members[idx].ConnectionId).hostupdate(true);
+                    await Clients.Group(UniqueId).userupdate(MainServer.members);
                 }
             }
             else
@@ -486,9 +505,9 @@ namespace SyncStreamAPI.Hubs
                 MainServer.members[idxMember].uptime = DateTime.Now.ToString("MM.dd.yyyy HH:mm:ss");
                 MainServer.members[idxHost].ishost = false;
                 MainServer.members[idxMember].ishost = true;
-                await Clients.Group(UniqueId).SendAsync("hostupdate" + MainServer.members[idxHost].username, false);
-                await Clients.Group(UniqueId).SendAsync("hostupdate" + MainServer.members[idxMember].username, true);
-                await Clients.Group(UniqueId).SendAsync("userupdate", MainServer.members);
+                await Clients.Client(MainServer.members[idxHost].ConnectionId).hostupdate(false);
+                await Clients.Client(MainServer.members[idxMember].ConnectionId).hostupdate(true);
+                await Clients.Group(UniqueId).userupdate(MainServer.members);
             }
         }
 
@@ -499,7 +518,7 @@ namespace SyncStreamAPI.Hubs
             while (Rooms.Any(x => x.uniqueId == room.uniqueId))
                 room.uniqueId = room.uniqueId + RoomCount++;
             Rooms.Add(room);
-            await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
+            await Clients.All.getrooms(DataManager.GetRooms());
         }
 
         public async Task RemoveUser(string username, string UniqueId)
@@ -517,10 +536,10 @@ namespace SyncStreamAPI.Hubs
             if (isHost && MainServer.members.Count > 0)
             {
                 MainServer.members[0].ishost = true;
-                await Clients.Group(UniqueId).SendAsync("hostupdate" + MainServer.members[0].username, true);
+                await Clients.Client(MainServer.members[0].ConnectionId).hostupdate(true);
             }
-            await Clients.Group(UniqueId).SendAsync("userupdate", MainServer.members);
-            await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
+            await Clients.Group(UniqueId).userupdate(MainServer.members);
+            await Clients.All.getrooms(DataManager.GetRooms());
         }
 
         public async Task RemoveRoom(string UniqueId)
@@ -529,7 +548,7 @@ namespace SyncStreamAPI.Hubs
             if (room == null)
                 return;
             DataManager.GetRooms().Remove(room);
-            await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
+            await Clients.All.getrooms(DataManager.GetRooms());
         }
 
         public async Task AddUser(string username, string UniqueId, string password)
@@ -543,7 +562,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             if (room.password != null && room.password != password)
             {
-                await Clients.Caller.SendAsync("adduserupdate", -1);
+                await Clients.Caller.adduserupdate(-1);
                 return;
             }
             Server MainServer = room.server;
@@ -555,20 +574,20 @@ namespace SyncStreamAPI.Hubs
             _manager.AddToMemberCheck(newMember);
             if (MainServer.bannedMembers.Any(x => x.ConnectionId == newMember.ConnectionId))
             {
-                await Clients.Caller.SendAsync("adduserupdate", -2);
+                await Clients.Caller.adduserupdate(-2);
                 return;
             }
             if (MainServer.chatmessages == null)
                 MainServer.chatmessages = new List<ChatMessage>();
             await Groups.AddToGroupAsync(Context.ConnectionId, UniqueId);
             MainServer.members.Add(newMember);
-            await Clients.Group(UniqueId).SendAsync("userupdate", MainServer.members);
-            await Clients.Caller.SendAsync("isplayingupdate", MainServer.isplaying);
-            await Clients.Caller.SendAsync("hostupdate" + newMember.username, newMember.ishost);
-            await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
-            await Clients.Caller.SendAsync("adduserupdate", 1);
+            await Clients.Group(UniqueId).userupdate(MainServer.members);
+            await Clients.Caller.isplayingupdate(MainServer.isplaying);
+            await Clients.Caller.hostupdate(newMember.ishost);
+            await Clients.All.getrooms(DataManager.GetRooms());
+            await Clients.Caller.adduserupdate(1);
             if (MainServer.playlist.Count > 0)
-                await Clients.Caller.SendAsync("playlistupdate", MainServer.playlist);
+                await Clients.Caller.playlistupdate(MainServer.playlist);
         }
 
         public async Task BanUser(string username, string UniqueId)
@@ -583,8 +602,8 @@ namespace SyncStreamAPI.Hubs
                 MainServer.members.Remove(member);
                 MainServer.bannedMembers.Add(member);
             }
-            await Clients.Group(UniqueId).SendAsync("userupdate", MainServer.members);
-            await Clients.All.SendAsync("getrooms", DataManager.GetRooms());
+            await Clients.Group(UniqueId).userupdate(MainServer.members);
+            await Clients.All.getrooms(DataManager.GetRooms());
         }
 
         public async Task SendMessage(ChatMessage message, string UniqueId)
@@ -597,37 +616,9 @@ namespace SyncStreamAPI.Hubs
             MainServer.chatmessages.Add(message);
             if (MainServer.chatmessages.Count >= 100)
                 MainServer.chatmessages = MainServer.chatmessages.GetRange(MainServer.chatmessages.Count - 100, MainServer.chatmessages.Count);
-            await Clients.Group(UniqueId).SendAsync("sendmessage", MainServer.chatmessages);
+            await Clients.Group(UniqueId).sendmessage(MainServer.chatmessages);
         }
 
-        public async Task DownloadMovie(string url, string filename, string listeningId)
-        {
-            await Clients.Caller.SendAsync("dlUpdate" + listeningId, "Download will start soon...");
-            string fileEnding = "";
-            try
-            {
-                fileEnding = url.Split('.').Last();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-                return;
-            }
-            string fileDir = System.IO.Directory.GetCurrentDirectory() + "\\movies\\";
-            if (!System.IO.Directory.Exists(fileDir))
-                System.IO.Directory.CreateDirectory(fileDir);
-            string filePath = fileDir + filename + "." + fileEnding;
-            using (WebClient wc = new WebClient())
-            {
-                wc.DownloadFileAsync(
-                    new Uri(url),
-                    filePath
-                );
-                wc.DownloadProgressChanged += new DownloadProgressChangedEventHandler((s, e) => _manager.wc_DownloadProgressChanged(s, e, listeningId));
-                wc.DownloadFileCompleted += new AsyncCompletedEventHandler((s, e) => _manager.Completed(s, e, listeningId));
-            }
-            await Clients.Caller.SendAsync("dlUpdate" + listeningId, "Download started");
-        }
         public async Task WhiteBoardJoin(string UniqueId)
         {
             try
@@ -639,7 +630,7 @@ namespace SyncStreamAPI.Hubs
                 if (drawings.Count > 0)
                 {
                     //drawings.ForEach(x => x.Uuid = drawings.First().Uuid);
-                    await Clients.Caller.SendAsync("whiteboardjoin", drawings);
+                    await Clients.Caller.whiteboardjoin(drawings);
                 }
             }
             catch (Exception ex)
@@ -656,7 +647,7 @@ namespace SyncStreamAPI.Hubs
                 if (room == null)
                     return;
                 room.server.members.First(x => x.ConnectionId == Context.ConnectionId).drawings.AddRange(updates);
-                await Clients.GroupExcept(UniqueId, Context.ConnectionId).SendAsync("whiteboardupdate", updates);
+                await Clients.GroupExcept(UniqueId, Context.ConnectionId).whiteboardupdate(updates);
             }
             catch (Exception ex)
             {
@@ -672,7 +663,7 @@ namespace SyncStreamAPI.Hubs
                 if (room == null)
                     return;
                 room.server.members.ForEach(x => x.drawings.Clear());
-                await Clients.GroupExcept(UniqueId, Context.ConnectionId).SendAsync("whiteboardclear", true);
+                await Clients.GroupExcept(UniqueId, Context.ConnectionId).whiteboardclear(true);
             }
             catch (Exception ex)
             {
@@ -684,7 +675,7 @@ namespace SyncStreamAPI.Hubs
         {
             try
             {
-                await Clients.GroupExcept(UniqueId, Context.ConnectionId).SendAsync("whiteboardundo", UUID);
+                await Clients.GroupExcept(UniqueId, Context.ConnectionId).whiteboardundo(UUID);
             }
             catch (Exception ex)
             {
@@ -696,7 +687,7 @@ namespace SyncStreamAPI.Hubs
         {
             try
             {
-                await Clients.GroupExcept(UniqueId, Context.ConnectionId).SendAsync("whiteboardredo", UUID);
+                await Clients.GroupExcept(UniqueId, Context.ConnectionId).whiteboardredo(UUID);
             }
             catch (Exception ex)
             {
@@ -706,7 +697,7 @@ namespace SyncStreamAPI.Hubs
 
         public async Task Ping(DateTime date)
         {
-            await Clients.Caller.SendAsync("PingTest", date);
+            await Clients.Caller.PingTest(date);
         }
 
         public async Task SendPrivateMessage(string UniqueId, string FromUser, string ToUser, string Message)
@@ -722,9 +713,10 @@ namespace SyncStreamAPI.Hubs
                 if (FromIdx != null && ToIdx != null)
                 {
                     string FullMessage = FromIdx.AddMessage(ToUser, Message);
-                    await Clients.Caller.SendAsync("PrivateMessage", FullMessage);
-                    await Clients.Client(ToIdx.ConnectionId).SendAsync("PrivateMessage", FullMessage);
-                } else
+                    await Clients.Caller.PrivateMessage(FullMessage);
+                    await Clients.Client(ToIdx.ConnectionId).PrivateMessage(FullMessage);
+                }
+                else
                 {
                     throw new Exception("User was not found");
                 }
@@ -732,7 +724,7 @@ namespace SyncStreamAPI.Hubs
             catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
-                await Clients.Caller.SendAsync("dialog", new Dialog() { Header = "Message Error", Question = "There has been an error trying to send your message, please try again.", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog() { Header = "Message Error", Question = "There has been an error trying to send your message, please try again.", Answer1 = "Ok" });
             }
         }
     }

@@ -52,6 +52,11 @@ namespace SyncStreamAPI.ServerData
 
         private async void Member_Kicked(Member e)
         {
+            await KickMember(e);
+        }
+
+        public async Task KickMember(Member e)
+        {
             if (e != null)
             {
                 try
@@ -64,7 +69,7 @@ namespace SyncStreamAPI.ServerData
                         if (!room.server.members.Contains(e))
                             return;
                         room.server.members.Remove(e);
-                        
+
                         if (room.server.members.Count > 0)
                         {
                             room.server.members[0].drawings.AddRange(e.drawings);
