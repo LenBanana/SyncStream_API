@@ -17,8 +17,17 @@ namespace SyncStreamAPI.Hubs
             message.time = DateTime.Now;
             MainServer.chatmessages.Add(message);
             if (MainServer.chatmessages.Count >= 100)
-                MainServer.chatmessages = MainServer.chatmessages.GetRange(MainServer.chatmessages.Count - 100, MainServer.chatmessages.Count);
-            await Clients.Group(UniqueId).sendmessage(MainServer.chatmessages);
+                MainServer.chatmessages.RemoveAt(0);
+            await Clients.Group(UniqueId).sendmessage(message);
+        }
+
+        public async Task GetMessages(string UniqueId)
+        {
+            Room room = GetRoom(UniqueId);
+            if (room == null)
+                return;
+            Server MainServer = room.server;
+            await Clients.Caller.sendmessages(MainServer.chatmessages);
         }
 
         public async Task SendPrivateMessage(string UniqueId, string FromUser, string ToUser, string Message)
@@ -57,7 +66,7 @@ namespace SyncStreamAPI.Hubs
                     return;
                 Server MainServer = room.server;
                 MainServer.chatmessages = new List<ChatMessage>();
-                await Clients.Group(UniqueId).sendmessage(MainServer.chatmessages);
+                await Clients.Group(UniqueId).sendmessages(MainServer.chatmessages);
             }
             catch (Exception ex)
             {
