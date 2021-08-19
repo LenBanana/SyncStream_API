@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SyncStreamAPI.DTOModel;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
@@ -15,6 +16,8 @@ namespace SyncStreamAPI.Models
         private string _uptime { get; set; } = DateTime.Now.ToString("MM.dd.yyyy HH:mm:ss");
         public string uptime { get { return _uptime; } set { _uptime = value; ConsecutiveAFK = 0; } }
         public bool ishost { get; set; }
+        public double gallowPoints { get; set; } = 0;
+        public bool guessedGallow { get; set; } = false;
         private int _ConsecutiveAFK { get; set; } = 0;
         private int ConsecutiveAFK { get { return _ConsecutiveAFK; } set { _ConsecutiveAFK = value; if (value >= 10) { Kicked?.Invoke(this); } } }
         public List<Drawing> drawings { get; set; } = new List<Drawing>();
@@ -26,6 +29,11 @@ namespace SyncStreamAPI.Models
         public Member()
         {
             CountDown();
+        }
+
+        public MemberDTO ToDTO()
+        {
+            return new MemberDTO(username, ishost, gallowPoints, guessedGallow);
         }
 
         private async void CountDown()

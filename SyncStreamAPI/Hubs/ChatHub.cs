@@ -18,7 +18,41 @@ namespace SyncStreamAPI.Hubs
             MainServer.chatmessages.Add(message);
             if (MainServer.chatmessages.Count >= 100)
                 MainServer.chatmessages.RemoveAt(0);
-            await Clients.Group(UniqueId).sendmessage(message);
+            Member sender = MainServer.members.FirstOrDefault(x => Context.ConnectionId == x.ConnectionId);
+            if (!room.PlayingGallows)
+            {
+                await Clients.Group(UniqueId).sendmessage(message);
+            }
+            else
+            {
+                if ((sender != null && sender.ishost) || sender.guessedGallow)
+                    return;
+                if (message.message.ToLower() == room.GallowWord.ToLower())
+                {
+                    var guessedGallow = MainServer.members.Where(x => x.guessedGallow);
+                    var points = 10 - guessedGallow.Count();
+                    sender.gallowPoints += points > 0 ? points : 0;
+                    sender.guessedGallow = true;
+                    ChatMessage correntAnswerServerMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{message.username} answered correctly" };
+                    ChatMessage correntAnswerPrivateMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{message.username} you answered correct. You've been awarded {points} points" };
+                    await Clients.Caller.sendmessage(correntAnswerPrivateMsg);
+                    await Clients.Group(UniqueId).sendmessage(correntAnswerServerMsg);
+                    if (MainServer.members.Where(x => !x.ishost).All(x => x.guessedGallow))
+                    {
+                        int idx = MainServer.members.FindIndex(x => x.ishost);
+                        idx = (idx + 1) == MainServer.members.Count ? 0 : idx + 1;
+                        MainServer.members.ForEach(x => x.guessedGallow = false);
+                        room.UpdateGallowWord();
+                        await Clients.Group(UniqueId).playinggallows(room.GallowWord);
+                        await ChangeHost(MainServer.members[idx].username, UniqueId);
+                    }
+                    await Clients.Group(UniqueId).gallowusers(MainServer.members.Select(x => x.ToDTO()).ToList());
+                }
+                else
+                {
+                    await Clients.Group(UniqueId).sendmessage(message);
+                }
+            }
         }
 
         public async Task GetMessages(string UniqueId)

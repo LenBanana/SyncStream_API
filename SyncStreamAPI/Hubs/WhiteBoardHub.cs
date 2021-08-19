@@ -9,6 +9,37 @@ namespace SyncStreamAPI.Hubs
 {
     public partial class ServerHub
     {
+        public async Task PlayGallows(string UniqueId)
+        {
+            try
+            {
+                Room room = GetRoom(UniqueId);
+                if (room == null)
+                    return;
+                if (room.server.members.Count > 1)
+                {
+                    room.PlayingGallows = !room.PlayingGallows;
+                    if (room.PlayingGallows)
+                    {
+                        room.UpdateGallowWord();
+                        await Clients.Group(UniqueId).playinggallows(room.GallowWord);
+                        await Task.Delay(250);
+                        await Clients.Group(UniqueId).gallowusers(room.server.members.Select(x => x.ToDTO()).ToList());
+                        return;
+                    }
+                }
+                if (room.PlayingGallows)
+                {
+                    room.server.members.ForEach(x => { x.gallowPoints = 0; x.guessedGallow = false; });
+                    await Clients.Group(UniqueId).playinggallows(null);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+        }
+
         public async Task WhiteBoardJoin(string UniqueId)
         {
             try
@@ -19,7 +50,6 @@ namespace SyncStreamAPI.Hubs
                 var drawings = room.server.members.SelectMany(x => x.drawings).OrderBy(x => x.Uuid).ToList();
                 if (drawings.Count > 0)
                 {
-                    //drawings.ForEach(x => x.Uuid = drawings.First().Uuid);
                     await Clients.Caller.whiteboardjoin(drawings);
                 }
             }

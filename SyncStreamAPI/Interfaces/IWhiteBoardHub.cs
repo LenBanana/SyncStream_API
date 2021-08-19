@@ -1,4 +1,5 @@
-﻿using SyncStreamAPI.Models;
+﻿using SyncStreamAPI.DTOModel;
+using SyncStreamAPI.Models;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -15,5 +16,9 @@ namespace SyncStreamAPI.Interfaces
         Task whiteboardundo(string UUID);
 
         Task whiteboardredo(string UUID);
+
+        Task playinggallows(string word);
+
+        Task gallowusers(List<MemberDTO> members);
     }
 }

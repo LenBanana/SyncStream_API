@@ -39,7 +39,12 @@ namespace SyncStreamAPI.Hubs
                 MainServer.chatmessages = new List<ChatMessage>();
             await Groups.AddToGroupAsync(Context.ConnectionId, UniqueId);
             MainServer.members.Add(newMember);
-            await Clients.Group(UniqueId).userupdate(MainServer.members);
+            await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
+            if (room.PlayingGallows)
+            {
+                await Clients.Caller.playinggallows(room.GallowWord);
+                await Clients.Caller.gallowusers(room.server.members.Select(x => x.ToDTO()).ToList());
+            }
             await Clients.Caller.isplayingupdate(MainServer.isplaying);
             await Clients.Caller.hostupdate(newMember.ishost);
             await Clients.All.getrooms(DataManager.GetRooms());
@@ -54,7 +59,7 @@ namespace SyncStreamAPI.Hubs
             if (room == null)
                 return;
             Server MainServer = room.server;
-            int idx = MainServer.members.FindIndex(x => x.username == username);
+            int idx = MainServer.members.FindIndex(x => x.ConnectionId == Context.ConnectionId);
             if (idx != -1)
             {
                 //var address = Context.GetHttpContext().Connection.RemoteIpAddress;
@@ -65,7 +70,7 @@ namespace SyncStreamAPI.Hubs
                 {
                     MainServer.members.RemoveAt(idx);
                     await Clients.Caller.adduserupdate((int)UserUpdate.Banned);
-                    await Clients.Group(UniqueId).userupdate(MainServer.members);
+                    await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
                     await Groups.RemoveFromGroupAsync(Context.ConnectionId, UniqueId);
                     return;
                 }
@@ -74,7 +79,7 @@ namespace SyncStreamAPI.Hubs
                 {
                     MainServer.members[idx].ishost = true;
                     await Clients.Client(MainServer.members[idx].ConnectionId).hostupdate(true);
-                    await Clients.Group(UniqueId).userupdate(MainServer.members);
+                    await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
                 }
             }
             else
@@ -91,7 +96,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             Server MainServer = room.server;
             int idxHost = MainServer.members.FindIndex(x => x.ishost == true);
-            int idxMember = MainServer.members.FindIndex(x => x.username == usernameMember);
+            int idxMember = MainServer.members.FindIndex(x => x.username == usernameMember || x.ConnectionId == usernameMember);
             if (idxHost != -1 && idxMember != -1)
             {
                 MainServer.members[idxHost].uptime = DateTime.Now.ToString("MM.dd.yyyy HH:mm:ss");
@@ -100,7 +105,7 @@ namespace SyncStreamAPI.Hubs
                 MainServer.members[idxMember].ishost = true;
                 await Clients.Client(MainServer.members[idxHost].ConnectionId).hostupdate(false);
                 await Clients.Client(MainServer.members[idxMember].ConnectionId).hostupdate(true);
-                await Clients.Group(UniqueId).userupdate(MainServer.members);
+                await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
             }
         }
 
@@ -110,7 +115,7 @@ namespace SyncStreamAPI.Hubs
             if (room == null)
                 return;
             Server MainServer = room.server;
-            int idx = MainServer.members.FindIndex(x => x.username == username);
+            int idx = MainServer.members.FindIndex(x => x != null && x.username == username);
             if (idx == -1)
                 return;
             bool isHost = MainServer.members[idx].ishost;
@@ -121,7 +126,7 @@ namespace SyncStreamAPI.Hubs
                 MainServer.members[0].ishost = true;
                 await Clients.Client(MainServer.members[0].ConnectionId).hostupdate(true);
             }
-            await Clients.Group(UniqueId).userupdate(MainServer.members);
+            await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
             await Clients.All.getrooms(DataManager.GetRooms());
         }
 
@@ -137,7 +142,7 @@ namespace SyncStreamAPI.Hubs
                 MainServer.members.Remove(member);
                 MainServer.bannedMembers.Add(member);
             }
-            await Clients.Group(UniqueId).userupdate(MainServer.members);
+            await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
             await Clients.All.getrooms(DataManager.GetRooms());
         }
     }

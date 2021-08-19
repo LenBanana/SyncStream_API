@@ -1,4 +1,5 @@
-﻿using SyncStreamAPI.Models;
+﻿using SyncStreamAPI.DTOModel;
+using SyncStreamAPI.Models;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -8,7 +9,7 @@ namespace SyncStreamAPI.Interfaces
     {
         Task adduserupdate(int errorCode);
 
-        Task userupdate(List<Member> members);
+        Task userupdate(List<MemberDTO> members);
 
         Task hostupdate(bool isHost);
     }
