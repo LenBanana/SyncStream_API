@@ -20,5 +20,9 @@ namespace SyncStreamAPI.Interfaces
         Task playinggallows(string word);
 
         Task gallowusers(List<MemberDTO> members);
+
+        Task gallowtimerupdate(int time);
+
+        Task gallowtimerelapsed(int time);
     }
 }

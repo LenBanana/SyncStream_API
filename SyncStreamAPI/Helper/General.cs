@@ -252,7 +252,7 @@ namespace SyncStreamAPI.Helper
             "Gleis",
             "Goethe-Institut",
             "Größe",
-            "Die Grenze",
+            "Grenze",
             "Grippe",
             "Großeltern",
             "Großmutter",
@@ -466,7 +466,7 @@ namespace SyncStreamAPI.Helper
             "Plastik",
             "Platz",
             "Polizei",
-            "Pommes frites",
+            "Pommes",
             "Portion",
             "Post",
             "Postleitzahl",
@@ -475,7 +475,7 @@ namespace SyncStreamAPI.Helper
             "Praxis",
             "Preis",
             "Problem",
-            "Das Produkt",
+            "Produkt",
             "Programm",
             "Prospekt",
             "Pullover",
@@ -511,7 +511,7 @@ namespace SyncStreamAPI.Helper
             "Saft",
             "Salat",
             "Salz",
-            "Samstag/Sonnabend",
+            "Samstag",
             "Satz",
             "Schüler",
             "Schülerin",
@@ -585,7 +585,7 @@ namespace SyncStreamAPI.Helper
             "Tasche",
             "Tasse",
             "Taxi",
-            "Der Tee",
+            "Tee",
             "Teil",
             "Telefon",
             "Telefonbuch",
@@ -676,6 +676,10 @@ namespace SyncStreamAPI.Helper
             "Zucker",
             "Zug"
         };
+
+        public static int GallowGameLength = 90;
+        public static int GallowGuessPoints = 10;
+        public static int GallowDrawBasePoints = 5;
 
         public static string GetGallowWord()
         {

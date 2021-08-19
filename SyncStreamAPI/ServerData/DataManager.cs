@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 using SyncStreamAPI.Hubs;
+using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
 using System;
 using System.Collections.Generic;
@@ -14,9 +15,9 @@ namespace SyncStreamAPI.ServerData
     {
         public static List<Room> Rooms = new List<Room>();
         public static bool checking = false;
-        private readonly IHubContext<ServerHub> _hub;
+        private readonly IHubContext<ServerHub, IServerHub> _hub;
 
-        public DataManager(IHubContext<ServerHub> hub)
+        public DataManager(IHubContext<ServerHub, IServerHub> hub)
         {
             _hub = hub;
             AddDefaultRooms();
@@ -24,16 +25,16 @@ namespace SyncStreamAPI.ServerData
 
         public void AddDefaultRooms()
         {
-            Rooms.Add(new Room() { name = "Dreckroom", server = new Server(), uniqueId = "dreck" });
-            Rooms.Add(new Room() { name = "Randomkeller", server = new Server(), uniqueId = "random" });
-            Rooms.Add(new Room() { name = "GuestRoom 1", server = new Server(), uniqueId = "guest1" });
-            Rooms.Add(new Room() { name = "GuestRoom 2", server = new Server(), uniqueId = "guest2" });
-            Rooms.Add(new Room() { name = "GuestRoom 3", server = new Server(), uniqueId = "guest3" });
-            Rooms.Add(new Room() { name = "GuestRoom 4", server = new Server(), uniqueId = "guest4" });
-            Rooms.Add(new Room() { name = "MovieRoom 1", server = new Server(), uniqueId = "movie1" });
-            Rooms.Add(new Room() { name = "MovieRoom 2", server = new Server(), uniqueId = "movie2" });
-            Rooms.Add(new Room() { name = "MovieRoom 3", server = new Server(), uniqueId = "movie3" });
-            Rooms.Add(new Room() { name = "MovieRoom 4", server = new Server(), uniqueId = "movie4" });
+            Rooms.Add(new Room() { name = "Dreckroom", server = new Server(this), uniqueId = "dreck" });
+            Rooms.Add(new Room() { name = "Randomkeller", server = new Server(this), uniqueId = "random" });
+            Rooms.Add(new Room() { name = "GuestRoom 1", server = new Server(this), uniqueId = "guest1" });
+            Rooms.Add(new Room() { name = "GuestRoom 2", server = new Server(this), uniqueId = "guest2" });
+            Rooms.Add(new Room() { name = "GuestRoom 3", server = new Server(this), uniqueId = "guest3" });
+            Rooms.Add(new Room() { name = "GuestRoom 4", server = new Server(this), uniqueId = "guest4" });
+            Rooms.Add(new Room() { name = "MovieRoom 1", server = new Server(this), uniqueId = "movie1" });
+            Rooms.Add(new Room() { name = "MovieRoom 2", server = new Server(this), uniqueId = "movie2" });
+            Rooms.Add(new Room() { name = "MovieRoom 3", server = new Server(this), uniqueId = "movie3" });
+            Rooms.Add(new Room() { name = "MovieRoom 4", server = new Server(this), uniqueId = "movie4" });
         }
 
         public static Room GetRoom(string UniqueId)
@@ -50,9 +51,84 @@ namespace SyncStreamAPI.ServerData
             member.Kicked += Member_Kicked;
         }
 
+        public void GallowTimeUpdate(Server server)
+        {
+            server.GallowTimerUpdate += Server_GallowTimerUpdate;
+        }
+
+        public void GallowTimeElapsed(Server server)
+        {
+            server.GallowTimerElapsed += Server_GallowTimerElapsed;
+        }
+
+        private async void Server_GallowTimerUpdate(int Time, Server server)
+        {
+            await _hub.Clients.Group(server.RoomId).gallowtimerupdate(Time);
+        }
+
+        private async void Server_GallowTimerElapsed(int Time, Server server)
+        {
+            await EndGallow(server);
+        }
+
         private async void Member_Kicked(Member e)
         {
             await KickMember(e);
+        }
+
+        public async Task PlayGallow(Server MainServer, Member sender, ChatMessage message)
+        {
+            if ((sender != null && sender.ishost) || sender.guessedGallow)
+                return;
+            if (message.message.ToLower() == MainServer.GallowWord.ToLower())
+            {
+                var guessedGallow = MainServer.members.Where(x => x.guessedGallow).Count();
+                var points = Helper.General.GallowGuessPoints - guessedGallow;
+                sender.gallowPoints += points > 0 ? points : 0;
+                sender.guessedGallow = true;
+                ChatMessage correntAnswerServerMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{message.username} answered correctly" };
+                await _hub.Clients.Group(MainServer.RoomId).sendmessage(correntAnswerServerMsg);
+                ChatMessage correntAnswerPrivateMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{message.username} you answered correct. You've been awarded {points} points" };
+                await _hub.Clients.Client(sender.ConnectionId).sendmessage(correntAnswerPrivateMsg);
+                if (MainServer.members.Where(x => !x.ishost).All(x => x.guessedGallow))
+                {
+                    await EndGallow(MainServer);
+                }
+                await _hub.Clients.Group(MainServer.RoomId).gallowusers(MainServer.members.Select(x => x.ToDTO()).ToList());
+            }
+            else
+            {
+                await _hub.Clients.Group(MainServer.RoomId).sendmessage(message);
+            }
+        }
+
+        public async Task EndGallow(Server MainServer)
+        {
+            var guessedGallow = MainServer.members.Where(x => x.guessedGallow).Count();
+            int idx = MainServer.members.FindIndex(x => x.ishost);
+            var hostPoints = guessedGallow * 2;
+            if (hostPoints > 0)
+            {
+                hostPoints += Helper.General.GallowDrawBasePoints;
+                MainServer.members[idx].gallowPoints += hostPoints;
+                ChatMessage hostMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{MainServer.members[idx].username} {guessedGallow} users got the word correct, good job. You've been awarded {hostPoints} points" };
+                await _hub.Clients.Client(MainServer.members[idx].ConnectionId).sendmessage(hostMsg);
+            }
+
+            MainServer.members[idx].ishost = false;
+            await _hub.Clients.Client(MainServer.members[idx].ConnectionId).hostupdate(false);
+
+            idx = (idx + 1) == MainServer.members.Count ? 0 : idx + 1;
+            MainServer.members.ForEach(x => x.guessedGallow = false);
+            ChatMessage gallowEndedMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"Round has ended! The correct word was {MainServer.GallowWord}" };
+            await _hub.Clients.Group(MainServer.RoomId).sendmessage(gallowEndedMsg);
+
+            MainServer.UpdateGallowWord();
+            await _hub.Clients.Group(MainServer.RoomId).playinggallows(MainServer.GallowWord);
+
+            MainServer.members[idx].ishost = true;
+            await _hub.Clients.Client(MainServer.members[idx].ConnectionId).hostupdate(true);
+            await _hub.Clients.Group(MainServer.RoomId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
         }
 
         public async Task KickMember(Member e)
@@ -76,11 +152,11 @@ namespace SyncStreamAPI.ServerData
                             if (e.ishost)
                             {
                                 room.server.members[0].ishost = true;
-                                await _hub.Clients.Group(room.uniqueId).SendAsync("hostupdate" + room.server.members[0].username, true);
+                                await _hub.Clients.Client(room.server.members[0].ConnectionId).hostupdate(true);
                             }
                         }
-                        await _hub.Clients.Group(room.uniqueId).SendAsync("userupdate", room.server.members);
-                        await _hub.Clients.All.SendAsync("getrooms", Rooms);
+                        await _hub.Clients.Group(room.uniqueId).userupdate(room.server.members.Select(x => x.ToDTO()).ToList());
+                        await _hub.Clients.All.getrooms(Rooms);
                     }
                 }
                 catch (Exception ex)
@@ -88,19 +164,6 @@ namespace SyncStreamAPI.ServerData
                     Console.WriteLine(ex.Message);
                 }
             }
-        }
-
-        public async void wc_DownloadProgressChanged(object sender, DownloadProgressChangedEventArgs e, string id)
-        {
-            float received = (e.BytesReceived / 1024f) / 1024f;
-            float total = (e.TotalBytesToReceive / 1024f) / 1024f;
-            string status = "Download at: " + e.ProgressPercentage + "%. Processed " + received + "mb of " + total + "mb total."; 
-            await _hub.Clients.All.SendAsync("dlUpdate" + id, status);
-        }
-
-        public async void Completed(object o, AsyncCompletedEventArgs args, string id)
-        {
-            await _hub.Clients.All.SendAsync("dlUpdate" + id, "Download completed");
         }
     }
 }

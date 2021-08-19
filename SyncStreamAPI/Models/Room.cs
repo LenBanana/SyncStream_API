@@ -11,19 +11,11 @@ namespace SyncStreamAPI.Models
         public string uniqueId { get; set; }
         public string name { get; set; }
         public string password { get; set; }
-        public string GallowWord { get; set; }
-        public bool PlayingGallows { get; set; }
         public Server server { get { return _server; } set { _server = value; } } //server.CheckMembers();
         private Server _server { get; set; }
 
-
         public Room()
         {
-        }
-
-        public void UpdateGallowWord()
-        {
-            GallowWord = General.GetGallowWord();
         }
 
     }

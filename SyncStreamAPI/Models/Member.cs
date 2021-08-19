@@ -26,9 +26,10 @@ namespace SyncStreamAPI.Models
         public delegate void KickEvent(Member e);
         public event KickEvent Kicked;
 
-        public Member()
+        public Member(ServerData.DataManager _manager)
         {
             CountDown();
+            _manager.AddToMemberCheck(this);
         }
 
         public MemberDTO ToDTO()

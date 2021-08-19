@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Hubs;
+using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.ServerData;
 
 namespace SyncStreamAPI
@@ -49,7 +50,7 @@ namespace SyncStreamAPI
             });
             services.AddSingleton(provider =>
             {
-                var hubContext = provider.GetService<IHubContext<ServerHub>>();
+                var hubContext = provider.GetService<IHubContext<ServerHub, IServerHub>>();
                 DataManager manager = new DataManager(hubContext);
                 return manager;
             });

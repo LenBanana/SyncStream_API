@@ -28,8 +28,7 @@ namespace SyncStreamAPI.Hubs
             {
                 MainServer.members = new List<Member>();
             }
-            Member newMember = new Member() { username = username, ishost = MainServer.members.Count == 0 ? true : false, ConnectionId = ip, RoomId = UniqueId };
-            _manager.AddToMemberCheck(newMember);
+            Member newMember = new Member(_manager) { username = username, ishost = MainServer.members.Count == 0 ? true : false, ConnectionId = ip, RoomId = UniqueId };
             if (MainServer.bannedMembers.Any(x => x.ConnectionId == newMember.ConnectionId))
             {
                 await Clients.Caller.adduserupdate((int)UserUpdate.Banned);
@@ -40,9 +39,9 @@ namespace SyncStreamAPI.Hubs
             await Groups.AddToGroupAsync(Context.ConnectionId, UniqueId);
             MainServer.members.Add(newMember);
             await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
-            if (room.PlayingGallows)
+            if (room.server.PlayingGallows)
             {
-                await Clients.Caller.playinggallows(room.GallowWord);
+                await Clients.Caller.playinggallows(room.server.GallowWord);
                 await Clients.Caller.gallowusers(room.server.members.Select(x => x.ToDTO()).ToList());
             }
             await Clients.Caller.isplayingupdate(MainServer.isplaying);

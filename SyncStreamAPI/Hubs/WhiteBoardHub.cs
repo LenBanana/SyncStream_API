@@ -18,21 +18,18 @@ namespace SyncStreamAPI.Hubs
                     return;
                 if (room.server.members.Count > 1)
                 {
-                    room.PlayingGallows = !room.PlayingGallows;
-                    if (room.PlayingGallows)
+                    room.server.PlayingGallows = !room.server.PlayingGallows;
+                    if (room.server.PlayingGallows)
                     {
-                        room.UpdateGallowWord();
-                        await Clients.Group(UniqueId).playinggallows(room.GallowWord);
+                        room.server.UpdateGallowWord();
+                        await Clients.Group(UniqueId).playinggallows(room.server.GallowWord);
                         await Task.Delay(250);
                         await Clients.Group(UniqueId).gallowusers(room.server.members.Select(x => x.ToDTO()).ToList());
                         return;
                     }
                 }
-                if (room.PlayingGallows)
-                {
-                    room.server.members.ForEach(x => { x.gallowPoints = 0; x.guessedGallow = false; });
-                    await Clients.Group(UniqueId).playinggallows(null);
-                }
+                room.server.members.ForEach(x => { x.gallowPoints = 0; x.guessedGallow = false; });
+                await Clients.Group(UniqueId).playinggallows(null);
             }
             catch (Exception ex)
             {
