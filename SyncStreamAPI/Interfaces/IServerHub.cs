@@ -25,12 +25,6 @@ namespace SyncStreamAPI.Interfaces
 
         Task twitchPlaying(bool playing);
 
-        Task adduserupdate(int errorCode);
-
-        Task userupdate(List<Member> members);
-
-        Task hostupdate(bool isHost);
-
         Task PingTest(DateTime dateSend);
 
     }
