@@ -33,6 +33,21 @@ namespace SyncStreamAPI.Hubs
                 Console.WriteLine(ex.Message);
             }
         }
+        public async Task NewGallow(string UniqueId)
+        {
+            try
+            {
+                Room room = GetRoom(UniqueId);
+                if (room == null)
+                    return;
+                if (room.server.PlayingGallows)
+                    room.server.UpdateGallowWord(false);                
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+        }
 
         public async Task WhiteBoardJoin(string UniqueId)
         {
