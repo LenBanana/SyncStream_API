@@ -28,8 +28,8 @@ namespace SyncStreamAPI.Hubs
                         return;
                     }
                 }
-                room.server.members.ForEach(x => { x.gallowPoints = 0; x.guessedGallow = false; });
-                await Clients.Group(UniqueId).playinggallows(null);
+                room.server.members.ForEach(x => { x.gallowPoints = 0; x.guessedGallow = false; x.drawings = new List<Drawing>(); });
+                await Clients.Group(UniqueId).playinggallows("$clearboard$");
             }
             catch (Exception ex)
             {

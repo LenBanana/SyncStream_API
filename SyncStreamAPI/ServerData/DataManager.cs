@@ -119,9 +119,10 @@ namespace SyncStreamAPI.ServerData
             await _hub.Clients.Client(MainServer.members[idx].ConnectionId).hostupdate(false);
 
             idx = (idx + 1) == MainServer.members.Count ? 0 : idx + 1;
-            MainServer.members.ForEach(x => x.guessedGallow = false);
+            MainServer.members.ForEach(x => { x.guessedGallow = false; x.drawings = new List<Drawing>(); });
             ChatMessage gallowEndedMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"Round has ended! The correct word was {MainServer.GallowWord}" };
             await _hub.Clients.Group(MainServer.RoomId).sendmessage(gallowEndedMsg);
+            await _hub.Clients.Group(MainServer.RoomId).whiteboardclear(true);
 
             MainServer.UpdateGallowWord();
             await _hub.Clients.Group(MainServer.RoomId).playinggallows(MainServer.GallowWord);
