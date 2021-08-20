@@ -20,9 +20,9 @@ namespace SyncStreamAPI.Models
         public string RoomId { get { return members.Count > 0 ? members[0].RoomId : ""; } }
         public string GallowWord { get; set; }
         private bool _PlayingGallows { get; set; }
-        public bool PlayingGallows { get { return _PlayingGallows; } set { if (_PlayingGallows == true && value == false) GallowGameEnded?.Invoke(this); _PlayingGallows = value; if (value == true) { GallowTimer = Helper.General.GallowGameLength; } } }
+        public bool PlayingGallows { get { return _PlayingGallows; } set { if (_PlayingGallows == true && value == false) GallowGameEnded?.Invoke(this); _PlayingGallows = value; if (value == true) { GallowTime = Helper.General.GallowGameLength; } } }
         private int _GallowTimer { get; set; } = Helper.General.GallowGameLength;
-        private int GallowTimer { get { return _GallowTimer; } set { _GallowTimer = value; if (GallowTimer > 0) GallowTimerUpdate?.Invoke(value, this); else GallowTimerElapsed?.Invoke(value, this); } }
+        public int GallowTime { get { return _GallowTimer; } set { _GallowTimer = value; if (GallowTime > 0) GallowTimerUpdate?.Invoke(value, this); else GallowTimerElapsed?.Invoke(value, this); } }
 
         public delegate void TimeUpdate(int Time, Server server);
         public event TimeUpdate GallowTimerUpdate;
@@ -48,15 +48,15 @@ namespace SyncStreamAPI.Models
         public async void GallowCountdown()
         {
             await Task.Delay(1000);
-            if (GallowTimer > 0 && PlayingGallows && members.Count > 0)
-                GallowTimer -= 1;
+            if (GallowTime > 0 && PlayingGallows && members.Count > 0)
+                GallowTime -= 1;
             GallowCountdown();
         }
 
         public void UpdateGallowWord(bool EndGame)
         {
-            if (GallowTimer != Helper.General.GallowGameLength)
-                GallowTimer = Helper.General.GallowGameLength;
+            if (GallowTime != Helper.General.GallowGameLength)
+                GallowTime = Helper.General.GallowGameLength;
             if (EndGame)
                 GallowTimerElapsed?.Invoke(0, this);
             GallowWord = Helper.General.GetGallowWord();

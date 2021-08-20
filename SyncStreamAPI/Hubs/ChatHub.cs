@@ -22,7 +22,7 @@ namespace SyncStreamAPI.Hubs
             if (!MainServer.PlayingGallows)
                 await Clients.Group(MainServer.RoomId).sendmessage(message);
             else
-                await _manager.PlayGallow(MainServer, sender, message);
+                await _manager.PlayGallow(MainServer, sender, message, MainServer.GallowTime);
         }
 
         public async Task GetMessages(string UniqueId)

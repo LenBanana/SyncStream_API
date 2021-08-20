@@ -18,6 +18,7 @@ namespace SyncStreamAPI.Models
         public bool ishost { get; set; }
         public double gallowPoints { get; set; } = 0;
         public bool guessedGallow { get; set; } = false;
+        public int guessedGallowTime { get; set; } = 0;
         private int _ConsecutiveAFK { get; set; } = 0;
         private int ConsecutiveAFK { get { return _ConsecutiveAFK; } set { _ConsecutiveAFK = value; if (value >= 10) { Kicked?.Invoke(this); } } }
         public List<Drawing> drawings { get; set; } = new List<Drawing>();

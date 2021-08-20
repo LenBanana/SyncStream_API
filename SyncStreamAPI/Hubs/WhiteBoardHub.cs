@@ -21,7 +21,6 @@ namespace SyncStreamAPI.Hubs
                 if (room.server.PlayingGallows)
                 {
                     room.server.UpdateGallowWord(false);
-                    await Task.Delay(250);
                     await Clients.Group(UniqueId).gallowusers(room.server.members.Select(x => x.ToDTO()).ToList());
                     return;
                 }
@@ -33,6 +32,7 @@ namespace SyncStreamAPI.Hubs
                 Console.WriteLine(ex.Message);
             }
         }
+
         public async Task NewGallow(string UniqueId)
         {
             try
