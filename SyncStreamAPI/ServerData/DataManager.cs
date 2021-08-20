@@ -51,14 +51,17 @@ namespace SyncStreamAPI.ServerData
             member.Kicked += Member_Kicked;
         }
 
-        public void GallowTimeUpdate(Server server)
+        public void GallowEvents(Server server)
         {
             server.GallowTimerUpdate += Server_GallowTimerUpdate;
+            server.GallowTimerElapsed += Server_GallowTimerElapsed;
+            server.GallowGameEnded += Server_GallowGameEnded;
+            server.GallowWordUpdate += Server_GallowWordUpdate;
         }
 
-        public void GallowTimeElapsed(Server server)
+        private async void Server_GallowWordUpdate(Server server)
         {
-            server.GallowTimerElapsed += Server_GallowTimerElapsed;
+            await _hub.Clients.Group(server.RoomId).playinggallows(server.GallowWord);
         }
 
         private async void Server_GallowTimerUpdate(int Time, Server server)
@@ -71,6 +74,15 @@ namespace SyncStreamAPI.ServerData
             await EndGallow(server);
         }
 
+        private async void Server_GallowGameEnded(Server server)
+        {
+            var players = server.members.OrderByDescending(x => x.gallowPoints);
+            string playerBoard = "";
+            int count = 1;
+            players.ToList().ForEach(x => playerBoard += $"{(count++)}. {x.username} with {x.gallowPoints} points\r\n");
+            await _hub.Clients.Group(server.RoomId).dialog(new Dialog() { Header = "Gallow Game Ended", Question = playerBoard, Answer1 = "Ok" });
+        }
+
         private async void Member_Kicked(Member e)
         {
             await KickMember(e);
@@ -80,14 +92,14 @@ namespace SyncStreamAPI.ServerData
         {
             if ((sender != null && sender.ishost) || sender.guessedGallow)
                 return;
-            if (message.message.ToLower() == MainServer.GallowWord.ToLower())
+            if (message.message.Trim().ToLower() == MainServer.GallowWord.ToLower())
             {
                 var guessedGallow = MainServer.members.Where(x => x.guessedGallow).Count();
                 var points = Helper.General.GallowGuessPoints - guessedGallow;
                 sender.gallowPoints += points > 0 ? points : 0;
                 sender.guessedGallow = true;
                 ChatMessage correntAnswerServerMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{message.username} answered correctly" };
-                await _hub.Clients.Group(MainServer.RoomId).sendmessage(correntAnswerServerMsg);
+                await _hub.Clients.GroupExcept(MainServer.RoomId, sender.ConnectionId).sendmessage(correntAnswerServerMsg);
                 ChatMessage correntAnswerPrivateMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{message.username} you answered correct. You've been awarded {points} points" };
                 await _hub.Clients.Client(sender.ConnectionId).sendmessage(correntAnswerPrivateMsg);
                 if (MainServer.members.Where(x => !x.ishost).All(x => x.guessedGallow))
@@ -106,30 +118,32 @@ namespace SyncStreamAPI.ServerData
         {
             var guessedGallow = MainServer.members.Where(x => x.guessedGallow).Count();
             int idx = MainServer.members.FindIndex(x => x.ishost);
-            var hostPoints = guessedGallow * 2;
-            if (hostPoints > 0)
+            if (idx > -1)
             {
-                hostPoints += Helper.General.GallowDrawBasePoints;
-                MainServer.members[idx].gallowPoints += hostPoints;
-                ChatMessage hostMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{MainServer.members[idx].username} {guessedGallow} users got the word correct, good job. You've been awarded {hostPoints} points" };
-                await _hub.Clients.Client(MainServer.members[idx].ConnectionId).sendmessage(hostMsg);
+                var hostPoints = guessedGallow * 2;
+                if (hostPoints > 0)
+                {
+                    hostPoints += Helper.General.GallowDrawBasePoints;
+                    MainServer.members[idx].gallowPoints += hostPoints;
+                    ChatMessage hostMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{MainServer.members[idx].username} {guessedGallow} users got the word correct, good job. You've been awarded {hostPoints} points" };
+                    await _hub.Clients.Client(MainServer.members[idx].ConnectionId).sendmessage(hostMsg);
+                }
+
+                MainServer.members[idx].ishost = false;
+                await _hub.Clients.Client(MainServer.members[idx].ConnectionId).hostupdate(false);
+
+                idx = (idx + 1) == MainServer.members.Count ? 0 : idx + 1;
+                MainServer.members[idx].ishost = true;
+                await _hub.Clients.Client(MainServer.members[idx].ConnectionId).hostupdate(true);
             }
-
-            MainServer.members[idx].ishost = false;
-            await _hub.Clients.Client(MainServer.members[idx].ConnectionId).hostupdate(false);
-
-            idx = (idx + 1) == MainServer.members.Count ? 0 : idx + 1;
             MainServer.members.ForEach(x => { x.guessedGallow = false; x.drawings = new List<Drawing>(); });
             ChatMessage gallowEndedMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"Round has ended! The correct word was {MainServer.GallowWord}" };
             await _hub.Clients.Group(MainServer.RoomId).sendmessage(gallowEndedMsg);
             await _hub.Clients.Group(MainServer.RoomId).whiteboardclear(true);
-
-            MainServer.UpdateGallowWord();
-            await _hub.Clients.Group(MainServer.RoomId).playinggallows(MainServer.GallowWord);
-
-            MainServer.members[idx].ishost = true;
-            await _hub.Clients.Client(MainServer.members[idx].ConnectionId).hostupdate(true);
+            MainServer.UpdateGallowWord(false);
             await _hub.Clients.Group(MainServer.RoomId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
+            if (idx == -1)
+                await _hub.Clients.Group(MainServer.RoomId).gallowusers(MainServer.members.Select(x => x.ToDTO()).ToList());
         }
 
         public async Task KickMember(Member e)

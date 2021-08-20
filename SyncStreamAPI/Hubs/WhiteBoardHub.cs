@@ -16,17 +16,14 @@ namespace SyncStreamAPI.Hubs
                 Room room = GetRoom(UniqueId);
                 if (room == null)
                     return;
-                if (room.server.members.Count > 1)
+
+                room.server.PlayingGallows = !room.server.PlayingGallows;
+                if (room.server.PlayingGallows)
                 {
-                    room.server.PlayingGallows = !room.server.PlayingGallows;
-                    if (room.server.PlayingGallows)
-                    {
-                        room.server.UpdateGallowWord();
-                        await Clients.Group(UniqueId).playinggallows(room.server.GallowWord);
-                        await Task.Delay(250);
-                        await Clients.Group(UniqueId).gallowusers(room.server.members.Select(x => x.ToDTO()).ToList());
-                        return;
-                    }
+                    room.server.UpdateGallowWord(false);
+                    await Task.Delay(250);
+                    await Clients.Group(UniqueId).gallowusers(room.server.members.Select(x => x.ToDTO()).ToList());
+                    return;
                 }
                 room.server.members.ForEach(x => { x.gallowPoints = 0; x.guessedGallow = false; x.drawings = new List<Drawing>(); });
                 await Clients.Group(UniqueId).playinggallows("$clearboard$");
@@ -56,15 +53,25 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
-        public async Task WhiteBoardUpdate(List<Drawing> updates, string UniqueId)
+        public async Task WhiteBoardUpdate(List<object> updates, string UniqueId)
         {
             try
             {
+                IList<Drawing> drawings = new List<Drawing>();
+                try
+                {
+                    drawings = (IList<Drawing>)updates;
+                }
+                catch
+                {
+                    var data = Newtonsoft.Json.JsonConvert.SerializeObject(updates);
+                    drawings = Newtonsoft.Json.JsonConvert.DeserializeObject<List<Drawing>>(data);
+                }
                 Room room = GetRoom(UniqueId);
                 if (room == null)
                     return;
-                room.server.members.First(x => x.ConnectionId == Context.ConnectionId).drawings.AddRange(updates);
-                await Clients.GroupExcept(UniqueId, Context.ConnectionId).whiteboardupdate(updates);
+                room.server.members.First(x => x.ConnectionId == Context.ConnectionId).drawings.AddRange(drawings);
+                await Clients.GroupExcept(UniqueId, Context.ConnectionId).whiteboardupdate(drawings.ToList());
             }
             catch (Exception ex)
             {

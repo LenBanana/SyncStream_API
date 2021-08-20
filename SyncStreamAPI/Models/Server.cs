@@ -20,7 +20,7 @@ namespace SyncStreamAPI.Models
         public string RoomId { get { return members.Count > 0 ? members[0].RoomId : ""; } }
         public string GallowWord { get; set; }
         private bool _PlayingGallows { get; set; }
-        public bool PlayingGallows { get { return _PlayingGallows; } set { _PlayingGallows = value; if (value == true) { GallowTimer = Helper.General.GallowGameLength; GallowCountdown(); } } }
+        public bool PlayingGallows { get { return _PlayingGallows; } set { if (_PlayingGallows == true && value == false) GallowGameEnded?.Invoke(this); _PlayingGallows = value; if (value == true) { GallowTimer = Helper.General.GallowGameLength; } } }
         private int _GallowTimer { get; set; } = Helper.General.GallowGameLength;
         private int GallowTimer { get { return _GallowTimer; } set { _GallowTimer = value; if (GallowTimer > 0) GallowTimerUpdate?.Invoke(value, this); else GallowTimerElapsed?.Invoke(value, this); } }
 
@@ -30,27 +30,37 @@ namespace SyncStreamAPI.Models
         public delegate void TimerElapsed(int Time, Server server);
         public event TimerElapsed GallowTimerElapsed;
 
+        public delegate void GameEnded(Server server);
+        public event GameEnded GallowGameEnded;
+
+        public delegate void WordUpdate(Server server);
+        public event WordUpdate GallowWordUpdate;
+
         public Server(ServerData.DataManager _manager)
         {
             currentVideo = new DreckVideo() { title = "Nothing playing", url = "", ended = true };
             isplaying = false;
             currenttime = 0;
-            _manager.GallowTimeElapsed(this);
-            _manager.GallowTimeUpdate(this);
+            _manager.GallowEvents(this);
+            GallowCountdown();
         }
 
         public async void GallowCountdown()
         {
             await Task.Delay(1000);
-            if (GallowTimer > 0 && PlayingGallows)
+            if (GallowTimer > 0 && PlayingGallows && members.Count > 0)
                 GallowTimer -= 1;
             GallowCountdown();
         }
 
-        public void UpdateGallowWord()
+        public void UpdateGallowWord(bool EndGame)
         {
+            if (GallowTimer != Helper.General.GallowGameLength)
+                GallowTimer = Helper.General.GallowGameLength;
+            if (EndGame)
+                GallowTimerElapsed?.Invoke(0, this);
             GallowWord = Helper.General.GetGallowWord();
-            GallowTimer = Helper.General.GallowGameLength;
+            GallowWordUpdate?.Invoke(this);
         }
 
     }

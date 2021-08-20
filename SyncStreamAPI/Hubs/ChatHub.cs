@@ -20,14 +20,9 @@ namespace SyncStreamAPI.Hubs
                 MainServer.chatmessages.RemoveAt(0);
             Member sender = MainServer.members.FirstOrDefault(x => Context.ConnectionId == x.ConnectionId);
             if (!MainServer.PlayingGallows)
-            {
                 await Clients.Group(MainServer.RoomId).sendmessage(message);
-            }
             else
-            {
                 await _manager.PlayGallow(MainServer, sender, message);
-            }
-
         }
 
         public async Task GetMessages(string UniqueId)

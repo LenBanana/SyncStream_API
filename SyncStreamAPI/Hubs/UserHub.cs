@@ -38,6 +38,9 @@ namespace SyncStreamAPI.Hubs
                 MainServer.chatmessages = new List<ChatMessage>();
             await Groups.AddToGroupAsync(Context.ConnectionId, UniqueId);
             MainServer.members.Add(newMember);
+            if (newMember.ishost)
+                MainServer.PlayingGallows = false;
+
             await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
             if (room.server.PlayingGallows)
             {
@@ -74,11 +77,14 @@ namespace SyncStreamAPI.Hubs
                     return;
                 }
                 MainServer.members[idx].uptime = DateTime.Now.ToString("MM.dd.yyyy HH:mm:ss");
-                if (MainServer.members.Count == 1 && !MainServer.members[idx].ishost)
+                if (MainServer.members.Count == 1)
                 {
-                    MainServer.members[idx].ishost = true;
-                    await Clients.Client(MainServer.members[idx].ConnectionId).hostupdate(true);
-                    await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
+                    if (!MainServer.members[idx].ishost)
+                    {
+                        MainServer.members[idx].ishost = true;
+                        await Clients.Client(MainServer.members[idx].ConnectionId).hostupdate(true);
+                        await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
+                    }
                 }
             }
             else
@@ -98,6 +104,8 @@ namespace SyncStreamAPI.Hubs
             int idxMember = MainServer.members.FindIndex(x => x.username == usernameMember || x.ConnectionId == usernameMember);
             if (idxHost != -1 && idxMember != -1)
             {
+                if (MainServer.PlayingGallows)
+                    MainServer.UpdateGallowWord(true);
                 MainServer.members[idxHost].uptime = DateTime.Now.ToString("MM.dd.yyyy HH:mm:ss");
                 MainServer.members[idxMember].uptime = DateTime.Now.ToString("MM.dd.yyyy HH:mm:ss");
                 MainServer.members[idxHost].ishost = false;
@@ -120,10 +128,19 @@ namespace SyncStreamAPI.Hubs
             bool isHost = MainServer.members[idx].ishost;
             MainServer.members.RemoveAt(idx);
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, UniqueId);
-            if (isHost && MainServer.members.Count > 0)
+            if (MainServer.members.Count > 0)
             {
-                MainServer.members[0].ishost = true;
-                await Clients.Client(MainServer.members[0].ConnectionId).hostupdate(true);
+                if (MainServer.PlayingGallows)
+                    if (MainServer.members.Count == 1)
+                        await PlayGallows(UniqueId);
+
+                if (isHost)
+                {
+                    if (MainServer.PlayingGallows)
+                        MainServer.UpdateGallowWord(true);
+                    MainServer.members[0].ishost = true;
+                    await Clients.Client(MainServer.members[0].ConnectionId).hostupdate(true);
+                }
             }
             await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
             await Clients.All.getrooms(DataManager.GetRooms());

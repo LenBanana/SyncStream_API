@@ -47,7 +47,7 @@ namespace SyncStreamAPI
             }));
             services.AddSignalR(options => {
                 options.EnableDetailedErrors = false;
-            });
+            }).AddNewtonsoftJsonProtocol();
             services.AddSingleton(provider =>
             {
                 var hubContext = provider.GetService<IHubContext<ServerHub, IServerHub>>();
