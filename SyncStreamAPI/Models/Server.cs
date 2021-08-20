@@ -12,7 +12,7 @@ namespace SyncStreamAPI.Models
         public bool isplaying { get; set; }
         public string title { get { return playlist.Count > 0 ? playlist[0].title : "Nothing playing"; } }
         DreckVideo _currentVideo { get; set; }
-        public DreckVideo currentVideo { get { return _currentVideo; } set { _currentVideo = value; currenttime = 0; } }
+        public DreckVideo currentVideo { get { return _currentVideo; } set { _currentVideo = value; currenttime = 0; PlayingGallows = false; } }
         public List<DreckVideo> playlist { get; set; } = new List<DreckVideo>();
         public List<Member> members { get; set; } = new List<Member>();
         public List<Member> bannedMembers { get; set; } = new List<Member>();
