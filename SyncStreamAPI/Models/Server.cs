@@ -20,7 +20,7 @@ namespace SyncStreamAPI.Models
         public string RoomId { get { return members.Count > 0 ? members[0].RoomId : ""; } }
         public string GallowWord { get; set; }
         private bool _PlayingGallows { get; set; }
-        public bool PlayingGallows { get { return _PlayingGallows; } set { _PlayingGallows = value; if (value == true) GallowCountdown(); } }
+        public bool PlayingGallows { get { return _PlayingGallows; } set { _PlayingGallows = value; if (value == true) { GallowTimer = Helper.General.GallowGameLength; GallowCountdown(); } } }
         private int _GallowTimer { get; set; } = Helper.General.GallowGameLength;
         private int GallowTimer { get { return _GallowTimer; } set { _GallowTimer = value; if (GallowTimer > 0) GallowTimerUpdate?.Invoke(value, this); else GallowTimerElapsed?.Invoke(value, this); } }
 
@@ -42,7 +42,7 @@ namespace SyncStreamAPI.Models
         public async void GallowCountdown()
         {
             await Task.Delay(1000);
-            if (GallowTimer > 0)
+            if (GallowTimer > 0 && PlayingGallows)
                 GallowTimer -= 1;
             GallowCountdown();
         }
