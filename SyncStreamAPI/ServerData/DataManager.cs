@@ -97,10 +97,11 @@ namespace SyncStreamAPI.ServerData
             if (message.message.Trim().ToLower() == MainServer.GallowWord.ToLower())
             {
                 var guessedGallow = MainServer.members.Where(x => x.guessedGallow).Count();
-                var points = Helper.General.GallowGuessPoints - guessedGallow + Time;
+                var points = Helper.General.GallowGuessPoints - guessedGallow + Time + (MainServer.GallowWord.Length * Helper.General.GallowWordLengthMultiplierPlayer);
                 sender.guessedGallowTime = Time;
                 sender.gallowPoints += points > 0 ? points : 0;
                 sender.guessedGallow = true;
+
                 ChatMessage correntAnswerServerMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{message.username} answered correctly" };
                 await _hub.Clients.GroupExcept(MainServer.RoomId, sender.ConnectionId).sendmessage(correntAnswerServerMsg);
                 ChatMessage correntAnswerPrivateMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{message.username} you answered correct. You've been awarded {points} points" };
@@ -131,9 +132,10 @@ namespace SyncStreamAPI.ServerData
 
             if (idx > -1)
             {
-                var hostPoints = guessedGallow.Count() * 2;
+                var hostPoints = guessedGallow.Count();
                 if (hostPoints > 0)
                 {
+                    hostPoints += (MainServer.GallowWord.Length * Helper.General.GallowWordLengthMultiplierHost);
                     hostPoints += Helper.General.GallowDrawBasePoints;
                     hostPoints += (int)((double)guessedGallow.Sum(x => x.guessedGallowTime) / (double)guessedGallow.Count());
                     MainServer.members[idx].gallowPoints += hostPoints > 0 ? hostPoints : 0;
