@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Hubs;
+using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.ServerData;
 
@@ -13,10 +14,10 @@ namespace SyncStreamAPI.Controllers
     [Route("api/Server")]
     public class ServerController : Controller
     {
-        private IHubContext<ServerHub> _hub;
+        private IHubContext<ServerHub, IServerHub> _hub;
         MariaContext _maria;
         IConfiguration Configuration { get; }
-        public ServerController(IConfiguration configuration, IHubContext<ServerHub> hub, MariaContext maria)
+        public ServerController(IConfiguration configuration, IHubContext<ServerHub, IServerHub> hub, MariaContext maria)
         {
             Configuration = configuration;
             _hub = hub;
@@ -29,7 +30,7 @@ namespace SyncStreamAPI.Controllers
             Room room = DataManager.GetRoom(UniqueId);
             if (room == null)
                 return StatusCode(204);
-            _hub.Clients.Group(UniqueId).SendAsync("sendmessage", room.server.chatmessages);
+            _hub.Clients.Group(UniqueId).sendmessages(room.server.chatmessages);
             return Ok(new { Message = "Request Completed" });
         }
 
@@ -39,7 +40,7 @@ namespace SyncStreamAPI.Controllers
             Room room = DataManager.GetRoom(UniqueId);
             if (room == null)
                 return StatusCode(204);
-            _hub.Clients.Group(UniqueId).SendAsync("sendserver", room.server);
+            _hub.Clients.Group(UniqueId).sendserver(room.server);
 
             return Ok(new { Message = "Request Completed" });
         }
@@ -47,7 +48,7 @@ namespace SyncStreamAPI.Controllers
         [HttpGet("[action]")]
         public IActionResult GetRooms()
         {
-            _hub.Clients.All.SendAsync("getrooms", DataManager.GetRooms());
+            _hub.Clients.All.getrooms(DataManager.GetRooms());
 
             return Ok(new { Message = "Request Completed" });
         }

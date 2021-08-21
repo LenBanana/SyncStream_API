@@ -61,11 +61,9 @@ namespace SyncStreamAPI.Hubs
             if (room == null)
                 return;
             Server MainServer = room.server;
-            int idx = MainServer.members.FindIndex(x => x.ConnectionId == Context.ConnectionId);
+            int idx = MainServer.members.FindIndex(x => x != null && x.ConnectionId == Context.ConnectionId);
             if (idx != -1)
             {
-                //var address = Context.GetHttpContext().Connection.RemoteIpAddress;
-                //var ip = address.ToString();
                 var ip = Context.ConnectionId;
                 MainServer.members[idx].ConnectionId = ip;
                 if (MainServer.bannedMembers.Any(x => x.ConnectionId == MainServer.members[idx].ConnectionId))
