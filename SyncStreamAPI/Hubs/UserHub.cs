@@ -120,11 +120,11 @@ namespace SyncStreamAPI.Hubs
             if (room == null)
                 return;
             Server MainServer = room.server;
-            int idx = MainServer.members.FindIndex(x => x != null && x.username == username);
-            if (idx == -1)
+            Member member = MainServer.members.FirstOrDefault(x => x.username == username);
+            if (member == null)
                 return;
-            bool isHost = MainServer.members[idx].ishost;
-            MainServer.members.RemoveAt(idx);
+            bool isHost = member.ishost;
+            MainServer.members.Remove(member);
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, UniqueId);
             if (MainServer.members.Count > 0)
             {
