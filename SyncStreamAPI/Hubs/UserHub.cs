@@ -129,8 +129,8 @@ namespace SyncStreamAPI.Hubs
             if (MainServer.members.Count > 0)
             {
                 if (MainServer.PlayingGallows)
-                    if (MainServer.members.Count == 1)
-                        await PlayGallows(UniqueId);
+                    if (MainServer.members.Count < 2)
+                        await PlayGallows(UniqueId, MainServer.GameLanguage);
 
                 if (isHost)
                 {

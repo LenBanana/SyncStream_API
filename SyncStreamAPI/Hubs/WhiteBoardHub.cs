@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.SignalR;
+using SyncStreamAPI.Enums;
 using SyncStreamAPI.Models;
 using System;
 using System.Collections.Generic;
@@ -9,7 +10,7 @@ namespace SyncStreamAPI.Hubs
 {
     public partial class ServerHub
     {
-        public async Task PlayGallows(string UniqueId)
+        public async Task PlayGallows(string UniqueId, Language language)
         {
             try
             {
@@ -18,6 +19,7 @@ namespace SyncStreamAPI.Hubs
                     return;
 
                 room.server.PlayingGallows = !room.server.PlayingGallows;
+                room.server.GameLanguage = language;
                 if (room.server.PlayingGallows)
                 {
                     room.server.UpdateGallowWord(false);

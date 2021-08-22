@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SyncStreamAPI.Enums;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -19,6 +20,7 @@ namespace SyncStreamAPI.Models
         public List<ChatMessage> chatmessages { get; set; } = new List<ChatMessage>();
         public string RoomId { get { return members.Count > 0 ? members[0].RoomId : ""; } }
         public string GallowWord { get; set; }
+        public Language GameLanguage { get; set; }
         private bool _PlayingGallows { get; set; }
         public bool PlayingGallows { get { return _PlayingGallows; } set { if (_PlayingGallows == true && value == false) GallowGameEnded?.Invoke(this); _PlayingGallows = value; if (value == true) { GallowTime = Helper.General.GallowGameLength; } } }
         private int _GallowTimer { get; set; } = Helper.General.GallowGameLength;
@@ -59,7 +61,7 @@ namespace SyncStreamAPI.Models
                 GallowTime = Helper.General.GallowGameLength;
             if (EndGame)
                 GallowTimerElapsed?.Invoke(0, this);
-            GallowWord = Helper.General.GetGallowWord();
+            GallowWord = Helper.General.GetGallowWord(GameLanguage);
             GallowWordUpdate?.Invoke(this);
         }
 
