@@ -22,9 +22,10 @@ namespace SyncStreamAPI.Models
         public string GallowWord { get; set; }
         public Language GameLanguage { get; set; }
         private bool _PlayingGallows { get; set; }
-        public bool PlayingGallows { get { return _PlayingGallows; } set { if (_PlayingGallows == true && value == false) GallowGameEnded?.Invoke(this); _PlayingGallows = value; if (value == true) { GallowTime = Helper.General.GallowGameLength; } } }
-        private int _GallowTimer { get; set; } = Helper.General.GallowGameLength;
+        public bool PlayingGallows { get { return _PlayingGallows; } set { if (_PlayingGallows == true && value == false) GallowGameEnded?.Invoke(this); _PlayingGallows = value; if (value == true) { GallowTime = GameLength; } } }
+        private int _GallowTimer { get; set; }
         public int GallowTime { get { return _GallowTimer; } set { _GallowTimer = value; if (GallowTime > 0) GallowTimerUpdate?.Invoke(value, this); else GallowTimerElapsed?.Invoke(value, this); } }
+        public int GameLength { get; set; } = Helper.General.GallowGameLength;
 
         public delegate void TimeUpdate(int Time, Server server);
         public event TimeUpdate GallowTimerUpdate;
@@ -57,8 +58,8 @@ namespace SyncStreamAPI.Models
 
         public void UpdateGallowWord(bool EndGame)
         {
-            if (GallowTime != Helper.General.GallowGameLength)
-                GallowTime = Helper.General.GallowGameLength;
+            if (GallowTime != GameLength)
+                GallowTime = GameLength;
             if (EndGame)
                 GallowTimerElapsed?.Invoke(0, this);
             GallowWord = Helper.General.GetGallowWord(GameLanguage);

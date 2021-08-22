@@ -10,7 +10,7 @@ namespace SyncStreamAPI.Hubs
 {
     public partial class ServerHub
     {
-        public async Task PlayGallows(string UniqueId, Language language)
+        public async Task PlayGallows(string UniqueId, Language language, int gameLength)
         {
             try
             {
@@ -20,6 +20,7 @@ namespace SyncStreamAPI.Hubs
 
                 room.server.PlayingGallows = !room.server.PlayingGallows;
                 room.server.GameLanguage = language;
+                room.server.GameLength = gameLength;
                 if (room.server.PlayingGallows)
                 {
                     room.server.UpdateGallowWord(false);
