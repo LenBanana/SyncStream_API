@@ -25,7 +25,8 @@ namespace SyncStreamAPI.Models
         public bool PlayingGallows { get { return _PlayingGallows; } set { if (_PlayingGallows == true && value == false) GallowGameEnded?.Invoke(this); _PlayingGallows = value; if (value == true) { GallowTime = GameLength; } } }
         private int _GallowTimer { get; set; }
         public int GallowTime { get { return _GallowTimer; } set { _GallowTimer = value; if (GallowTime > 0) GallowTimerUpdate?.Invoke(value, this); else GallowTimerElapsed?.Invoke(value, this); } }
-        public int GameLength { get; set; } = Helper.General.GallowGameLength;
+        private int _GameLength { get; set; } = Helper.General.GallowGameLength;
+        public int GameLength { get { return _GameLength; } set { _GameLength = value > 300 ? 300 : value < 60 ? 60 : value; } }
 
         public delegate void TimeUpdate(int Time, Server server);
         public event TimeUpdate GallowTimerUpdate;
