@@ -10,5 +10,7 @@ namespace SyncStreamAPI.Models
         public string message { get; set; }
         public string username { get; set; }
         public DateTime time { get; set; }
+        public string color { get; set; }
+        public string usercolor { get; set; }
     }
 }

@@ -24,6 +24,8 @@ namespace SyncStreamAPI.Hubs
                 {
                     room.server.UpdateGallowWord(false);
                     await Clients.Group(UniqueId).gallowusers(room.server.members.Select(x => x.ToDTO()).ToList());
+                    ChatMessage startGallowMessage = new ChatMessage() { time = DateTime.Now, username = "System", message = $"Started a round of gallows, have fun!", color = Helper.Colors.SystemColor, usercolor = Helper.Colors.SystemUserColor };
+                    await Clients.Group(UniqueId).sendmessage(startGallowMessage);
                     return;
                 }
                 room.server.members.ForEach(x => { x.gallowPoints = 0; x.guessedGallow = false; x.drawings = new List<Drawing>(); });

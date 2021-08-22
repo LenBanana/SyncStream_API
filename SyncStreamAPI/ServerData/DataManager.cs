@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.SignalR;
+using SyncStreamAPI.Helper;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
@@ -94,22 +95,29 @@ namespace SyncStreamAPI.ServerData
         {
             if ((sender != null && sender.ishost) || sender.guessedGallow)
                 return;
-            if (message.message.Trim().ToLower() == MainServer.GallowWord.ToLower())
+            string msg = message.message.Trim().ToLower();
+            string gallowWord = MainServer.GallowWord.ToLower();
+            if (msg == gallowWord)
             {
                 var guessedGallow = MainServer.members.Where(x => x.guessedGallow).Count();
-                var points = Helper.General.GallowGuessPoints - guessedGallow + Time + (MainServer.GallowWord.Length * Helper.General.GallowWordLengthMultiplierPlayer);
+                var points = General.GallowGuessPoints - guessedGallow + Time + (MainServer.GallowWord.Length * General.GallowWordLengthMultiplierPlayer);
                 sender.guessedGallowTime = Time;
                 sender.gallowPoints += points > 0 ? points : 0;
                 sender.guessedGallow = true;
 
-                ChatMessage correntAnswerServerMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{message.username} answered correctly" };
+                ChatMessage correntAnswerServerMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{message.username} answered correctly", color = Colors.SystemColor, usercolor = Colors.SystemUserColor };
                 await _hub.Clients.GroupExcept(MainServer.RoomId, sender.ConnectionId).sendmessage(correntAnswerServerMsg);
-                ChatMessage correntAnswerPrivateMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{message.username} you answered correct. You've been awarded {points} points" };
+                ChatMessage correntAnswerPrivateMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{message.username} you answered correct. You've been awarded {points} points", color = Colors.SystemColor, usercolor = Colors.SystemUserColor };
                 await _hub.Clients.Client(sender.ConnectionId).sendmessage(correntAnswerPrivateMsg);
                 if (MainServer.members.Where(x => !x.ishost).All(x => x.guessedGallow))
                     await EndGallow(MainServer, Time);
 
                 await _hub.Clients.Group(MainServer.RoomId).gallowusers(MainServer.members.Select(x => x.ToDTO()).ToList());
+            }
+            else if (StringExtensions.CalculateWordDifference(msg, gallowWord) == 1)
+            {
+                ChatMessage closeMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{message.username} {msg} was close!", color = Colors.SystemColor, usercolor = Colors.SystemUserColor };
+                await _hub.Clients.Client(sender.ConnectionId).sendmessage(closeMsg);
             }
             else
             {
@@ -121,7 +129,7 @@ namespace SyncStreamAPI.ServerData
         {
             var guessedGallow = MainServer.members.Where(x => x.guessedGallow).ToList();
             MainServer.members.ForEach(x => { x.guessedGallow = false; x.drawings = new List<Drawing>(); });
-            ChatMessage gallowEndedMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"Round has ended! The correct word was {MainServer.GallowWord}" };
+            ChatMessage gallowEndedMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"Round has ended! The correct word was {MainServer.GallowWord}", color = Colors.SystemColor, usercolor = Colors.SystemUserColor };
             await _hub.Clients.Group(MainServer.RoomId).sendmessage(gallowEndedMsg);
             await _hub.Clients.Group(MainServer.RoomId).whiteboardclear(true);
             MainServer.UpdateGallowWord(false);
@@ -135,11 +143,11 @@ namespace SyncStreamAPI.ServerData
                 var hostPoints = guessedGallow.Count();
                 if (hostPoints > 0)
                 {
-                    hostPoints += (MainServer.GallowWord.Length * Helper.General.GallowWordLengthMultiplierHost);
-                    hostPoints += Helper.General.GallowDrawBasePoints;
+                    hostPoints += (MainServer.GallowWord.Length * General.GallowWordLengthMultiplierHost);
+                    hostPoints += General.GallowDrawBasePoints;
                     hostPoints += (int)((double)guessedGallow.Sum(x => x.guessedGallowTime) / (double)guessedGallow.Count());
                     MainServer.members[idx].gallowPoints += hostPoints > 0 ? hostPoints : 0;
-                    ChatMessage hostMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{MainServer.members[idx].username} {guessedGallow.Count()} users got the word correct, good job. You've been awarded {hostPoints} points" };
+                    ChatMessage hostMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{MainServer.members[idx].username} {guessedGallow.Count()} users got the word correct, good job. You've been awarded {hostPoints} points", color = Colors.SystemColor, usercolor = Colors.SystemUserColor };
                     await _hub.Clients.Client(MainServer.members[idx].ConnectionId).sendmessage(hostMsg);
                 }
 

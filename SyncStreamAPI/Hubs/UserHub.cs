@@ -136,7 +136,7 @@ namespace SyncStreamAPI.Hubs
                 {
                     if (MainServer.PlayingGallows)
                         MainServer.UpdateGallowWord(true); 
-                    if (MainServer.members.Count > 0)
+                    if (MainServer.members.Count > 0 && MainServer.members[0] != null)
                         MainServer.members[0].ishost = true;
                     await Clients.Client(MainServer.members[0].ConnectionId).hostupdate(true);
                 }
