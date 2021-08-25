@@ -63,6 +63,7 @@ namespace SyncStreamAPI.Games.Blackjack
                 await _hub.Clients.Client(member.ConnectionId).sendblackjackmembers(game.members.Where(x => x.ConnectionId != member.ConnectionId).ToList());
             }
             await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer);
+            game.members.ForEach(x => x.NewlyJoined = false);
             await Task.Delay(2500);
             AskForBet(game, 0);
         }
@@ -84,13 +85,18 @@ namespace SyncStreamAPI.Games.Blackjack
                 return true;
             }
             await _hub.Clients.Group(UniqueId).playblackjack(false);
+            var _game = blackjackGames[idx];
+            _game.CardDealed -= Game_CardDealed;
+            _game.DealerDealed -= Game_DealerDealed;
+            _game.ShuffledDeck -= Game_ShuffledDeck;
+            _game.RoundEnded -= Game_RoundEnded;
             blackjackGames.RemoveAt(idx);
             return false;
         }
 
         public async void AskForBet(BlackjackLogic game, int memberIdx)
         {
-            if (memberIdx < game.members.Count)
+            if (memberIdx < game.members.Count && !game.members[memberIdx].NewlyJoined)
                 await _hub.Clients.Client(game.members[memberIdx].ConnectionId).askforbet();
             else
             {
@@ -108,7 +114,7 @@ namespace SyncStreamAPI.Games.Blackjack
 
         public async void AskForPull(BlackjackLogic game, int memberIdx)
         {
-            if (memberIdx < game.members.Count)
+            if (memberIdx < game.members.Count && !game.members[memberIdx].NewlyJoined)
             {
                 var member = game.members[memberIdx];
                 var doubleOption = (member.cards.Count == 2);

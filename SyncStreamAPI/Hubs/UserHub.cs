@@ -51,6 +51,12 @@ namespace SyncStreamAPI.Hubs
                 await Clients.Caller.playinggallows(game.GallowWord);
                 await Clients.Caller.gallowusers(game.members);
             }
+            if (room.GameMode == GameMode.Blackjack)
+            {
+                var game = room.BlackjackGame;
+                game.members.Add(new Models.GameModels.Members.BlackjackMember(newMember.username, newMember.ConnectionId));
+                await Clients.Caller.playblackjack(true);
+            }
             await Clients.Caller.isplayingupdate(MainServer.isplaying);
             await Clients.Caller.hostupdate(newMember.ishost);
             await Clients.All.getrooms(DataManager.GetRooms());

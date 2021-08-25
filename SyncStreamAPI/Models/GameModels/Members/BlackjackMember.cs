@@ -22,6 +22,7 @@ namespace SyncStreamAPI.Models.GameModels.Members
         public double Bet { get; private set; } = 0;
         public bool blackjack => (cards.Count == 2 && points == 21);
         public bool doubled { get; set; } = false;
+        public bool NewlyJoined { get; set; } = true;
 
         public void AddMoney(int dealerPoints)
         {
