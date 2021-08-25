@@ -33,7 +33,7 @@ namespace SyncStreamAPI.Helper
         public static int CalculatePoints(this List<PlayingCard> cards)
         {
             int points = 0;
-            foreach (var card in cards)
+            foreach (var card in cards.OrderBy(x => (int)x.Rank))
                 points += card.CardValue(points);
             return points;
         }
