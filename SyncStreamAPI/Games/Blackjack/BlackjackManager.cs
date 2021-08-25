@@ -65,7 +65,8 @@ namespace SyncStreamAPI.Games.Blackjack
             await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer);
             game.members.ForEach(x => x.NewlyJoined = false);
             await Task.Delay(2500);
-            AskForBet(game, 0);
+            if (!game.GameEnded)
+                AskForBet(game, 0);
         }
 
         public async Task<bool> PlayNewRound(string UniqueId)
@@ -90,6 +91,7 @@ namespace SyncStreamAPI.Games.Blackjack
             _game.DealerDealed -= Game_DealerDealed;
             _game.ShuffledDeck -= Game_ShuffledDeck;
             _game.RoundEnded -= Game_RoundEnded;
+            _game.GameEnded = true;
             blackjackGames.RemoveAt(idx);
             return false;
         }

@@ -15,6 +15,7 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
         public List<PlayingCard> playingCards { get; set; } = new List<PlayingCard>();
         public List<BlackjackMember> members { get; set; } = new List<BlackjackMember>();
         public BlackjackDealer dealer { get; set; } = new BlackjackDealer();
+        public bool GameEnded { get; set; } = false;
 
         public delegate void BlackjackGameEvent(BlackjackLogic game);
         public delegate void CardDealEvent(BlackjackLogic game, BlackjackMember member);

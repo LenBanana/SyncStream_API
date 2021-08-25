@@ -144,6 +144,13 @@ namespace SyncStreamAPI.Hubs
                     if (MainServer.members.Count < 2)
                         await PlayGallows(UniqueId, gallowGame.GameLanguage, gallowGame.GameLength);
 
+                var blackjack = room.BlackjackGame;
+                if (blackjack != null)
+                {
+                    var idx = blackjack.members.FindIndex(x => x.ConnectionId == member.ConnectionId);
+                    if (idx != -1)
+                        blackjack.members.RemoveAt(idx);
+                }
                 if (isHost)
                 {
                     if (gallowGame != null && gallowGame.PlayingGallows)
