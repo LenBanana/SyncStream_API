@@ -6,6 +6,7 @@ using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
+using SyncStreamAPI.Models.GameModels.Blackjack;
 using SyncStreamAPI.ServerData;
 
 namespace SyncStreamAPI.Controllers
@@ -17,6 +18,7 @@ namespace SyncStreamAPI.Controllers
         private IHubContext<ServerHub, IServerHub> _hub;
         MariaContext _maria;
         IConfiguration Configuration { get; }
+
         public ServerController(IConfiguration configuration, IHubContext<ServerHub, IServerHub> hub, MariaContext maria)
         {
             Configuration = configuration;

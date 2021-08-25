@@ -1,4 +1,5 @@
 ﻿using SyncStreamAPI.Enums;
+using SyncStreamAPI.Enums.Games;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.ServerData;
 using System;
@@ -38,14 +39,17 @@ namespace SyncStreamAPI.Hubs
                 MainServer.chatmessages = new List<ChatMessage>();
             await Groups.AddToGroupAsync(Context.ConnectionId, UniqueId);
             MainServer.members.Add(newMember);
-            if (newMember.ishost)
-                MainServer.PlayingGallows = false;
+            //if (newMember.ishost)
+            //    MainServer.PlayingGallows = false;
 
             await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
-            if (room.server.PlayingGallows)
+
+            if (room.GameMode == GameMode.Gallows)
             {
-                await Clients.Caller.playinggallows(room.server.GallowWord);
-                await Clients.Caller.gallowusers(room.server.members.Select(x => x.ToDTO()).ToList());
+                var game = room.GallowGame;
+                game.members.Add(new Models.GameModels.Members.GallowMember(newMember.username, newMember.ishost, newMember.ConnectionId));
+                await Clients.Caller.playinggallows(game.GallowWord);
+                await Clients.Caller.gallowusers(game.members);
             }
             await Clients.Caller.isplayingupdate(MainServer.isplaying);
             await Clients.Caller.hostupdate(newMember.ishost);
@@ -102,8 +106,9 @@ namespace SyncStreamAPI.Hubs
             int idxMember = MainServer.members.FindIndex(x => x.username == usernameMember || x.ConnectionId == usernameMember);
             if (idxHost != -1 && idxMember != -1)
             {
-                if (MainServer.PlayingGallows)
-                    MainServer.UpdateGallowWord(true);
+                var game = room.GallowGame;
+                if (game != null && game.PlayingGallows)
+                    game.UpdateGallowWord(true);
                 MainServer.members[idxHost].uptime = DateTime.Now.ToString("MM.dd.yyyy HH:mm:ss");
                 MainServer.members[idxMember].uptime = DateTime.Now.ToString("MM.dd.yyyy HH:mm:ss");
                 MainServer.members[idxHost].ishost = false;
@@ -128,14 +133,15 @@ namespace SyncStreamAPI.Hubs
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, UniqueId);
             if (MainServer.members.Count > 0)
             {
-                if (MainServer.PlayingGallows)
+                var gallowGame = room.GallowGame;
+                if (gallowGame != null && gallowGame.PlayingGallows)
                     if (MainServer.members.Count < 2)
-                        await PlayGallows(UniqueId, MainServer.GameLanguage, MainServer.GameLength);
+                        await PlayGallows(UniqueId, gallowGame.GameLanguage, gallowGame.GameLength);
 
                 if (isHost)
                 {
-                    if (MainServer.PlayingGallows)
-                        MainServer.UpdateGallowWord(true); 
+                    if (gallowGame != null && gallowGame.PlayingGallows)
+                        gallowGame.UpdateGallowWord(true);
                     if (MainServer.members.Count > 0 && MainServer.members[0] != null)
                         MainServer.members[0].ishost = true;
                     await Clients.Client(MainServer.members[0].ConnectionId).hostupdate(true);

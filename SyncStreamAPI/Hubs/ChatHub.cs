@@ -1,4 +1,5 @@
-﻿using SyncStreamAPI.Models;
+﻿using SyncStreamAPI.Enums.Games;
+using SyncStreamAPI.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -19,10 +20,17 @@ namespace SyncStreamAPI.Hubs
             if (MainServer.chatmessages.Count >= 100)
                 MainServer.chatmessages.RemoveAt(0);
             Member sender = MainServer.members.FirstOrDefault(x => Context.ConnectionId == x.ConnectionId);
-            if (!MainServer.PlayingGallows)
-                await Clients.Group(MainServer.RoomId).sendmessage(message);
-            else
-                await _manager.PlayGallow(MainServer, sender, message, MainServer.GallowTime);
+
+            switch (room.GameMode)
+            {
+                case GameMode.NotPlaying:
+                    await Clients.Group(MainServer.RoomId).sendmessage(message);
+                    break;
+                case GameMode.Gallows:
+                    var game = room.GallowGame;
+                    await _gallowGameManager.PlayGallow(game, sender, message, game.GallowTime);
+                    break;
+            }
         }
 
         public async Task GetMessages(string UniqueId)

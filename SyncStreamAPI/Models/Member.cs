@@ -1,4 +1,5 @@
 ﻿using SyncStreamAPI.DTOModel;
+using SyncStreamAPI.Models.GameModels.Members;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -16,12 +17,8 @@ namespace SyncStreamAPI.Models
         private string _uptime { get; set; } = DateTime.Now.ToString("MM.dd.yyyy HH:mm:ss");
         public string uptime { get { return _uptime; } set { _uptime = value; ConsecutiveAFK = 0; } }
         public bool ishost { get; set; }
-        public double gallowPoints { get; set; } = 0;
-        public bool guessedGallow { get; set; } = false;
-        public int guessedGallowTime { get; set; } = 0;
         private int _ConsecutiveAFK { get; set; } = 0;
         private int ConsecutiveAFK { get { return _ConsecutiveAFK; } set { _ConsecutiveAFK = value; if (value >= 10) { Kicked?.Invoke(this); } } }
-        public List<Drawing> drawings { get; set; } = new List<Drawing>();
         public Dictionary<string, List<string>> PrivateMessages { get; set; } = new Dictionary<string, List<string>>();
 
         public delegate void KickEvent(Member e);
@@ -33,10 +30,10 @@ namespace SyncStreamAPI.Models
             _manager.AddToMemberCheck(this);
         }
 
-        public MemberDTO ToDTO()
-        {
-            return new MemberDTO(username, ishost, gallowPoints, guessedGallow);
-        }
+        public MemberDTO ToDTO() => new MemberDTO(username, ishost);
+        public GallowMember ToGallowMember() => new GallowMember(username, ishost, ConnectionId);
+        public BlackjackMember ToBlackjackMember(int userId) => new BlackjackMember(username, ConnectionId, userId);
+
 
         private async void CountDown()
         {

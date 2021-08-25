@@ -14,7 +14,7 @@ namespace SyncStreamAPI.Helper
 {
     public class General
     {
-        private static Random random = new Random();        
+        public static Random random = new Random();        
 
         public static int GallowGameLength = 90;
         public static int GallowGameLengthMin = 60;
@@ -23,6 +23,8 @@ namespace SyncStreamAPI.Helper
         public static int GallowDrawBasePoints = 5;
         public static int GallowWordLengthMultiplierPlayer = 8;
         public static int GallowWordLengthMultiplierHost = 12;
+
+        public static int BlackjackShoeSize = 6;
 
         public static string GetGallowWord(Language language)
         {

@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Enums;
+using SyncStreamAPI.Games.Blackjack;
+using SyncStreamAPI.Games.Gallows;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
@@ -24,11 +26,17 @@ namespace SyncStreamAPI.Hubs
 
         MariaContext _maria;
 
-        public ServerHub(IConfiguration configuration, DataManager manager, MariaContext maria)
+        GallowGameManager _gallowGameManager;
+
+        BlackjackManager _blackjackManager;
+
+        public ServerHub(IConfiguration configuration, DataManager manager, MariaContext maria, GallowGameManager gallowGameManager, BlackjackManager blackjackManager)
         {
             Configuration = configuration;
             _manager = manager;
             _maria = maria;
+            _gallowGameManager = gallowGameManager;
+            _blackjackManager = blackjackManager;
         }
 
 #nullable enable
@@ -41,6 +49,15 @@ namespace SyncStreamAPI.Hubs
                 Room room = Rooms[idx];
                 Member e = room.server.members.First(x => x.ConnectionId == Context.ConnectionId);
                 e.InvokeKick();
+
+                var gameMode = room.GameMode;
+                if (gameMode == Enums.Games.GameMode.Gallows)
+                {
+                    var game = room.GallowGame;
+                    var gameMemberIdx = game.members.FindIndex(x => x.ConnectionId == Context.ConnectionId);
+                    if (gameMemberIdx > -1)
+                        game.members.RemoveAt(gameMemberIdx);
+                }
             }
             return base.OnDisconnectedAsync(ex);
         }
@@ -238,7 +255,7 @@ namespace SyncStreamAPI.Hubs
             int RoomCount = 0;
             while (Rooms.Any(x => x.uniqueId == room.uniqueId))
                 room.uniqueId = room.uniqueId + RoomCount++;
-            room.server = new Server(_manager);
+            room.server = new Server();
             Rooms.Add(room);
             await Clients.All.getrooms(DataManager.GetRooms());
         }

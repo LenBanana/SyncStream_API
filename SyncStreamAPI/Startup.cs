@@ -7,6 +7,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SyncStreamAPI.DataContext;
+using SyncStreamAPI.Games.Blackjack;
+using SyncStreamAPI.Games.Gallows;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.ServerData;
@@ -52,6 +54,18 @@ namespace SyncStreamAPI
             {
                 var hubContext = provider.GetService<IHubContext<ServerHub, IServerHub>>();
                 DataManager manager = new DataManager(hubContext);
+                return manager;
+            });
+            services.AddSingleton(provider =>
+            {
+                var hubContext = provider.GetService<IHubContext<ServerHub, IServerHub>>();
+                GallowGameManager manager = new GallowGameManager(hubContext);
+                return manager;
+            });
+            services.AddSingleton(provider =>
+            {
+                var hubContext = provider.GetService<IHubContext<ServerHub, IServerHub>>();
+                BlackjackManager manager = new BlackjackManager(hubContext);
                 return manager;
             });
             services.AddControllers();

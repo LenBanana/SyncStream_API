@@ -26,16 +26,16 @@ namespace SyncStreamAPI.ServerData
 
         public void AddDefaultRooms()
         {
-            Rooms.Add(new Room() { name = "Dreckroom", server = new Server(this), uniqueId = "dreck" });
-            Rooms.Add(new Room() { name = "Randomkeller", server = new Server(this), uniqueId = "random" });
-            Rooms.Add(new Room() { name = "GuestRoom 1", server = new Server(this), uniqueId = "guest1" });
-            Rooms.Add(new Room() { name = "GuestRoom 2", server = new Server(this), uniqueId = "guest2" });
-            Rooms.Add(new Room() { name = "GuestRoom 3", server = new Server(this), uniqueId = "guest3" });
-            Rooms.Add(new Room() { name = "GuestRoom 4", server = new Server(this), uniqueId = "guest4" });
-            Rooms.Add(new Room() { name = "MovieRoom 1", server = new Server(this), uniqueId = "movie1" });
-            Rooms.Add(new Room() { name = "MovieRoom 2", server = new Server(this), uniqueId = "movie2" });
-            Rooms.Add(new Room() { name = "MovieRoom 3", server = new Server(this), uniqueId = "movie3" });
-            Rooms.Add(new Room() { name = "MovieRoom 4", server = new Server(this), uniqueId = "movie4" });
+            Rooms.Add(new Room() { name = "Dreckroom", server = new Server(), uniqueId = "dreck" });
+            Rooms.Add(new Room() { name = "Randomkeller", server = new Server(), uniqueId = "random" });
+            Rooms.Add(new Room() { name = "GuestRoom 1", server = new Server(), uniqueId = "guest1" });
+            Rooms.Add(new Room() { name = "GuestRoom 2", server = new Server(), uniqueId = "guest2" });
+            Rooms.Add(new Room() { name = "GuestRoom 3", server = new Server(), uniqueId = "guest3" });
+            Rooms.Add(new Room() { name = "GuestRoom 4", server = new Server(), uniqueId = "guest4" });
+            Rooms.Add(new Room() { name = "MovieRoom 1", server = new Server(), uniqueId = "movie1" });
+            Rooms.Add(new Room() { name = "MovieRoom 2", server = new Server(), uniqueId = "movie2" });
+            Rooms.Add(new Room() { name = "MovieRoom 3", server = new Server(), uniqueId = "movie3" });
+            Rooms.Add(new Room() { name = "MovieRoom 4", server = new Server(), uniqueId = "movie4" });
         }
 
         public static Room GetRoom(string UniqueId)
@@ -52,113 +52,9 @@ namespace SyncStreamAPI.ServerData
             member.Kicked += Member_Kicked;
         }
 
-        public void GallowEvents(Server server)
-        {
-            server.GallowTimerUpdate += Server_GallowTimerUpdate;
-            server.GallowTimerElapsed += Server_GallowTimerElapsed;
-            server.GallowGameEnded += Server_GallowGameEnded;
-            server.GallowWordUpdate += Server_GallowWordUpdate;
-        }
-
-        private async void Server_GallowWordUpdate(Server server)
-        {
-            await _hub.Clients.Group(server.RoomId).playinggallows(server.GallowWord);
-        }
-
-        private async void Server_GallowTimerUpdate(int Time, Server server)
-        {
-            if (Time % 5 == 0)
-                await _hub.Clients.Group(server.RoomId).gallowusers(server.members.Select(x => x.ToDTO()).ToList());
-            await _hub.Clients.Group(server.RoomId).gallowtimerupdate(Time);
-        }
-
-        private async void Server_GallowTimerElapsed(int Time, Server server)
-        {
-            await EndGallow(server, Time);
-        }
-
-        private async void Server_GallowGameEnded(Server server)
-        {
-            var players = server.members.OrderByDescending(x => x.gallowPoints);
-            string playerBoard = "";
-            int count = 1;
-            players.ToList().ForEach(x => playerBoard += $"{(count++)}. {x.username} with {x.gallowPoints} points\r\n");
-            await _hub.Clients.Group(server.RoomId).dialog(new Dialog() { Header = "Gallow Game Ended", Question = playerBoard, Answer1 = "Ok" });
-        }
-
         private async void Member_Kicked(Member e)
         {
             await KickMember(e);
-        }
-
-        public async Task PlayGallow(Server MainServer, Member sender, ChatMessage message, int Time)
-        {
-            if ((sender != null && sender.ishost) || sender.guessedGallow)
-                return;
-            string msg = message.message.Trim().ToLower();
-            string gallowWord = MainServer.GallowWord.ToLower();
-            if (msg == gallowWord)
-            {
-                var guessedGallow = MainServer.members.Where(x => x.guessedGallow).Count();
-                var points = General.GallowGuessPoints - guessedGallow + Time + (MainServer.GallowWord.Length * General.GallowWordLengthMultiplierPlayer);
-                sender.guessedGallowTime = Time;
-                sender.gallowPoints += points > 0 ? points : 0;
-                sender.guessedGallow = true;
-
-                ChatMessage correntAnswerServerMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{message.username} answered correctly", color = Colors.SystemColor, usercolor = Colors.SystemUserColor };
-                await _hub.Clients.GroupExcept(MainServer.RoomId, sender.ConnectionId).sendmessage(correntAnswerServerMsg);
-                ChatMessage correntAnswerPrivateMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{message.username} you answered correct. You've been awarded {points} points", color = Colors.SystemColor, usercolor = Colors.SystemUserColor };
-                await _hub.Clients.Client(sender.ConnectionId).sendmessage(correntAnswerPrivateMsg);
-                if (MainServer.members.Where(x => !x.ishost).All(x => x.guessedGallow))
-                    await EndGallow(MainServer, Time);
-
-                await _hub.Clients.Group(MainServer.RoomId).gallowusers(MainServer.members.Select(x => x.ToDTO()).ToList());
-            }
-            else if (StringExtensions.CalculateWordDifference(msg, gallowWord) == 1)
-            {
-                ChatMessage closeMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{message.username} {msg} was close!", color = Colors.SystemColor, usercolor = Colors.SystemUserColor };
-                await _hub.Clients.Client(sender.ConnectionId).sendmessage(closeMsg);
-            }
-            else
-            {
-                await _hub.Clients.Group(MainServer.RoomId).sendmessage(message);
-            }
-        }
-
-        public async Task EndGallow(Server MainServer, int Time)
-        {
-            var guessedGallow = MainServer.members.Where(x => x.guessedGallow).ToList();
-            MainServer.members.ForEach(x => { x.guessedGallow = false; x.drawings = new List<Drawing>(); });
-            ChatMessage gallowEndedMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"Round has ended! The correct word was {MainServer.GallowWord}", color = Colors.SystemColor, usercolor = Colors.SystemUserColor };
-            await _hub.Clients.Group(MainServer.RoomId).sendmessage(gallowEndedMsg);
-            await _hub.Clients.Group(MainServer.RoomId).whiteboardclear(true);
-            MainServer.UpdateGallowWord(false);
-
-            int idx = MainServer.members.FindIndex(x => x.ishost);
-            if (idx == -1)
-                await _hub.Clients.Group(MainServer.RoomId).gallowusers(MainServer.members.Select(x => x.ToDTO()).ToList());
-
-            if (idx > -1)
-            {
-                var hostPoints = guessedGallow.Count();
-                if (hostPoints > 0)
-                {
-                    hostPoints += (MainServer.GallowWord.Length * General.GallowWordLengthMultiplierHost);
-                    hostPoints += General.GallowDrawBasePoints;
-                    hostPoints += (int)((double)guessedGallow.Sum(x => x.guessedGallowTime) / (double)guessedGallow.Count());
-                    MainServer.members[idx].gallowPoints += hostPoints > 0 ? hostPoints : 0;
-                    ChatMessage hostMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = $"{MainServer.members[idx].username} {guessedGallow.Count()} users got the word correct, good job. You've been awarded {hostPoints} points", color = Colors.SystemColor, usercolor = Colors.SystemUserColor };
-                    await _hub.Clients.Client(MainServer.members[idx].ConnectionId).sendmessage(hostMsg);
-                }
-
-                MainServer.members[idx].ishost = false;
-                await _hub.Clients.Client(MainServer.members[idx].ConnectionId).hostupdate(false);
-
-                idx = (idx + 1) == MainServer.members.Count ? 0 : idx + 1;
-                MainServer.members[idx].ishost = true;
-                await _hub.Clients.Client(MainServer.members[idx].ConnectionId).hostupdate(true);
-            }
-            await _hub.Clients.Group(MainServer.RoomId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
         }
 
         public async Task KickMember(Member e)
@@ -178,7 +74,7 @@ namespace SyncStreamAPI.ServerData
 
                         if (room.server.members.Count > 0)
                         {
-                            room.server.members[0].drawings.AddRange(e.drawings);
+                            var game = room.GallowGame;
                             if (e.ishost)
                             {
                                 room.server.members[0].ishost = true;

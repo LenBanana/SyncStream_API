@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.Models;
+using SyncStreamAPI.Models.GameModels.Gallows;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,19 +18,27 @@ namespace SyncStreamAPI.Hubs
                 Room room = GetRoom(UniqueId);
                 if (room == null)
                     return;
+                var gallows = room.GallowGame;
 
-                room.server.PlayingGallows = !room.server.PlayingGallows;
-                room.server.GameLanguage = language;
-                room.server.GameLength = gameLength;
-                if (room.server.PlayingGallows)
+                if (gallows == null||gallows.PlayingGallows)
                 {
-                    room.server.UpdateGallowWord(false);
-                    await Clients.Group(UniqueId).gallowusers(room.server.members.Select(x => x.ToDTO()).ToList());
+                    if (_gallowGameManager.PlayNewRound(room.uniqueId))
+                    {
+                        gallows = room.GallowGame;
+                    }
+                }
+                if (gallows!=null&&gallows.PlayingGallows)
+                {
+                    gallows.GameLanguage = language;
+                    gallows.GameLength = gameLength;
+                    gallows.UpdateGallowWord(false);
+                    await Clients.Group(UniqueId).gallowusers(room.GallowGame.members);
                     ChatMessage startGallowMessage = new ChatMessage() { time = DateTime.Now, username = "System", message = $"Started a round of gallows, have fun!", color = Helper.Colors.SystemColor, usercolor = Helper.Colors.SystemUserColor };
                     await Clients.Group(UniqueId).sendmessage(startGallowMessage);
                     return;
                 }
-                room.server.members.ForEach(x => { x.gallowPoints = 0; x.guessedGallow = false; x.drawings = new List<Drawing>(); });
+                gallows.drawings = new List<Drawing>();
+                gallows.members.ForEach(x => { x.gallowPoints = 0; x.guessedGallow = false; });
                 await Clients.Group(UniqueId).playinggallows("$clearboard$");
             }
             catch (Exception ex)
@@ -45,8 +54,9 @@ namespace SyncStreamAPI.Hubs
                 Room room = GetRoom(UniqueId);
                 if (room == null)
                     return;
-                if (room.server.PlayingGallows)
-                    room.server.UpdateGallowWord(false);                
+                var game = room.GallowGame;
+                if (game!=null && game.PlayingGallows)
+                    game.UpdateGallowWord(false);                
             }
             catch (Exception ex)
             {
@@ -61,7 +71,7 @@ namespace SyncStreamAPI.Hubs
                 Room room = GetRoom(UniqueId);
                 if (room == null)
                     return;
-                var drawings = room.server.members.SelectMany(x => x.drawings).OrderBy(x => x.Uuid).ToList();
+                var drawings = room.GallowGame.drawings.OrderBy(x => x.Uuid).ToList();
                 if (drawings.Count > 0)
                 {
                     await Clients.Caller.whiteboardjoin(drawings);
@@ -90,7 +100,10 @@ namespace SyncStreamAPI.Hubs
                 Room room = GetRoom(UniqueId);
                 if (room == null)
                     return;
-                room.server.members.First(x => x.ConnectionId == Context.ConnectionId).drawings.AddRange(drawings);
+                var game = room.GallowGame;
+                if (game != null)
+                    game.drawings.AddRange(drawings);
+                
                 await Clients.GroupExcept(UniqueId, Context.ConnectionId).whiteboardupdate(drawings.ToList());
             }
             catch (Exception ex)
@@ -106,7 +119,7 @@ namespace SyncStreamAPI.Hubs
                 Room room = GetRoom(UniqueId);
                 if (room == null)
                     return;
-                room.server.members.ForEach(x => x.drawings.Clear());
+                room.GallowGame.drawings.Clear();
                 await Clients.GroupExcept(UniqueId, Context.ConnectionId).whiteboardclear(true);
             }
             catch (Exception ex)

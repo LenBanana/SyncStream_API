@@ -1,5 +1,6 @@
 ﻿using SyncStreamAPI.DTOModel;
 using SyncStreamAPI.Models;
+using SyncStreamAPI.Models.GameModels.Members;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -17,9 +18,11 @@ namespace SyncStreamAPI.Interfaces
 
         Task whiteboardredo(string UUID);
 
+        Task isdrawingupdate(bool isDrawing);
+
         Task playinggallows(string word);
 
-        Task gallowusers(List<MemberDTO> members);
+        Task gallowusers(List<GallowMember> members);
 
         Task gallowtimerupdate(int time);
 
