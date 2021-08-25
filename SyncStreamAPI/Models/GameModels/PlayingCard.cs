@@ -9,8 +9,9 @@ namespace SyncStreamAPI.Models.GameModels
     public class PlayingCard
     {
         public string Id => $"{Suit.ToString()}{Rank.ToString()}";
-        public string SuitS => $"{Suit.ToString()}";
+        public string SuitS => $"{Suit.ToString().First().ToString()}";
         public string RankS => GetRank();
+        public string CardName => this.ToString();
         public PlayingCardSuit Suit { get; set; }
         public PlayingCardRank Rank { get; set; }
         public bool FaceUp { get; set; } = false;

@@ -40,7 +40,7 @@ namespace SyncStreamAPI.Hubs
         }
 
 #nullable enable
-        public override Task OnDisconnectedAsync(Exception? ex)
+        public override async Task OnDisconnectedAsync(Exception? ex)
         {
             var Rooms = DataManager.GetRooms();
             int idx = Rooms.FindIndex(x => x.server.members.FirstOrDefault(y => y.ConnectionId == Context.ConnectionId) != null);
@@ -58,8 +58,17 @@ namespace SyncStreamAPI.Hubs
                     if (gameMemberIdx > -1)
                         game.members.RemoveAt(gameMemberIdx);
                 }
+                if (gameMode == Enums.Games.GameMode.Blackjack)
+                {
+                    var game = room.BlackjackGame;
+                    var gameMemberIdx = game.members.FindIndex(x => x.ConnectionId == Context.ConnectionId);
+                    if (gameMemberIdx > -1)
+                        game.members.RemoveAt(gameMemberIdx);
+                    if (game.members.Count < 1)
+                        await _blackjackManager.PlayNewRound(game.RoomId);
+                }
             }
-            return base.OnDisconnectedAsync(ex);
+            await base.OnDisconnectedAsync(ex);
         }
 #nullable disable
 

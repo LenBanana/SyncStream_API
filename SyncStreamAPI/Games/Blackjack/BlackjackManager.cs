@@ -33,11 +33,7 @@ namespace SyncStreamAPI.Games.Blackjack
 
         private async void Game_RoundEnded(BlackjackLogic game)
         {
-            foreach (var member in game.members)
-                await _hub.Clients.Client(member.ConnectionId).sendblackjackmembers(member, game.members.Where(x => x.UserId != member.UserId).ToList());
-            await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer);
-            await Task.Delay(2500);
-            AskForBet(game, 0);
+            await InitRound(game);
         }
 
         private async void Game_DealerDealed(BlackjackLogic game)
@@ -52,10 +48,26 @@ namespace SyncStreamAPI.Games.Blackjack
 
         private async void Game_CardDealed(BlackjackLogic game, BlackjackMember member)
         {
-            await _hub.Clients.Client(member.ConnectionId).sendblackjackmembers(member, game.members.Where(x => x.UserId != member.UserId).ToList());
+            foreach (var _member in game.members)
+            {
+                await _hub.Clients.Client(_member.ConnectionId).sendblackjackself(_member);
+                await _hub.Clients.Client(_member.ConnectionId).sendblackjackmembers(game.members.Where(x => x.ConnectionId != _member.ConnectionId).ToList());
+            }
         }
 
-        public bool PlayNewRound(string UniqueId)
+        private async Task InitRound(BlackjackLogic game)
+        {
+            foreach (var member in game.members)
+            {
+                await _hub.Clients.Client(member.ConnectionId).sendblackjackself(member);
+                await _hub.Clients.Client(member.ConnectionId).sendblackjackmembers(game.members.Where(x => x.ConnectionId != member.ConnectionId).ToList());
+            }
+            await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer);
+            await Task.Delay(2500);
+            AskForBet(game, 0);
+        }
+
+        public async Task<bool> PlayNewRound(string UniqueId)
         {
             var idx = blackjackGames.FindIndex(x => x.RoomId == UniqueId);
             if (idx < 0)
@@ -63,13 +75,15 @@ namespace SyncStreamAPI.Games.Blackjack
                 Room room = DataManager.GetRoom(UniqueId);
                 List<BlackjackMember> bjMember = new List<BlackjackMember>();
                 foreach (var member in room.server.members)
-                    bjMember.Add(member.ToBlackjackMember(bjMember.Count));
+                    bjMember.Add(member.ToBlackjackMember());
 
                 var game = new BlackjackLogic(this, UniqueId, bjMember);
                 blackjackGames.Add(game);
-                AskForBet(game, 0);
+                await _hub.Clients.Group(UniqueId).playblackjack(true);
+                await InitRound(game);
                 return true;
             }
+            await _hub.Clients.Group(UniqueId).playblackjack(false);
             blackjackGames.RemoveAt(idx);
             return false;
         }
@@ -83,8 +97,12 @@ namespace SyncStreamAPI.Games.Blackjack
                 await game.PlayRound();
                 await Task.Delay(2000);
                 await game.PlayRound();
-                await Task.Delay(1000);
-                AskForPull(game, game.members.FindIndex(x => x.blackjack == false));
+                await Task.Delay(2000);
+                var idx = game.members.FindIndex(x => x.blackjack == false && x.points < 21);
+                if (idx > -1)
+                    AskForPull(game, idx);
+                else
+                    AskForPull(game, game.members.Count);
             }
         }
 
@@ -93,10 +111,14 @@ namespace SyncStreamAPI.Games.Blackjack
             if (memberIdx < game.members.Count)
             {
                 var member = game.members[memberIdx];
-                if (member.blackjack == false)
-                    await _hub.Clients.Client(member.ConnectionId).askforpull(member.cards.Count == 2);
-                else
-                    AskForPull(game, memberIdx++);
+                var doubleOption = (member.cards.Count == 2);
+                if (member.blackjack == false && member.points < 21)
+                {
+                    Console.WriteLine("Pull card " + member.ConnectionId);
+                    await _hub.Clients.Client(member.ConnectionId).askforpull(doubleOption);
+                    return;
+                }
+                AskForPull(game, memberIdx + 1);
             }
             else
                 DealerPull(game);

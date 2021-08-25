@@ -40,7 +40,7 @@ namespace SyncStreamAPI.Helper
 
         public static void RemoveById(this List<PlayingCardDeck> cards, string cardId)
         {
-            var idx = cards.FindIndex(x => x.CardDeck.FirstOrDefault(x => x.Id == cardId).Id == cardId);
+            var idx = cards.FindIndex(x => x.CardDeck.FirstOrDefault(x => x.Id == cardId)?.Id == cardId);
             if (idx > -1)
             {
                 var cardIdx = cards[idx].CardDeck.FindIndex(x => x.Id == cardId);

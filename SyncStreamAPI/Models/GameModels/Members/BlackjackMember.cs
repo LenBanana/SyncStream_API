@@ -8,15 +8,13 @@ namespace SyncStreamAPI.Models.GameModels.Members
 {
     public class BlackjackMember
     {
-        public BlackjackMember(string Username, string connectionId, int Userid)
+        public BlackjackMember(string Username, string connectionId)
         {
             username = Username;
             ConnectionId = connectionId;
-            UserId = Userid;
         }
         public bool ShouldSerializeConnectionId() { return false; }
         public string ConnectionId { get; set; }
-        public int UserId { get; set; }
         public string username { get; set; }
         public List<PlayingCard> cards { get; set; } = new List<PlayingCard>();
         public int points => cards.CalculatePoints();
@@ -27,7 +25,7 @@ namespace SyncStreamAPI.Models.GameModels.Members
 
         public void AddMoney(int dealerPoints)
         {
-            if (dealerPoints < points)
+            if ((dealerPoints < points || dealerPoints > 21) && points <= 21)
             {
                 if (blackjack)
                     Money = Money + Bet * 2.5;
@@ -36,8 +34,8 @@ namespace SyncStreamAPI.Models.GameModels.Members
                 else
                     Money = Money + Bet * 2;
             }
-            else if (dealerPoints > points)
-                Money = Money - Bet;
+            else if (dealerPoints < 21 && dealerPoints == points)
+                Money = Money + Bet;
         }
 
         public void SetBet(double bet)

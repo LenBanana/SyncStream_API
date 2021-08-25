@@ -32,7 +32,7 @@ namespace SyncStreamAPI.Models
 
         public MemberDTO ToDTO() => new MemberDTO(username, ishost);
         public GallowMember ToGallowMember() => new GallowMember(username, ishost, ConnectionId);
-        public BlackjackMember ToBlackjackMember(int userId) => new BlackjackMember(username, ConnectionId, userId);
+        public BlackjackMember ToBlackjackMember() => new BlackjackMember(username, ConnectionId);
 
 
         private async void CountDown()

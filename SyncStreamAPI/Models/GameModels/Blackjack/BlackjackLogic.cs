@@ -12,9 +12,9 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
     {
         public string RoomId { get; set; }
         public List<PlayingCardDeck> playingCardDecks { get; set; } = new List<PlayingCardDeck>();
-        public List<PlayingCard> playingCards { get { return playingCardDecks.SelectMany(x => x.CardDeck).ToList(); } }
+        public List<PlayingCard> playingCards { get; set; } = new List<PlayingCard>();
         public List<BlackjackMember> members { get; set; } = new List<BlackjackMember>();
-        public BlackjackDealer dealer { get; set; } = new BlackjackDealer("Fred");
+        public BlackjackDealer dealer { get; set; } = new BlackjackDealer();
 
         public delegate void BlackjackGameEvent(BlackjackLogic game);
         public delegate void CardDealEvent(BlackjackLogic game, BlackjackMember member);
@@ -36,13 +36,21 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
             playingCardDecks = new List<PlayingCardDeck>();
             for (int i = 0; i < General.BlackjackShoeSize; i++)
                 playingCardDecks.Add(new PlayingCardDeck());
+            playingCards = playingCardDecks.SelectMany(x => x.CardDeck).ToList();
             Shuffle();
         }
 
         public void Shuffle()
         {
-            playingCardDecks.ForEach(x => x.CardDeck.Shuffle());
+            playingCards.Shuffle();
             ShuffledDeck?.Invoke(this);
+        }
+
+        public PlayingCard PullCard()
+        {
+            var card = playingCards[0];
+            playingCards.RemoveAt(0);
+            return card;
         }
 
         public (List<PlayingCard> membersCards, List<PlayingCard> otherCards, List<PlayingCard> dealerCards) GetAllDecks(string ConnectionId)
@@ -72,6 +80,29 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
             DealDealerCard();
         }
 
+        public bool DealCard(BlackjackMember member)
+        {
+            var card = PullCard();
+            card.FaceUp = true;
+            member.cards.Add(card);
+            CardDealed?.Invoke(this, member);
+            return true;
+        }
+
+        public bool DealDealerCard()
+        {
+            if (dealer.points < 17)
+            {
+                var dealersCard = PullCard();
+                if (dealer.cards.Count != 1)
+                    dealersCard.FaceUp = true;
+                dealer.cards.Add(dealersCard);
+                DealerDealed?.Invoke(this);
+                return true;
+            }
+            return false;
+        }
+
         public void CheckDeckSize()
         {
             var remainingSize = playingCards.Count();
@@ -79,32 +110,9 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
                 ResetBlackjackDeck();
         }
 
-        public bool DealDealerCard()
+        public async void EndRound()
         {
-            if (dealer.points < 17)
-            {
-                var dealersCard = playingCards[0];
-                if (dealer.cards.Count != 0)
-                    dealersCard.FaceUp = true;
-                dealer.cards.Add(dealersCard);
-                playingCardDecks.RemoveById(dealersCard.Id);
-                DealerDealed?.Invoke(this);
-                return true;
-            }
-            return false;
-        }
-
-        public void DealCard(BlackjackMember member)
-        {
-            var card = playingCards[0];
-            card.FaceUp = true;
-            member.cards.Add(card);
-            playingCardDecks.RemoveById(card.Id);
-            CardDealed?.Invoke(this, member);
-        }
-
-        public void EndRound()
-        {
+            await Task.Delay(2500);
             foreach (var member in members)
             {
                 member.AddMoney(dealer.points);
