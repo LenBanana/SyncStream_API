@@ -55,6 +55,8 @@ namespace SyncStreamAPI.Hubs
                 var newBjMember = new Models.GameModels.Members.BlackjackMember(newMember.username, newMember.ConnectionId);
                 game.members.Add(newBjMember);
                 await Clients.Caller.playblackjack(true);
+                //give time to build component
+                await Task.Delay(250);
                 await _blackjackManager.SendAllUsers(game);
             }
             await Clients.Caller.isplayingupdate(MainServer.isplaying);
