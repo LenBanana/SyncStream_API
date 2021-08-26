@@ -33,7 +33,7 @@ namespace SyncStreamAPI.Games.Blackjack
 
         private async void Game_RoundEnded(BlackjackLogic game)
         {
-            await InitRound(game);
+            await InitRound(game, 2000);
         }
 
         private async void Game_DealerDealed(BlackjackLogic game)
@@ -48,14 +48,19 @@ namespace SyncStreamAPI.Games.Blackjack
 
         private async void Game_CardDealed(BlackjackLogic game, BlackjackMember member)
         {
-            foreach (var _member in game.members)
-            {
-                await _hub.Clients.Client(_member.ConnectionId).sendblackjackself(_member);
-                await _hub.Clients.Client(_member.ConnectionId).sendblackjackmembers(game.members.Where(x => x.ConnectionId != _member.ConnectionId).ToList());
-            }
+            await SendAllUsers(game);
         }
 
-        private async Task InitRound(BlackjackLogic game)
+        private async Task InitRound(BlackjackLogic game, int timeout)
+        {
+            await SendAllUsers(game);
+            game.members.ForEach(x => x.NewlyJoined = false);
+            await Task.Delay(timeout);
+            if (!game.GameEnded)
+                AskForBet(game, 0);
+        }
+
+        public async Task SendAllUsers(BlackjackLogic game)
         {
             foreach (var member in game.members)
             {
@@ -63,10 +68,6 @@ namespace SyncStreamAPI.Games.Blackjack
                 await _hub.Clients.Client(member.ConnectionId).sendblackjackmembers(game.members.Where(x => x.ConnectionId != member.ConnectionId).ToList());
             }
             await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer);
-            game.members.ForEach(x => x.NewlyJoined = false);
-            await Task.Delay(2500);
-            if (!game.GameEnded)
-                AskForBet(game, 0);
         }
 
         public async Task<bool> PlayNewRound(string UniqueId)
@@ -82,7 +83,7 @@ namespace SyncStreamAPI.Games.Blackjack
                 var game = new BlackjackLogic(this, UniqueId, bjMember);
                 blackjackGames.Add(game);
                 await _hub.Clients.Group(UniqueId).playblackjack(true);
-                await InitRound(game);
+                await InitRound(game, 500);
                 return true;
             }
             await _hub.Clients.Group(UniqueId).playblackjack(false);
@@ -122,7 +123,6 @@ namespace SyncStreamAPI.Games.Blackjack
                 var doubleOption = (member.cards.Count == 2);
                 if (member.blackjack == false && member.points < 21)
                 {
-                    Console.WriteLine("Pull card " + member.ConnectionId);
                     await _hub.Clients.Client(member.ConnectionId).askforpull(doubleOption);
                     return;
                 }

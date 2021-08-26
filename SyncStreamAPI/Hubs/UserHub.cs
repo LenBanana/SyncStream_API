@@ -39,8 +39,6 @@ namespace SyncStreamAPI.Hubs
                 MainServer.chatmessages = new List<ChatMessage>();
             await Groups.AddToGroupAsync(Context.ConnectionId, UniqueId);
             MainServer.members.Add(newMember);
-            //if (newMember.ishost)
-            //    MainServer.PlayingGallows = false;
 
             await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
 
@@ -54,8 +52,10 @@ namespace SyncStreamAPI.Hubs
             if (room.GameMode == GameMode.Blackjack)
             {
                 var game = room.BlackjackGame;
-                game.members.Add(new Models.GameModels.Members.BlackjackMember(newMember.username, newMember.ConnectionId));
+                var newBjMember = new Models.GameModels.Members.BlackjackMember(newMember.username, newMember.ConnectionId);
+                game.members.Add(newBjMember);
                 await Clients.Caller.playblackjack(true);
+                await _blackjackManager.SendAllUsers(game);
             }
             await Clients.Caller.isplayingupdate(MainServer.isplaying);
             await Clients.Caller.hostupdate(newMember.ishost);
@@ -144,13 +144,6 @@ namespace SyncStreamAPI.Hubs
                     if (MainServer.members.Count < 2)
                         await PlayGallows(UniqueId, gallowGame.GameLanguage, gallowGame.GameLength);
 
-                var blackjack = room.BlackjackGame;
-                if (blackjack != null)
-                {
-                    var idx = blackjack.members.FindIndex(x => x.ConnectionId == member.ConnectionId);
-                    if (idx != -1)
-                        blackjack.members.RemoveAt(idx);
-                }
                 if (isHost)
                 {
                     if (gallowGame != null && gallowGame.PlayingGallows)
@@ -159,6 +152,15 @@ namespace SyncStreamAPI.Hubs
                         MainServer.members[0].ishost = true;
                     await Clients.Client(MainServer.members[0].ConnectionId).hostupdate(true);
                 }
+            }
+            var blackjack = room.BlackjackGame;
+            if (blackjack != null)
+            {
+                var idx = blackjack.members.FindIndex(x => x.ConnectionId == member.ConnectionId);
+                if (idx != -1)
+                    blackjack.members.RemoveAt(idx);
+                if (blackjack.members.Count < 1)
+                    await _blackjackManager.PlayNewRound(UniqueId);
             }
             await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
             await Clients.All.getrooms(DataManager.GetRooms());

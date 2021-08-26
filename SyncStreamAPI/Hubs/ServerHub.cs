@@ -66,6 +66,8 @@ namespace SyncStreamAPI.Hubs
                         game.members.RemoveAt(gameMemberIdx);
                     if (game.members.Count < 1)
                         await _blackjackManager.PlayNewRound(game.RoomId);
+                    else
+                        await _blackjackManager.SendAllUsers(game);
                 }
             }
             await base.OnDisconnectedAsync(ex);

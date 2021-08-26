@@ -83,6 +83,8 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
 
         public bool DealCard(BlackjackMember member)
         {
+            if (member.NewlyJoined)
+                return false;
             var card = PullCard();
             card.FaceUp = true;
             member.cards.Add(card);
@@ -113,7 +115,7 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
 
         public async void EndRound()
         {
-            await Task.Delay(2500);
+            await Task.Delay(1500);
             foreach (var member in members)
             {
                 member.AddMoney(dealer.points);
