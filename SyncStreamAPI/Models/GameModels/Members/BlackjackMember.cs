@@ -46,7 +46,7 @@ namespace SyncStreamAPI.Models.GameModels.Members
                 else
                     Money = Money + Bet * 2;
             }
-            else if (dealerPoints < 21 && dealerPoints == points)
+            else if (dealerPoints == points)
                 Money = Money + Bet;
             if (didSplit)
             {
@@ -57,7 +57,7 @@ namespace SyncStreamAPI.Models.GameModels.Members
                     else
                         Money = Money + Bet * 2;
                 }
-                else if (dealerPoints < 21 && dealerPoints == splitPoints)
+                else if (dealerPoints == splitPoints)
                     Money = Money + Bet;
             }
         }
