@@ -53,6 +53,7 @@ namespace SyncStreamAPI.Games.Blackjack
                 }
                 else if (member.waitingForPull)
                 {
+                    Console.WriteLine("Failed to pull");
                     AskForPull(game, memberIdx + 1);
                     member.waitingForPull = false;
                 }
@@ -216,7 +217,6 @@ namespace SyncStreamAPI.Games.Blackjack
         public async void AskForSplitPull(BlackjackLogic game, int memberIdx, bool pullForSplitHand)
         {
             var member = game.members[memberIdx];
-            Console.WriteLine($"{member.username}: splitpoints: {member.splitPoints} - points: {member.points} - choose: {pullForSplitHand}");
             if (pullForSplitHand == false)
             {
                 if (member.points < 21)
@@ -240,6 +240,7 @@ namespace SyncStreamAPI.Games.Blackjack
                     return;
                 }
             }
+            Console.WriteLine($"{member.username}: splitpoints: {member.splitPoints} - points: {member.points} - choose: {pullForSplitHand}");
             AskForPull(game, memberIdx + 1);
         }
 
