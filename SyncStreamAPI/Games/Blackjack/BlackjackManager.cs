@@ -121,7 +121,6 @@ namespace SyncStreamAPI.Games.Blackjack
         private async Task InitRound(BlackjackLogic game, int timeout)
         {
             await SendAllUsers(game);
-            await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer);
             game.members.ForEach(x => x.NewlyJoined = false);
             await Task.Delay(timeout);
             if (!game.GameEnded)
