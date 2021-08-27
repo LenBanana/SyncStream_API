@@ -28,7 +28,7 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
         {
             RoomId = roomId;
             members = Members;
-            manager.BlackjackEvents(this);
+            manager.BlackjackGameEvents(this);
             ResetBlackjackDeck();
         }
 
@@ -92,6 +92,15 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
             return true;
         }
 
+        public bool DealSplitCard(BlackjackMember member)
+        {
+            var card = PullCard();
+            card.FaceUp = true;
+            member.splitCards.Add(card);
+            CardDealed?.Invoke(this, member);
+            return true;
+        }
+
         public bool DealDealerCard()
         {
             if (dealer.points < 17)
@@ -120,6 +129,7 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
             {
                 member.AddMoney(dealer.points);
                 member.cards = new List<PlayingCard>();
+                member.didSplit = false;
                 CardDealed?.Invoke(this, member);
             }
             dealer.cards = new List<PlayingCard>();

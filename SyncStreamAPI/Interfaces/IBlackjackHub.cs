@@ -12,6 +12,7 @@ namespace SyncStreamAPI.Interfaces
         Task playblackjack(bool playing);
         Task askforbet();
         Task askforpull(bool doubleOption);
+        Task askforsplitpull(bool forSplitHand);
         Task sendblackjackself(BlackjackMember you);
         Task sendblackjackmembers(List<BlackjackMember> others);
         Task sendblackjackdealer(BlackjackDealer dealer);

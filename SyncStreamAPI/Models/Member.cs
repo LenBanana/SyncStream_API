@@ -1,4 +1,5 @@
 ﻿using SyncStreamAPI.DTOModel;
+using SyncStreamAPI.Games.Blackjack;
 using SyncStreamAPI.Models.GameModels.Members;
 using System;
 using System.Collections.Generic;
@@ -32,7 +33,7 @@ namespace SyncStreamAPI.Models
 
         public MemberDTO ToDTO() => new MemberDTO(username, ishost);
         public GallowMember ToGallowMember() => new GallowMember(username, ishost, ConnectionId);
-        public BlackjackMember ToBlackjackMember() => new BlackjackMember(username, ConnectionId);
+        public BlackjackMember ToBlackjackMember(BlackjackManager manager) => new BlackjackMember(username, ConnectionId, manager);
 
 
         private async void CountDown()

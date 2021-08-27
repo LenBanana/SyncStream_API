@@ -23,12 +23,31 @@ namespace SyncStreamAPI.Games.Blackjack
             _hub = hub;
         }
 
-        public void BlackjackEvents(BlackjackLogic game)
+        public void BlackjackGameEvents(BlackjackLogic game)
         {
             game.CardDealed += Game_CardDealed;
             game.DealerDealed += Game_DealerDealed;
             game.ShuffledDeck += Game_ShuffledDeck;
             game.RoundEnded += Game_RoundEnded;
+        }
+
+        public void BlackjackMemberEvents(BlackjackMember member)
+        {
+            member.DidSplit += Member_DidSplit;
+        }
+
+        private async void Member_DidSplit(BlackjackMember member)
+        {
+            var game = blackjackGames.FirstOrDefault(x => x.members.FindIndex(y => y.ConnectionId == member.ConnectionId) != -1);
+            if (game != null)
+            {
+                await Task.Delay(1000);
+                game.DealCard(member);
+                await Task.Delay(1000);
+                game.DealSplitCard(member);
+                await Task.Delay(500);
+                AskForSplitPull(game, game.members.FindIndex(x => x.ConnectionId == member.ConnectionId), false);
+            }
         }
 
         private async void Game_RoundEnded(BlackjackLogic game)
@@ -78,7 +97,7 @@ namespace SyncStreamAPI.Games.Blackjack
                 Room room = DataManager.GetRoom(UniqueId);
                 List<BlackjackMember> bjMember = new List<BlackjackMember>();
                 foreach (var member in room.server.members)
-                    bjMember.Add(member.ToBlackjackMember());
+                    bjMember.Add(member.ToBlackjackMember(this));
 
                 var game = new BlackjackLogic(this, UniqueId, bjMember);
                 blackjackGames.Add(game);
@@ -93,6 +112,10 @@ namespace SyncStreamAPI.Games.Blackjack
             _game.ShuffledDeck -= Game_ShuffledDeck;
             _game.RoundEnded -= Game_RoundEnded;
             _game.GameEnded = true;
+            foreach (var member in _game.members)
+            {
+                member.DidSplit -= Member_DidSplit;
+            }
             blackjackGames.RemoveAt(idx);
             return false;
         }
@@ -130,6 +153,28 @@ namespace SyncStreamAPI.Games.Blackjack
             }
             else
                 DealerPull(game);
+        }
+
+        public async void AskForSplitPull(BlackjackLogic game, int memberIdx, bool pullForSplitHand)
+        {
+            var member = game.members[memberIdx];
+            if (!pullForSplitHand)
+            {
+                if (member.blackjack == false && member.points < 21)
+                    await _hub.Clients.Client(member.ConnectionId).askforsplitpull(pullForSplitHand);
+                else
+                    AskForSplitPull(game, memberIdx, !pullForSplitHand);
+                return;
+            }
+            else
+            {
+                if (member.splitable == false && member.splitPoints < 21)
+                {
+                    await _hub.Clients.Client(member.ConnectionId).askforsplitpull(pullForSplitHand);
+                    return;
+                }
+            }
+            AskForPull(game, memberIdx + 1);
         }
 
         public async void DealerPull(BlackjackLogic game)

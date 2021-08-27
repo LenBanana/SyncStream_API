@@ -21,7 +21,7 @@ namespace SyncStreamAPI.Hubs
             _blackjackManager.AskForBet(game, idx + 1);
         }
 
-        public async Task TakePull(string UniqueId, bool pull, bool doubleOption)
+        public async Task TakePull(string UniqueId, bool pull, bool doubleOption, bool splitOption)
         {
             var room = GetRoom(UniqueId);
             var game = room.BlackjackGame;
@@ -39,9 +39,37 @@ namespace SyncStreamAPI.Hubs
                 member.doubleBet();
                 game.DealCard(member);
             }
+            else if (splitOption)
+            {
+                member.didSplit = splitOption;
+                return;
+            }
             await Task.Delay(500);
             _blackjackManager.AskForPull(game, idx + 1);
+        }
 
+        public async Task TakeSplitPull(string UniqueId, bool pull, bool pullForSplitHand)
+        {
+            var room = GetRoom(UniqueId);
+            var game = room.BlackjackGame;
+            var idx = game.members.FindIndex(x => x.ConnectionId == Context.ConnectionId);
+            var member = game.members[idx];
+            if (pull)
+            {
+                if (pullForSplitHand)
+                    game.DealSplitCard(member);
+                else
+                    game.DealCard(member);
+                await Task.Delay(500);
+                _blackjackManager.AskForSplitPull(game, idx, pullForSplitHand);
+            }
+            else
+            {
+                if (!pullForSplitHand)
+                    _blackjackManager.AskForSplitPull(game, idx, !pullForSplitHand);
+                else
+                    _blackjackManager.AskForPull(game, idx + 1);
+            }
         }
     }
 }

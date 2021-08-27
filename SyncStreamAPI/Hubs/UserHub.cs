@@ -52,7 +52,7 @@ namespace SyncStreamAPI.Hubs
             if (room.GameMode == GameMode.Blackjack)
             {
                 var game = room.BlackjackGame;
-                var newBjMember = new Models.GameModels.Members.BlackjackMember(newMember.username, newMember.ConnectionId);
+                var newBjMember = new Models.GameModels.Members.BlackjackMember(newMember.username, newMember.ConnectionId, _blackjackManager);
                 game.members.Add(newBjMember);
                 await Clients.Caller.playblackjack(true);
                 //give time to build component
