@@ -34,7 +34,7 @@ namespace SyncStreamAPI.Models.GameModels.Members
         public bool NewlyJoined { get; set; } = true;
         private bool _WaitingForBet { get; set; } = false;
         private bool _WaitingForPull { get; set; } = false;
-        public bool WaitingForBet
+        public bool waitingForBet
         {
             get { return _WaitingForBet; }
             set
@@ -46,7 +46,7 @@ namespace SyncStreamAPI.Models.GameModels.Members
                     WaitFor();
             }
         }
-        public bool WaitingForPull
+        public bool waitingForPull
         {
             get { return _WaitingForPull; }
             set
@@ -69,21 +69,14 @@ namespace SyncStreamAPI.Models.GameModels.Members
             cancelWait = new CancellationTokenSource();
             await Task.Delay(60000, cancelWait.Token).ContinueWith(task =>
             {
-                if (WaitingForBet || WaitingForPull)
+                if (waitingForBet || waitingForPull)
                     FailedToReact?.Invoke(this);
             });
         }
 
-        public void WaitFor(bool betOrPull)
+        public bool AddMoney(int dealerPoints)
         {
-            if (betOrPull)
-                WaitingForBet = true;
-            else
-                WaitingForPull = true;
-        }
-
-        public void AddMoney(int dealerPoints)
-        {
+            var money = Money;
             if ((dealerPoints < points || dealerPoints > 21) && points <= 21)
             {
                 if (blackjack)
@@ -107,12 +100,15 @@ namespace SyncStreamAPI.Models.GameModels.Members
                 else if (dealerPoints == splitPoints)
                     Money = Money + Bet;
             }
+            if (money == Money || Money == (money + Bet))
+                return false;
+            else
+                return true;
         }
 
         public void SetBet(double bet)
         {
-            WaitingForBet = false;
-            didSplit = false;
+            waitingForBet = false;
             Money = Money - bet;
             Bet = bet;
         }

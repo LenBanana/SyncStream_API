@@ -163,14 +163,14 @@ namespace SyncStreamAPI.Hubs
                 { 
                     var bjMember = blackjack.members[idx];
                     blackjack.members.RemoveAt(idx);
-                    if (bjMember.WaitingForBet)
+                    if (bjMember.waitingForBet)
                     {
-                        bjMember.WaitingForBet = false;
+                        bjMember.waitingForBet = false;
                         _blackjackManager.AskForBet(blackjack, idx + 1);
                     }
-                    else if (bjMember.WaitingForPull)
+                    else if (bjMember.waitingForPull)
                     {
-                        bjMember.WaitingForPull = false;
+                        bjMember.waitingForPull = false;
                         _blackjackManager.AskForPull(blackjack, idx + 1);
                         await _blackjackManager.SendAllUsers(blackjack);
                     }

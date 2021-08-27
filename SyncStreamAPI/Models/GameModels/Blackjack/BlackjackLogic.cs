@@ -125,17 +125,8 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
         public async void EndRound()
         {
             await Task.Delay(1500);
-            foreach (var member in members.ToList())
-            {
-                member.AddMoney(dealer.points);
-                member.cards = new List<PlayingCard>();
-                member.didSplit = false;
-                CardDealed?.Invoke(this, member);
-            }
-            dealer.cards = new List<PlayingCard>();
-            DealerDealed?.Invoke(this);
-            CheckDeckSize();
             RoundEnded?.Invoke(this);
+            CheckDeckSize();
         }
     }
 }

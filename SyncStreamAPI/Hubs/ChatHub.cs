@@ -24,6 +24,7 @@ namespace SyncStreamAPI.Hubs
             switch (room.GameMode)
             {
                 case GameMode.NotPlaying:
+                case GameMode.Blackjack:
                     await Clients.Group(MainServer.RoomId).sendmessage(message);
                     break;
                 case GameMode.Gallows:
