@@ -59,13 +59,13 @@ namespace SyncStreamAPI.Hubs
             var member = game.members[idx];
             member.waitingForPull = false;
             await _blackjackManager.SendAllUsers(game);
+            await Task.Delay(500);
             if (pull)
             {
                 if (pullForSplitHand == true)
                     game.DealSplitCard(member);
                 else
                     game.DealCard(member);
-                await Task.Delay(500);
                 _blackjackManager.AskForSplitPull(game, idx, pullForSplitHand);
             }
             else

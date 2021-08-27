@@ -52,7 +52,7 @@ namespace SyncStreamAPI.Models.GameModels.Members
             set
             {
                 _WaitingForPull = value;
-                if (!value)
+                if (value == false)
                     cancelWait.Cancel();
                 else
                     WaitFor();
