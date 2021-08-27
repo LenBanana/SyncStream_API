@@ -61,7 +61,7 @@ namespace SyncStreamAPI.Hubs
             await _blackjackManager.SendAllUsers(game);
             if (pull)
             {
-                if (pullForSplitHand)
+                if (pullForSplitHand == true)
                     game.DealSplitCard(member);
                 else
                     game.DealCard(member);
@@ -70,8 +70,8 @@ namespace SyncStreamAPI.Hubs
             }
             else
             {
-                if (!pullForSplitHand)
-                    _blackjackManager.AskForSplitPull(game, idx, !pullForSplitHand);
+                if (pullForSplitHand == false)
+                    _blackjackManager.AskForSplitPull(game, idx, true);
                 else
                     _blackjackManager.AskForPull(game, idx + 1);
             }
