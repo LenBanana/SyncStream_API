@@ -218,6 +218,7 @@ namespace SyncStreamAPI.Games.Blackjack
             var member = game.members[memberIdx];
             if (!pullForSplitHand)
             {
+                Console.WriteLine($"{member.username} points - {member.points}");
                 if (member.points < 21)
                 {
                     await _hub.Clients.Client(member.ConnectionId).askforsplitpull(pullForSplitHand);
@@ -231,6 +232,7 @@ namespace SyncStreamAPI.Games.Blackjack
             }
             else
             {
+                Console.WriteLine($"{member.username} splitpoints - {member.splitPoints}");
                 if (member.splitPoints < 21)
                 {
                     await _hub.Clients.Client(member.ConnectionId).askforsplitpull(pullForSplitHand);
