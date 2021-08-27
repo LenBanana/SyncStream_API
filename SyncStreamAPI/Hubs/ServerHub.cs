@@ -60,14 +60,30 @@ namespace SyncStreamAPI.Hubs
                 }
                 if (gameMode == Enums.Games.GameMode.Blackjack)
                 {
-                    var game = room.BlackjackGame;
-                    var gameMemberIdx = game.members.FindIndex(x => x.ConnectionId == Context.ConnectionId);
+                    var blackjack = room.BlackjackGame;
+                    var gameMemberIdx = blackjack.members.FindIndex(x => x.ConnectionId == Context.ConnectionId);
                     if (gameMemberIdx > -1)
-                        game.members.RemoveAt(gameMemberIdx);
-                    if (game.members.Count < 1)
-                        await _blackjackManager.PlayNewRound(game.RoomId);
+                    {
+                        var bjMember = blackjack.members[gameMemberIdx];
+                        blackjack.members.RemoveAt(gameMemberIdx);
+                        if (bjMember.WaitingForBet)
+                        {
+                            bjMember.WaitingForBet = false;
+                            _blackjackManager.AskForBet(blackjack, idx + 1);
+                        }
+                        else if (bjMember.WaitingForPull)
+                        {
+                            bjMember.WaitingForPull = false;
+                            _blackjackManager.AskForPull(blackjack, idx + 1);
+                            _blackjackManager.SendAllUsers(blackjack);
+                        }
+                        else
+                            await _blackjackManager.SendAllUsers(blackjack);
+                    }
+                    if (blackjack.members.Count < 1)
+                        await _blackjackManager.PlayNewRound(blackjack.RoomId);
                     else
-                        await _blackjackManager.SendAllUsers(game);
+                        await _blackjackManager.SendAllUsers(blackjack);
                 }
             }
             await base.OnDisconnectedAsync(ex);

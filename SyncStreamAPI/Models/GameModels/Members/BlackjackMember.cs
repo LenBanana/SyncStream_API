@@ -3,6 +3,7 @@ using SyncStreamAPI.Helper;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Models.GameModels.Members
@@ -31,9 +32,55 @@ namespace SyncStreamAPI.Models.GameModels.Members
         public bool splitBlackjack => (splitCards.Count == 2 && splitPoints == 21);
         public bool doubled { get; set; } = false;
         public bool NewlyJoined { get; set; } = true;
+        private bool _WaitingForBet { get; set; } = false;
+        private bool _WaitingForPull { get; set; } = false;
+        public bool WaitingForBet
+        {
+            get { return _WaitingForBet; }
+            set
+            {
+                _WaitingForBet = value;
+                if (!value)
+                    cancelWait.Cancel();
+                else
+                    WaitFor();
+            }
+        }
+        public bool WaitingForPull
+        {
+            get { return _WaitingForPull; }
+            set
+            {
+                _WaitingForPull = value;
+                if (!value)
+                    cancelWait.Cancel();
+                else
+                    WaitFor();
+            }
+        }
+        private CancellationTokenSource cancelWait { get; set; } = new CancellationTokenSource();
 
-        public delegate void DidSplitEvent(BlackjackMember member);
-        public event DidSplitEvent DidSplit;
+        public delegate void MemberEvent(BlackjackMember member);
+        public event MemberEvent DidSplit;
+        public event MemberEvent FailedToReact;
+
+        private async void WaitFor()
+        {
+            cancelWait = new CancellationTokenSource();
+            await Task.Delay(60000, cancelWait.Token).ContinueWith(task =>
+            {
+                if (WaitingForBet || WaitingForPull)
+                    FailedToReact?.Invoke(this);
+            });
+        }
+
+        public void WaitFor(bool betOrPull)
+        {
+            if (betOrPull)
+                WaitingForBet = true;
+            else
+                WaitingForPull = true;
+        }
 
         public void AddMoney(int dealerPoints)
         {
@@ -64,12 +111,13 @@ namespace SyncStreamAPI.Models.GameModels.Members
 
         public void SetBet(double bet)
         {
+            WaitingForBet = false;
             didSplit = false;
             Money = Money - bet;
             Bet = bet;
         }
 
-        public void doubleBet()
+        public void DoubleBet()
         {
             Money = Money - Bet;
             Bet = Bet * 2;

@@ -73,7 +73,7 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
 
         public async Task PlayRound()
         {
-            foreach (var member in members)
+            foreach (var member in members.ToList())
             {
                 DealCard(member);
                 await Task.Delay(500);
@@ -125,7 +125,7 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
         public async void EndRound()
         {
             await Task.Delay(1500);
-            foreach (var member in members)
+            foreach (var member in members.ToList())
             {
                 member.AddMoney(dealer.points);
                 member.cards = new List<PlayingCard>();

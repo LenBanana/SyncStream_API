@@ -34,6 +34,27 @@ namespace SyncStreamAPI.Games.Blackjack
         public void BlackjackMemberEvents(BlackjackMember member)
         {
             member.DidSplit += Member_DidSplit;
+            member.FailedToReact += Member_FailedToReact;
+        }
+
+        private void Member_FailedToReact(BlackjackMember member)
+        {
+            var game = blackjackGames.FirstOrDefault(x => x.members.FindIndex(y => y.ConnectionId == member.ConnectionId) != -1);
+            if (game != null)
+            {
+                var memberIdx = game.members.FindIndex(x => x.ConnectionId == member.ConnectionId);
+                if (member.WaitingForBet)
+                {
+                    member.SetBet(5);
+                    AskForBet(game, memberIdx + 1);
+                    member.WaitingForBet = false;
+                }
+                else if (member.WaitingForPull)
+                {
+                    AskForPull(game, memberIdx + 1);
+                    member.WaitingForPull = false;
+                }
+            }
         }
 
         private async void Member_DidSplit(BlackjackMember member)
@@ -114,7 +135,10 @@ namespace SyncStreamAPI.Games.Blackjack
             _game.GameEnded = true;
             foreach (var member in _game.members)
             {
+                member.WaitingForBet = false;
+                member.WaitingForPull = false;
                 member.DidSplit -= Member_DidSplit;
+                member.FailedToReact -= Member_FailedToReact;
             }
             blackjackGames.RemoveAt(idx);
             return false;
@@ -123,7 +147,11 @@ namespace SyncStreamAPI.Games.Blackjack
         public async void AskForBet(BlackjackLogic game, int memberIdx)
         {
             if (memberIdx < game.members.Count && !game.members[memberIdx].NewlyJoined)
-                await _hub.Clients.Client(game.members[memberIdx].ConnectionId).askforbet();
+            {
+                var member = game.members[memberIdx];
+                await _hub.Clients.Client(member.ConnectionId).askforbet();
+                member.WaitingForBet = true;
+            }
             else
             {
                 await game.PlayRound();
@@ -147,6 +175,7 @@ namespace SyncStreamAPI.Games.Blackjack
                 if (member.blackjack == false && member.points < 21)
                 {
                     await _hub.Clients.Client(member.ConnectionId).askforpull(doubleOption);
+                    member.WaitingForPull = true;
                     return;
                 }
                 AskForPull(game, memberIdx + 1);
@@ -161,16 +190,20 @@ namespace SyncStreamAPI.Games.Blackjack
             if (!pullForSplitHand)
             {
                 if (member.blackjack == false && member.points < 21)
+                {
                     await _hub.Clients.Client(member.ConnectionId).askforsplitpull(pullForSplitHand);
+                    member.WaitingForPull = true;
+                }
                 else
                     AskForSplitPull(game, memberIdx, !pullForSplitHand);
                 return;
             }
             else
             {
-                if (member.splitable == false && member.splitPoints < 21)
+                if (member.splitBlackjack == false && member.splitPoints < 21)
                 {
                     await _hub.Clients.Client(member.ConnectionId).askforsplitpull(pullForSplitHand);
+                    member.WaitingForPull = true;
                     return;
                 }
             }

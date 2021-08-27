@@ -27,6 +27,7 @@ namespace SyncStreamAPI.Hubs
             var game = room.BlackjackGame;
             var idx = game.members.FindIndex(x => x.ConnectionId == Context.ConnectionId);
             var member = game.members[idx];
+            member.WaitingForPull = false;
             if (pull)
             {
                  game.DealCard(member);
@@ -36,7 +37,7 @@ namespace SyncStreamAPI.Hubs
             }
             else if (doubleOption)
             {
-                member.doubleBet();
+                member.DoubleBet();
                 game.DealCard(member);
             }
             else if (splitOption)
@@ -54,6 +55,7 @@ namespace SyncStreamAPI.Hubs
             var game = room.BlackjackGame;
             var idx = game.members.FindIndex(x => x.ConnectionId == Context.ConnectionId);
             var member = game.members[idx];
+            member.WaitingForPull = false;
             if (pull)
             {
                 if (pullForSplitHand)
