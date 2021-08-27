@@ -218,7 +218,7 @@ namespace SyncStreamAPI.Games.Blackjack
             var member = game.members[memberIdx];
             if (!pullForSplitHand)
             {
-                if (member.blackjack == false && member.points < 21)
+                if (member.points < 21)
                 {
                     await _hub.Clients.Client(member.ConnectionId).askforsplitpull(pullForSplitHand);
                     member.waitingForPull = true;
@@ -226,11 +226,12 @@ namespace SyncStreamAPI.Games.Blackjack
                 }
                 else
                     AskForSplitPull(game, memberIdx, !pullForSplitHand);
+
                 return;
             }
             else
             {
-                if (member.splitBlackjack == false && member.splitPoints < 21)
+                if (member.splitPoints < 21)
                 {
                     await _hub.Clients.Client(member.ConnectionId).askforsplitpull(pullForSplitHand);
                     member.waitingForPull = true;
