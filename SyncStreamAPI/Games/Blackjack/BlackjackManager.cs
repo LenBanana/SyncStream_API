@@ -45,15 +45,14 @@ namespace SyncStreamAPI.Games.Blackjack
             if (game != null)
             {
                 var memberIdx = game.members.FindIndex(x => x.ConnectionId == member.ConnectionId);
-                if (member.waitingForBet)
+                if (member.waitingForBet && !member.NewlyJoined && !member.notPlaying)
                 {
                     member.SetBet(5);
                     AskForBet(game, memberIdx + 1);
                     member.waitingForBet = false;
                 }
-                else if (member.waitingForPull)
+                else if (member.waitingForPull && !member.NewlyJoined && !member.notPlaying)
                 {
-                    Console.WriteLine("Failed to pull");
                     AskForPull(game, memberIdx + 1);
                     member.waitingForPull = false;
                 }
@@ -98,7 +97,7 @@ namespace SyncStreamAPI.Games.Blackjack
         private async Task AddMoney(BlackjackLogic game)
         {
             string dealerText = $"Dealer had {game.dealer.pointsDTO}. ";
-            foreach (var member in game.members.Where(x => !x.notPlaying))
+            foreach (var member in game.members.Where(x => !x.notPlaying && !x.NewlyJoined))
             {
                 var totalText = $"You had {member.points}";
 
@@ -184,12 +183,17 @@ namespace SyncStreamAPI.Games.Blackjack
 
         public async void AskForBet(BlackjackLogic game, int memberIdx)
         {
-            if (memberIdx < game.members.Count && !game.members[memberIdx].notPlaying && !game.members[memberIdx].NewlyJoined)
+            if (memberIdx < game.members.Count)
             {
                 var member = game.members[memberIdx];
-                await _hub.Clients.Client(member.ConnectionId).askforbet();
-                member.waitingForBet = true;
-                await SendAllUsers(game);
+                if (!game.members[memberIdx].notPlaying && !game.members[memberIdx].NewlyJoined)
+                {
+                    await _hub.Clients.Client(member.ConnectionId).askforbet();
+                    member.waitingForBet = true;
+                    await SendAllUsers(game);
+                }
+                else
+                    AskForBet(game, memberIdx + 1);
             }
             else
             {
@@ -197,7 +201,7 @@ namespace SyncStreamAPI.Games.Blackjack
                 await Task.Delay(1000);
                 await game.PlayRound();
                 await Task.Delay(1000);
-                var idx = game.members.FindIndex(x => x.blackjack == false && x.points < 21);
+                var idx = game.members.FindIndex(x => !x.notPlaying && !x.NewlyJoined && x.blackjack == false && x.points < 21);
                 if (idx > -1)
                     AskForPull(game, idx);
                 else
@@ -207,11 +211,11 @@ namespace SyncStreamAPI.Games.Blackjack
 
         public async void AskForPull(BlackjackLogic game, int memberIdx)
         {
-            if (memberIdx < game.members.Count && !game.members[memberIdx].notPlaying && !game.members[memberIdx].NewlyJoined)
+            if (memberIdx < game.members.Count)
             {
                 var member = game.members[memberIdx];
                 var doubleOption = (member.cards.Count == 2);
-                if (member.blackjack == false && member.points < 21)
+                if (!member.notPlaying && !member.NewlyJoined && member.blackjack == false && member.points < 21)
                 {
                     await _hub.Clients.Client(member.ConnectionId).askforpull(doubleOption);
                     member.waitingForPull = true;
@@ -250,7 +254,6 @@ namespace SyncStreamAPI.Games.Blackjack
                     return;
                 }
             }
-            Console.WriteLine($"{member.username}: splitpoints: {member.splitPoints} - points: {member.points} - choose: {pullForSplitHand}");
             AskForPull(game, memberIdx + 1);
         }
 

@@ -45,21 +45,27 @@ namespace SyncStreamAPI.Hubs
             if (room.GameMode == GameMode.Gallows)
             {
                 var game = room.GallowGame;
-                game.members.Add(new Models.GameModels.Members.GallowMember(newMember.username, newMember.ishost, newMember.ConnectionId));
-                await Clients.Caller.playinggallows(game.GallowWord);
-                await Clients.Caller.gallowusers(game.members);
+                if (game.members.FindIndex(x => x.ConnectionId == newMember.ConnectionId) == -1)
+                {
+                    game.members.Add(new Models.GameModels.Members.GallowMember(newMember.username, newMember.ishost, newMember.ConnectionId));
+                    await Clients.Caller.playinggallows(game.GallowWord);
+                    await Clients.Caller.gallowusers(game.members);
+                }
             }
             if (room.GameMode == GameMode.Blackjack)
             {
                 var game = room.BlackjackGame;
-                var newBjMember = new Models.GameModels.Members.BlackjackMember(newMember.username, newMember.ConnectionId, _blackjackManager);
-                if (game.members.Count > 5)
-                    newBjMember.notPlaying = true;
-                game.members.Add(newBjMember);
-                await Clients.Caller.playblackjack(true);
-                //give time to build component
-                await Task.Delay(250);
-                await _blackjackManager.SendAllUsers(game);
+                if (game.members.FindIndex(x => x.ConnectionId == newMember.ConnectionId) == -1)
+                {
+                    var newBjMember = new Models.GameModels.Members.BlackjackMember(newMember.username, newMember.ConnectionId, _blackjackManager);
+                    if (game.members.Count > 5)
+                        newBjMember.notPlaying = true;
+                    game.members.Add(newBjMember);
+                    await Clients.Caller.playblackjack(true);
+                    //give time to build component
+                    await Task.Delay(250);
+                    await _blackjackManager.SendAllUsers(game);
+                }
             }
             await Clients.Caller.isplayingupdate(MainServer.isplaying);
             await Clients.Caller.hostupdate(newMember.ishost);
