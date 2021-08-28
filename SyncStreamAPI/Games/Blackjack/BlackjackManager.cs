@@ -98,7 +98,7 @@ namespace SyncStreamAPI.Games.Blackjack
         private async Task AddMoney(BlackjackLogic game)
         {
             string dealerText = $"Dealer had {game.dealer.pointsDTO}. ";
-            foreach (var member in game.members)
+            foreach (var member in game.members.Where(x => !x.notPlaying))
             {
                 var totalText = $"You had {member.points}";
 

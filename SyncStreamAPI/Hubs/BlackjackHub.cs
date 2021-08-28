@@ -22,6 +22,37 @@ namespace SyncStreamAPI.Hubs
             _blackjackManager.AskForBet(game, idx + 1);
         }
 
+        public async Task SpectateBlackjack(string UniqueId)
+        {
+            var room = GetRoom(UniqueId);
+            var game = room.BlackjackGame;
+            if (game != null && game.members.Count > 1)
+            {
+                var idx = game.members.FindIndex(x => x.ConnectionId == Context.ConnectionId);
+                var member = game.members[idx];
+                if (game.members.Count < 5 && member.notPlaying)
+                {
+                    member.NewlyJoined = true;
+                    member.notPlaying = false;
+                }
+                else
+                {
+                    if (member.waitingForBet)
+                    {
+                        member.waitingForBet = false;
+                        _blackjackManager.AskForBet(game, idx + 1);
+                    }
+                    if (member.waitingForPull)
+                    {
+                        member.waitingForPull = false;
+                        _blackjackManager.AskForPull(game, idx + 1);
+                    }
+                    member.notPlaying = true;
+                }
+                await _blackjackManager.SendAllUsers(game);
+            }
+        }
+
         public async Task TakePull(string UniqueId, bool pull, bool doubleOption, bool splitOption)
         {
             var room = GetRoom(UniqueId);
