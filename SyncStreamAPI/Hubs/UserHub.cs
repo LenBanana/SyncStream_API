@@ -135,13 +135,13 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
-        public async Task RemoveUser(string username, string UniqueId)
+        public async Task RemoveUser(string UniqueId)
         {
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
             Server MainServer = room.server;
-            Member member = MainServer.members.FirstOrDefault(x => x.username == username);
+            Member member = MainServer.members.FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
             if (member == null)
                 return;
             bool isHost = member.ishost;

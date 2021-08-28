@@ -104,6 +104,11 @@ namespace SyncStreamAPI.Hubs
             return room;
         }
 
+        public async Task GetRooms()
+        {
+            await Clients.Caller.getrooms(DataManager.GetRooms());
+        }
+
         public async Task AddVideo(DreckVideo key, string UniqueId)
         {
             Room room = GetRoom(UniqueId);

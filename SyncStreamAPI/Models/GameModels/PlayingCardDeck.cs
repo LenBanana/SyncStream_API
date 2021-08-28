@@ -12,11 +12,11 @@ namespace SyncStreamAPI.Models.GameModels
 
         public PlayingCardDeck()
         {
-            foreach (PlayingCardSuit colourPossibleValues in Enum.GetValues(typeof(PlayingCardSuit)))
+            foreach (PlayingCardSuit suit in Enum.GetValues(typeof(PlayingCardSuit)))
             {
-                foreach (PlayingCardRank namePossibleValues in Enum.GetValues(typeof(PlayingCardRank)))
+                foreach (PlayingCardRank rank in Enum.GetValues(typeof(PlayingCardRank)))
                 {
-                    PlayingCard nextCard = new PlayingCard(colourPossibleValues, namePossibleValues);
+                    PlayingCard nextCard = new PlayingCard(suit, rank);
                     CardDeck.Add(nextCard);
                 }
             }
