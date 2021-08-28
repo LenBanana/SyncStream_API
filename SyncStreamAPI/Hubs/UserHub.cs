@@ -53,6 +53,8 @@ namespace SyncStreamAPI.Hubs
             {
                 var game = room.BlackjackGame;
                 var newBjMember = new Models.GameModels.Members.BlackjackMember(newMember.username, newMember.ConnectionId, _blackjackManager);
+                if (game.members.Count > 5)
+                    newBjMember.notPlaying = true;
                 game.members.Add(newBjMember);
                 await Clients.Caller.playblackjack(true);
                 //give time to build component
@@ -160,7 +162,7 @@ namespace SyncStreamAPI.Hubs
             {
                 var idx = blackjack.members.FindIndex(x => x.ConnectionId == member.ConnectionId);
                 if (idx != -1)
-                { 
+                {
                     var bjMember = blackjack.members[idx];
                     blackjack.members.RemoveAt(idx);
                     if (bjMember.waitingForBet)

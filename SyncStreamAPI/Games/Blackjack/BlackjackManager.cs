@@ -130,7 +130,7 @@ namespace SyncStreamAPI.Games.Blackjack
 
         public async Task SendAllUsers(BlackjackLogic game)
         {
-            foreach (var member in game.members)
+            foreach (var member in game.members.ToList())
             {
                 await _hub.Clients.Client(member.ConnectionId).sendblackjackself(member);
                 await _hub.Clients.Client(member.ConnectionId).sendblackjackmembers(game.members.Where(x => x.ConnectionId != member.ConnectionId).ToList());
@@ -145,8 +145,18 @@ namespace SyncStreamAPI.Games.Blackjack
             {
                 Room room = DataManager.GetRoom(UniqueId);
                 List<BlackjackMember> bjMember = new List<BlackjackMember>();
-                foreach (var member in room.server.members)
+                foreach (var member in room.server.members.Take(5))
                     bjMember.Add(member.ToBlackjackMember(this));
+
+                if (room.server.members.Count > 5)
+                {
+                    foreach (var member in room.server.members.Skip(5))
+                    {
+                        var bjMem = member.ToBlackjackMember(this);
+                        bjMem.notPlaying = true;
+                        bjMember.Add(bjMem);
+                    }
+                }
 
                 var game = new BlackjackLogic(this, UniqueId, bjMember);
                 blackjackGames.Add(game);
@@ -174,7 +184,7 @@ namespace SyncStreamAPI.Games.Blackjack
 
         public async void AskForBet(BlackjackLogic game, int memberIdx)
         {
-            if (memberIdx < game.members.Count && !game.members[memberIdx].NewlyJoined)
+            if (memberIdx < game.members.Count && !game.members[memberIdx].notPlaying && !game.members[memberIdx].NewlyJoined)
             {
                 var member = game.members[memberIdx];
                 await _hub.Clients.Client(member.ConnectionId).askforbet();
@@ -197,7 +207,7 @@ namespace SyncStreamAPI.Games.Blackjack
 
         public async void AskForPull(BlackjackLogic game, int memberIdx)
         {
-            if (memberIdx < game.members.Count && !game.members[memberIdx].NewlyJoined)
+            if (memberIdx < game.members.Count && !game.members[memberIdx].notPlaying && !game.members[memberIdx].NewlyJoined)
             {
                 var member = game.members[memberIdx];
                 var doubleOption = (member.cards.Count == 2);

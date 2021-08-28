@@ -83,7 +83,7 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
 
         public bool DealCard(BlackjackMember member)
         {
-            if (member.NewlyJoined)
+            if (member.NewlyJoined||member.notPlaying)
                 return false;
             var card = PullCard();
             card.FaceUp = true;
