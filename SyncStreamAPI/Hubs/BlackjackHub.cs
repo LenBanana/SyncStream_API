@@ -10,6 +10,9 @@ namespace SyncStreamAPI.Hubs
         public async Task PlayBlackjack(string UniqueId)
         {
             var playing = await _blackjackManager.PlayNewRound(UniqueId);
+            var room = GetRoom(UniqueId);
+            if (playing && room.GallowGame != null)
+                _gallowGameManager.PlayNewRound(UniqueId);
         }
 
         public async Task SetBet(string UniqueId, double bet)

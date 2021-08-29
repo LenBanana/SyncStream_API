@@ -119,7 +119,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             Server MainServer = room.server;
             int idxHost = MainServer.members.FindIndex(x => x.ishost == true);
-            int idxMember = MainServer.members.FindIndex(x => x.username == usernameMember || x.ConnectionId == usernameMember);
+            int idxMember = MainServer.members.FindIndex(x => !x.ishost && (x.username == usernameMember || x.ConnectionId == usernameMember));
             if (idxHost != -1 && idxMember != -1)
             {
                 var game = room.GallowGame;

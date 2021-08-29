@@ -35,7 +35,12 @@ namespace SyncStreamAPI.Games.Gallows
                 gallowGames.Add(new GallowLogic(this, UniqueId, room.server.members.Select(x => x.ToGallowMember()).ToList()));
                 return true;
             }
-            gallowGames[idx].PlayingGallows = false;
+            var game = gallowGames[idx];
+            game.PlayingGallows = false;
+            game.GallowTimerUpdate -= Server_GallowTimerUpdate;
+            game.GallowTimerElapsed -= Server_GallowTimerElapsed;
+            game.GallowGameEnded -= Server_GallowGameEnded;
+            game.GallowWordUpdate -= Server_GallowWordUpdate;
             gallowGames.RemoveAt(idx);
             return false;
         }

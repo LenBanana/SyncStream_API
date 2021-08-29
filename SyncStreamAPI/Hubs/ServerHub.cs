@@ -287,7 +287,7 @@ namespace SyncStreamAPI.Hubs
             int RoomCount = 0;
             while (Rooms.Any(x => x.uniqueId == room.uniqueId))
                 room.uniqueId = room.uniqueId + RoomCount++;
-            room.server = new Server();
+            room.deletable = true;
             Rooms.Add(room);
             await Clients.All.getrooms(DataManager.GetRooms());
         }

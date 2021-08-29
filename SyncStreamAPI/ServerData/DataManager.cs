@@ -14,8 +14,8 @@ namespace SyncStreamAPI.ServerData
 {
     public class DataManager
     {
-        public static List<Room> Rooms = new List<Room>();
-        public static bool checking = false;
+        public static List<Room> Rooms { get; set; } = new List<Room>();
+        public static bool checking { get; set; } = false;
         private readonly IHubContext<ServerHub, IServerHub> _hub;
 
         public DataManager(IHubContext<ServerHub, IServerHub> hub)
@@ -26,16 +26,10 @@ namespace SyncStreamAPI.ServerData
 
         public void AddDefaultRooms()
         {
-            Rooms.Add(new Room() { name = "Dreckroom", server = new Server(), uniqueId = "dreck" });
-            Rooms.Add(new Room() { name = "Randomkeller", server = new Server(), uniqueId = "random" });
-            Rooms.Add(new Room() { name = "GuestRoom 1", server = new Server(), uniqueId = "guest1" });
-            Rooms.Add(new Room() { name = "GuestRoom 2", server = new Server(), uniqueId = "guest2" });
-            Rooms.Add(new Room() { name = "GuestRoom 3", server = new Server(), uniqueId = "guest3" });
-            Rooms.Add(new Room() { name = "GuestRoom 4", server = new Server(), uniqueId = "guest4" });
-            Rooms.Add(new Room() { name = "MovieRoom 1", server = new Server(), uniqueId = "movie1" });
-            Rooms.Add(new Room() { name = "MovieRoom 2", server = new Server(), uniqueId = "movie2" });
-            Rooms.Add(new Room() { name = "MovieRoom 3", server = new Server(), uniqueId = "movie3" });
-            Rooms.Add(new Room() { name = "MovieRoom 4", server = new Server(), uniqueId = "movie4" });
+            Rooms.Add(new Room("Dreckroom", "dreck", false));
+            Rooms.Add(new Room("Randomkeller", "random", false));
+            for (int i = 1; i < 5; i++)
+                Rooms.Add(new Room($"Guest Room - {i}", $"guest{i}", true));
         }
 
         public static Room GetRoom(string UniqueId)

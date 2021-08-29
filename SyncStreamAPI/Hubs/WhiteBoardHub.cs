@@ -24,6 +24,8 @@ namespace SyncStreamAPI.Hubs
                 {
                     if (_gallowGameManager.PlayNewRound(room.uniqueId))
                     {
+                        if (room.BlackjackGame != null)
+                            await _blackjackManager.PlayNewRound(UniqueId);
                         gallows = room.GallowGame;
                     }
                 }
