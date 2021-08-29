@@ -254,6 +254,7 @@ namespace SyncStreamAPI.Games.Blackjack
                                 break;
                             case BlackjackSmartReaction.Double:
                                 member.DoubleBet();
+                                game.dealer.money += member.Bet;
                                 game.DealCard(member);
                                 AskForPull(game, memberIdx + 1);
                                 break;

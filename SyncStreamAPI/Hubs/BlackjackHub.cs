@@ -114,6 +114,7 @@ namespace SyncStreamAPI.Hubs
             else if (doubleOption)
             {
                 member.DoubleBet();
+                game.dealer.money += member.Bet;
                 game.DealCard(member);
             }
             else if (splitOption)
