@@ -33,6 +33,7 @@ namespace SyncStreamAPI.Models.GameModels.Members
         public bool doubled { get; set; } = false;
         public bool NewlyJoined { get; set; } = true;
         public bool notPlaying { get; set; } = false;
+        public bool Ai { get; set; } = false;
         private bool _WaitingForBet { get; set; } = false;
         private bool _WaitingForPull { get; set; } = false;
         public bool waitingForBet

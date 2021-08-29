@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SyncStreamAPI.Models.GameModels.Members;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -56,6 +57,43 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
+        public async Task AddBlackjackAi(string UniqueId)
+        {
+            var room = GetRoom(UniqueId);
+            var game = room.BlackjackGame;
+            if (game != null && game.members.Count < 5)
+            {
+                var bjMember = new BlackjackMember($"BlackJack-Ai {Helper.General.random.Next(0, 99)}", "", _blackjackManager);
+                bjMember.NewlyJoined = true;
+                bjMember.Ai = true;
+                game.members.Add(bjMember);
+                await _blackjackManager.SendAllUsers(game);
+            }
+        }
+
+        public async Task MakeAi(string UniqueId)
+        {
+            var room = GetRoom(UniqueId);
+            var game = room.BlackjackGame;
+            if (game != null)
+            {
+                var idx = game.members.FindIndex(x => x.ConnectionId == Context.ConnectionId);
+                var member = game.members[idx];
+                if (member.waitingForBet)
+                {
+                    member.waitingForBet = false;
+                    _blackjackManager.AskForBet(game, idx + 1);
+                }
+                if (member.waitingForPull)
+                {
+                    member.waitingForPull = false;
+                    _blackjackManager.AskForPull(game, idx + 1);
+                }
+                member.Ai = !member.Ai;
+            }
+            await _blackjackManager.SendAllUsers(game);
+        }
+
         public async Task TakePull(string UniqueId, bool pull, bool doubleOption, bool splitOption)
         {
             var room = GetRoom(UniqueId);
@@ -66,7 +104,7 @@ namespace SyncStreamAPI.Hubs
             await _blackjackManager.SendAllUsers(game);
             if (pull)
             {
-                 game.DealCard(member);
+                game.DealCard(member);
                 await Task.Delay(500);
                 _blackjackManager.AskForPull(game, idx);
                 return;

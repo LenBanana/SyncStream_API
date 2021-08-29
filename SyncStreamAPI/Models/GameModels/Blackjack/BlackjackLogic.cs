@@ -5,6 +5,8 @@ using System.Linq;
 using SyncStreamAPI.Models.GameModels.Members;
 using SyncStreamAPI.Games.Blackjack;
 using System.Threading.Tasks;
+using SyncStreamAPI.Enums.Games.Cards;
+using SyncStreamAPI.Enums.Games;
 
 namespace SyncStreamAPI.Models.GameModels.Blackjack
 {

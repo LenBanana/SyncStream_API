@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.SignalR;
+using SyncStreamAPI.Enums.Games;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
@@ -129,7 +130,7 @@ namespace SyncStreamAPI.Games.Blackjack
 
         public async Task SendAllUsers(BlackjackLogic game)
         {
-            foreach (var member in game.members.ToList())
+            foreach (var member in game.members.Where(x => x.ConnectionId.Length > 0))
             {
                 await _hub.Clients.Client(member.ConnectionId).sendblackjackself(member);
                 await _hub.Clients.Client(member.ConnectionId).sendblackjackmembers(game.members.Where(x => x.ConnectionId != member.ConnectionId).ToList());
@@ -186,11 +187,20 @@ namespace SyncStreamAPI.Games.Blackjack
             if (memberIdx < game.members.Count)
             {
                 var member = game.members[memberIdx];
-                if (!game.members[memberIdx].notPlaying && !game.members[memberIdx].NewlyJoined)
+                if (!member.notPlaying && !member.NewlyJoined)
                 {
-                    await _hub.Clients.Client(member.ConnectionId).askforbet();
-                    member.waitingForBet = true;
-                    await SendAllUsers(game);
+                    if (!member.Ai)
+                    {
+                        await _hub.Clients.Client(member.ConnectionId).askforbet();
+                        member.waitingForBet = true;
+                        await SendAllUsers(game);
+                    }
+                    else
+                    {
+                        await Task.Delay(250);
+                        member.SetBet(5);
+                        AskForBet(game, memberIdx + 1);
+                    }
                 }
                 else
                     AskForBet(game, memberIdx + 1);
@@ -217,9 +227,34 @@ namespace SyncStreamAPI.Games.Blackjack
                 var doubleOption = (member.cards.Count == 2);
                 if (!member.notPlaying && !member.NewlyJoined && member.blackjack == false && member.points < 21)
                 {
-                    await _hub.Clients.Client(member.ConnectionId).askforpull(doubleOption);
-                    member.waitingForPull = true;
-                    await SendAllUsers(game);
+                    if (!member.Ai)
+                    {
+                        await _hub.Clients.Client(member.ConnectionId).askforpull(doubleOption);
+                        member.waitingForPull = true;
+                        await SendAllUsers(game);
+                    } 
+                    else
+                    {
+                        await Task.Delay(500);
+                        switch (BlackjackAi.SmartPull(member, game.dealer, true))
+                        {
+                            case BlackjackSmartReaction.Stand:
+                                AskForPull(game, memberIdx + 1);
+                                break;
+                            case BlackjackSmartReaction.Hit:
+                                game.DealCard(member);
+                                AskForPull(game, memberIdx);
+                                break;
+                            case BlackjackSmartReaction.Double:
+                                member.DoubleBet();
+                                game.DealCard(member);
+                                AskForPull(game, memberIdx + 1);
+                                break;
+                            case BlackjackSmartReaction.Split:
+                                member.didSplit = true;
+                                break;
+                        }
+                    }
                     return;
                 }
                 AskForPull(game, memberIdx + 1);
@@ -235,22 +270,55 @@ namespace SyncStreamAPI.Games.Blackjack
             {
                 if (member.points < 21)
                 {
-                    await _hub.Clients.Client(member.ConnectionId).askforsplitpull(pullForSplitHand);
-                    member.waitingForPull = true;
-                    await SendAllUsers(game);
+                    if (!member.Ai)
+                    {
+                        await _hub.Clients.Client(member.ConnectionId).askforsplitpull(pullForSplitHand);
+                        member.waitingForPull = true;
+                        await SendAllUsers(game);
+                    }
+                    else
+                    {
+                        await Task.Delay(500);
+                        switch (BlackjackAi.SmartPull(member, game.dealer, false))
+                        {
+                            case BlackjackSmartReaction.Stand:
+                                AskForSplitPull(game, memberIdx, true);
+                                break;
+                            case BlackjackSmartReaction.Hit:
+                                game.DealCard(member);
+                                AskForSplitPull(game, memberIdx, false);
+                                break;
+                        }
+                    }
                 }
                 else
                     AskForSplitPull(game, memberIdx, true);
-
                 return;
             }
             else
             {
                 if (member.splitPoints < 21)
                 {
-                    await _hub.Clients.Client(member.ConnectionId).askforsplitpull(pullForSplitHand);
-                    member.waitingForPull = true;
-                    await SendAllUsers(game);
+                    if (!member.Ai)
+                    {
+                        await _hub.Clients.Client(member.ConnectionId).askforsplitpull(pullForSplitHand);
+                        member.waitingForPull = true;
+                        await SendAllUsers(game);
+                    }
+                    else
+                    {
+                        await Task.Delay(500);
+                        switch (BlackjackAi.SmartPull(member, game.dealer, false))
+                        {
+                            case BlackjackSmartReaction.Stand:
+                                AskForPull(game, memberIdx + 1);
+                                break;
+                            case BlackjackSmartReaction.Hit:
+                                game.DealCard(member);
+                                AskForSplitPull(game, memberIdx, true);
+                                break;
+                        }
+                    }
                     return;
                 }
             }
