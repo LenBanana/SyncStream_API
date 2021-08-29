@@ -112,11 +112,14 @@ namespace SyncStreamAPI.Games.Blackjack
                 if (money > 0)
                 {
                     game.dealer.money -= money;
-                    totalText += $"Congratulations you won.";
+                    if (money > member.Bet)
+                        totalText += $"Congratulations you won.";
+                    else
+                        totalText += $"Pushed, you got your money back.";
                 }
                 else
                     totalText += $"Better luck next time.";
-                
+
                 member.cards = new List<PlayingCard>();
                 member.didSplit = false;
                 ChatMessage roundEndMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = totalText, color = Colors.SystemColor, usercolor = Colors.SystemUserColor };
@@ -239,7 +242,7 @@ namespace SyncStreamAPI.Games.Blackjack
                         await _hub.Clients.Client(member.ConnectionId).askforpull(doubleOption);
                         member.waitingForPull = true;
                         await SendAllUsers(game);
-                    } 
+                    }
                     else
                     {
                         await Task.Delay(500);
