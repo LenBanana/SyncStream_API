@@ -11,18 +11,18 @@ namespace SyncStreamAPI.Games.Blackjack
 {
     public class BlackjackAi
     {
-        public static BlackjackSmartReaction SmartPull(BlackjackMember member, BlackjackDealer dealer, bool doubleOption)
+        public static BlackjackSmartReaction SmartPull(BlackjackMember member, BlackjackDealer dealer, bool doubleOption, bool forSplitHand)
         {
             var dealerCard = dealer.cards[0].Rank;
             var dealerPoints = dealer.pointsDTO;
             if (member.splitable && !member.didSplit)
                 return ReactToSplit(member.cards[0].Rank, dealerPoints, doubleOption);
 
-            var aceIdx = member.cards.FindIndex(x => x.Rank == PlayingCardRank.Ace);
-            if (aceIdx != -1 && member.cards.Count == 2)
-                return ReactToSingleAce(member.cards[aceIdx == 1 ? 0 : 1].Rank, dealerPoints, doubleOption);
+            var aceIdx = forSplitHand ? member.splitCards.FindIndex(x => x.Rank == PlayingCardRank.Ace) : member.cards.FindIndex(x => x.Rank == PlayingCardRank.Ace);
+            if (aceIdx != -1 && ((!forSplitHand && member.cards.Count == 2) || (forSplitHand && member.splitCards.Count == 2)))
+                return ReactToSingleAce(forSplitHand ? member.splitCards[aceIdx == 1 ? 0 : 1].Rank : member.cards[aceIdx == 1 ? 0 : 1].Rank, dealerPoints, doubleOption);
             else
-                return ReactToNormalHand(member.points, dealerPoints, doubleOption);
+                return ReactToNormalHand(forSplitHand ? member.splitPoints : member.points, dealerPoints, doubleOption);
         }
 
         private static BlackjackSmartReaction ReactToSplit(PlayingCardRank rank, int dealerPoints, bool doubleOption)
