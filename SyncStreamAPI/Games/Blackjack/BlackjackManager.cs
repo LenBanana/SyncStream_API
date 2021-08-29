@@ -314,7 +314,7 @@ namespace SyncStreamAPI.Games.Blackjack
                                 AskForPull(game, memberIdx + 1);
                                 break;
                             case BlackjackSmartReaction.Hit:
-                                game.DealCard(member);
+                                game.DealSplitCard(member);
                                 AskForSplitPull(game, memberIdx, true);
                                 break;
                         }
