@@ -18,11 +18,13 @@ namespace SyncStreamAPI.Games.Blackjack
             if (member.splitable && !member.didSplit)
                 return ReactToSplit(member.cards[0].Rank, dealerPoints, doubleOption);
 
-            var aceIdx = forSplitHand ? member.splitCards.FindIndex(x => x.Rank == PlayingCardRank.Ace) : member.cards.FindIndex(x => x.Rank == PlayingCardRank.Ace);
-            if (aceIdx != -1 && ((!forSplitHand && member.cards.Count == 2) || (forSplitHand && member.splitCards.Count == 2)))
-                return ReactToSingleAce(forSplitHand ? member.splitCards[aceIdx == 1 ? 0 : 1].Rank : member.cards[aceIdx == 1 ? 0 : 1].Rank, dealerPoints, doubleOption);
-            else
-                return ReactToNormalHand(forSplitHand ? member.splitPoints : member.points, dealerPoints, doubleOption);
+            if ((!forSplitHand && member.cards.Count == 2) || (forSplitHand && member.splitCards.Count == 2))
+            {
+                var aceIdx = forSplitHand ? member.splitCards.FindIndex(x => x.Rank == PlayingCardRank.Ace) : member.cards.FindIndex(x => x.Rank == PlayingCardRank.Ace);
+                if (aceIdx != -1)
+                    return ReactToSingleAce(forSplitHand ? member.splitCards[aceIdx == 1 ? 0 : 1].Rank : member.cards[aceIdx == 1 ? 0 : 1].Rank, dealerPoints, doubleOption);
+            }
+            return ReactToNormalHand(forSplitHand ? member.splitPoints : member.points, dealerPoints, doubleOption);
         }
 
         private static BlackjackSmartReaction ReactToSplit(PlayingCardRank rank, int dealerPoints, bool doubleOption)
@@ -79,7 +81,7 @@ namespace SyncStreamAPI.Games.Blackjack
                         case 10:
                             return BlackjackSmartReaction.Hit;
                         default:
-                            return doubleOption == true ? BlackjackSmartReaction.Double : BlackjackSmartReaction.Hit;
+                            return doubleOption ? BlackjackSmartReaction.Double : BlackjackSmartReaction.Hit;
                     }
                 case PlayingCardRank.Four:
                     switch (dealerPoints)
@@ -119,7 +121,7 @@ namespace SyncStreamAPI.Games.Blackjack
                         case 9:
                             return BlackjackSmartReaction.Hit;
                         default:
-                            return doubleOption == true ? BlackjackSmartReaction.Double : BlackjackSmartReaction.Hit;
+                            return doubleOption ? BlackjackSmartReaction.Double : BlackjackSmartReaction.Hit;
                     }
                 case PlayingCardRank.Six:
                     switch (dealerPoints)
@@ -128,7 +130,7 @@ namespace SyncStreamAPI.Games.Blackjack
                         case 5:
                         case 4:
                         case 3:
-                            return doubleOption == true ? BlackjackSmartReaction.Double : BlackjackSmartReaction.Hit;
+                            return doubleOption ? BlackjackSmartReaction.Double : BlackjackSmartReaction.Hit;
                         default:
                             return BlackjackSmartReaction.Hit;
                     }
@@ -139,7 +141,7 @@ namespace SyncStreamAPI.Games.Blackjack
                         case 6:
                         case 5:
                         case 4:
-                            return doubleOption == true ? BlackjackSmartReaction.Double : BlackjackSmartReaction.Hit;
+                            return doubleOption ? BlackjackSmartReaction.Double : BlackjackSmartReaction.Hit;
                         default:
                             return BlackjackSmartReaction.Hit;
                     }
@@ -149,7 +151,7 @@ namespace SyncStreamAPI.Games.Blackjack
                     {
                         case 6:
                         case 5:
-                            return doubleOption == true ? BlackjackSmartReaction.Double : BlackjackSmartReaction.Hit;
+                            return doubleOption ? BlackjackSmartReaction.Double : BlackjackSmartReaction.Hit;
                         default:
                             return BlackjackSmartReaction.Hit;
                     }
@@ -194,7 +196,7 @@ namespace SyncStreamAPI.Games.Blackjack
                         case 11:
                             return BlackjackSmartReaction.Hit;
                         default:
-                            return doubleOption == true ? BlackjackSmartReaction.Double : BlackjackSmartReaction.Hit;
+                            return doubleOption ? BlackjackSmartReaction.Double : BlackjackSmartReaction.Hit;
                     }
                 case 10:
                     switch (dealerPoints)
@@ -203,7 +205,7 @@ namespace SyncStreamAPI.Games.Blackjack
                         case 10:
                             return BlackjackSmartReaction.Hit;
                         default:
-                            return doubleOption == true ? BlackjackSmartReaction.Double : BlackjackSmartReaction.Hit;
+                            return doubleOption ? BlackjackSmartReaction.Double : BlackjackSmartReaction.Hit;
                     }
                 case 9:
                     switch (dealerPoints)
@@ -212,7 +214,7 @@ namespace SyncStreamAPI.Games.Blackjack
                         case 5:
                         case 4:
                         case 3:
-                            return doubleOption == true ? BlackjackSmartReaction.Double : BlackjackSmartReaction.Hit;
+                            return doubleOption ? BlackjackSmartReaction.Double : BlackjackSmartReaction.Hit;
                         default:
                             return BlackjackSmartReaction.Hit;
                     }

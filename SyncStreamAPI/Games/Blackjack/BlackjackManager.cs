@@ -279,7 +279,7 @@ namespace SyncStreamAPI.Games.Blackjack
                     else
                     {
                         await Task.Delay(500);
-                        switch (BlackjackAi.SmartPull(member, game.dealer, false, false))
+                        switch (BlackjackAi.SmartPull(member, game.dealer, false, pullForSplitHand))
                         {
                             case BlackjackSmartReaction.Stand:
                                 AskForSplitPull(game, memberIdx, true);
@@ -308,7 +308,7 @@ namespace SyncStreamAPI.Games.Blackjack
                     else
                     {
                         await Task.Delay(500);
-                        switch (BlackjackAi.SmartPull(member, game.dealer, false, true))
+                        switch (BlackjackAi.SmartPull(member, game.dealer, false, pullForSplitHand))
                         {
                             case BlackjackSmartReaction.Stand:
                                 AskForPull(game, memberIdx + 1);
