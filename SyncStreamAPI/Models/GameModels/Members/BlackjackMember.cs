@@ -102,8 +102,10 @@ namespace SyncStreamAPI.Models.GameModels.Members
                 else if (dealerPoints == splitPoints)
                     Money = Money + Bet;
             }
-            if (money == Money || Money == (money + Bet))
+            if (money == Money)
                 return 0;
+            else if (Money == (money + Bet))
+                return Bet;
             else
                 return Money - money;
         }
