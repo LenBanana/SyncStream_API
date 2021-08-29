@@ -222,6 +222,7 @@ namespace SyncStreamAPI.Games.Blackjack
                 case 7:
                 case 6:
                 case 5:
+                case 4:
                     return BlackjackSmartReaction.Hit;
                 default:
                     return BlackjackSmartReaction.Stand;
