@@ -81,17 +81,19 @@ namespace SyncStreamAPI.Hubs
             {
                 var idx = game.members.FindIndex(x => x.ConnectionId == Context.ConnectionId);
                 var member = game.members[idx];
+                member.Ai = !member.Ai;
                 if (member.waitingForBet)
                 {
                     member.waitingForBet = false;
+                    member.SetBet(5);
                     _blackjackManager.AskForBet(game, idx + 1);
                 }
                 if (member.waitingForPull)
                 {
                     member.waitingForPull = false;
-                    _blackjackManager.AskForPull(game, idx + 1);
+                    await Task.Delay(500);
+                    _blackjackManager.AskForPull(game, idx);
                 }
-                member.Ai = !member.Ai;
             }
             await _blackjackManager.SendAllUsers(game);
         }
