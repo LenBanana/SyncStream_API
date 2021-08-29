@@ -49,6 +49,7 @@ namespace SyncStreamAPI.Games.Blackjack
                 if (member.waitingForBet && !member.NewlyJoined && !member.notPlaying)
                 {
                     member.SetBet(5);
+                    game.dealer.money += member.Bet;
                     AskForBet(game, memberIdx + 1);
                     member.waitingForBet = false;
                 }
@@ -107,10 +108,15 @@ namespace SyncStreamAPI.Games.Blackjack
                 else
                     totalText += ". ";
                 totalText += dealerText;
-                if (member.AddMoney(game.dealer.points))
+                var money = member.AddMoney(game.dealer.points);
+                if (money > 0)
+                {
+                    game.dealer.money -= money;
                     totalText += $"Congratulations you won.";
+                }
                 else
                     totalText += $"Better luck next time.";
+                
                 member.cards = new List<PlayingCard>();
                 member.didSplit = false;
                 ChatMessage roundEndMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = totalText, color = Colors.SystemColor, usercolor = Colors.SystemUserColor };
@@ -199,6 +205,7 @@ namespace SyncStreamAPI.Games.Blackjack
                     {
                         await Task.Delay(250);
                         member.SetBet(5);
+                        game.dealer.money += member.Bet;
                         AskForBet(game, memberIdx + 1);
                     }
                 }

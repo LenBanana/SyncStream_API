@@ -76,7 +76,7 @@ namespace SyncStreamAPI.Models.GameModels.Members
             });
         }
 
-        public bool AddMoney(int dealerPoints)
+        public double AddMoney(int dealerPoints)
         {
             var money = Money;
             if ((dealerPoints < points || dealerPoints > 21) && points <= 21)
@@ -103,9 +103,9 @@ namespace SyncStreamAPI.Models.GameModels.Members
                     Money = Money + Bet;
             }
             if (money == Money || Money == (money + Bet))
-                return false;
+                return 0;
             else
-                return true;
+                return Money - money;
         }
 
         public void SetBet(double bet)

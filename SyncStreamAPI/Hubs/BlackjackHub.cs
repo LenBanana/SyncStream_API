@@ -21,7 +21,9 @@ namespace SyncStreamAPI.Hubs
             var room = GetRoom(UniqueId);
             var game = room.BlackjackGame;
             var idx = game.members.FindIndex(x => x.ConnectionId == Context.ConnectionId);
-            game.members[idx].SetBet(bet);
+            var member = game.members[idx];
+            member.SetBet(bet);
+            game.dealer.money += member.Bet;
             await _blackjackManager.SendAllUsers(game);
             _blackjackManager.AskForBet(game, idx + 1);
         }
