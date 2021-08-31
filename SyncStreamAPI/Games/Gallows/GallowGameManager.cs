@@ -88,7 +88,7 @@ namespace SyncStreamAPI.Games.Gallows
         public async Task PlayGallow(GallowLogic game, Member sender, ChatMessage message, int Time)
         {
             var gallowMember = game.members.FirstOrDefault(x => x.username == sender.username);
-            if ((sender != null && sender.ishost) || gallowMember.guessedGallow)
+            if (gallowMember.isDrawing || gallowMember.guessedGallow)
                 return;
             string msg = message.message.Trim().ToLower();
             string gallowWord = game.GallowWord.ToLower();
