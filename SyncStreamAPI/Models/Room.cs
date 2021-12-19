@@ -12,6 +12,7 @@ namespace SyncStreamAPI.Models
         public string uniqueId { get; set; }
         public string name { get; set; }
         public string password { get; set; }
+        public bool isPrivileged { get; set; }
         public bool deletable { get; set; } = true;
         public Server server { get { return _server; } set { _server = value; } }
         private Server _server { get; set; } = new Server();
@@ -19,11 +20,12 @@ namespace SyncStreamAPI.Models
         public GallowLogic GallowGame { get { var gG = GallowGameManager.gallowGames.FirstOrDefault(x => x != null && x.RoomId == uniqueId); return gG; } }
         public BlackjackLogic BlackjackGame { get { var bG = BlackjackManager.blackjackGames.FirstOrDefault(x => x != null && x.RoomId == uniqueId); return bG; } }
 
-        public Room(string Name, string UnqiueId, bool Deletable)
+        public Room(string Name, string UnqiueId, bool Deletable, bool Privileged)
         {
             name = Name;
             uniqueId = UnqiueId;
             deletable = Deletable;
+            isPrivileged = Privileged;
         }
 
     }

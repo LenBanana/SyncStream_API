@@ -75,7 +75,7 @@ namespace SyncStreamAPI.Hubs
                         {
                             bjMember.waitingForPull = false;
                             _blackjackManager.AskForPull(blackjack, idx + 1);
-                            _blackjackManager.SendAllUsers(blackjack);
+                            await _blackjackManager.SendAllUsers(blackjack);
                         }
                         else
                             await _blackjackManager.SendAllUsers(blackjack);
@@ -89,6 +89,25 @@ namespace SyncStreamAPI.Hubs
             await base.OnDisconnectedAsync(ex);
         }
 #nullable disable
+
+        public bool CheckPrivileges(Room room)
+        {
+            if (room.isPrivileged)
+            {
+                var member = room.server.members.FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
+                if (member != null)
+                {
+                    if (member.ishost)
+                        return true;
+                    var user = _maria.Users.FirstOrDefault(x => x.username == member.username);
+                    if (user == null || user.userprivileges < 1)
+                        return false;
+                }
+                else
+                    return false;
+            }
+            return true;
+        }
 
         public async Task SendServer(Server server, string UniqueId)
         {
@@ -114,6 +133,11 @@ namespace SyncStreamAPI.Hubs
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
+            if (!CheckPrivileges(room))
+            {
+                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "You don't have permissions to add a video to this room", Answer1 = "Ok" });
+                return;
+            }
             if (!room.server.playlist.Select(x => x.url).Contains(key.url))
             {
                 if (!key.url.Contains("youtube") && !key.url.Contains("youtu.be")
@@ -187,6 +211,11 @@ namespace SyncStreamAPI.Hubs
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
+            if (!CheckPrivileges(room))
+            {
+                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "You don't have permissions to remove videos from this room", Answer1 = "Ok" });
+                return;
+            }
             int idx = room.server.playlist.FindIndex(x => x.url == key);
             if (idx != -1)
             {
@@ -201,6 +230,11 @@ namespace SyncStreamAPI.Hubs
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
+            if (!CheckPrivileges(room))
+            {
+                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "You don't have permissions to skip videos in this room", Answer1 = "Ok" });
+                return;
+            }
             Server MainServer = room.server;
             if (room.server.playlist.Count > 1)
             {
@@ -228,6 +262,11 @@ namespace SyncStreamAPI.Hubs
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
+            if (!CheckPrivileges(room))
+            {
+                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "You don't have permissions to skip videos in this room", Answer1 = "Ok" });
+                return;
+            }
             Server MainServer = room.server;
             int idx = MainServer.playlist.FindIndex(x => x.url == key);
             if (idx != -1)
@@ -249,6 +288,11 @@ namespace SyncStreamAPI.Hubs
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
+            if (!CheckPrivileges(room))
+            {
+                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "You don't have permissions to move videos in this room", Answer1 = "Ok" });
+                return;
+            }
             DreckVideo vid = room.server.playlist[fromIndex];
             room.server.playlist.RemoveAt(fromIndex);
             room.server.playlist.Insert(toIndex, vid);

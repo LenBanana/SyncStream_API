@@ -26,10 +26,11 @@ namespace SyncStreamAPI.ServerData
 
         public void AddDefaultRooms()
         {
-            Rooms.Add(new Room("Dreckroom", "dreck", false));
-            Rooms.Add(new Room("Randomkeller", "random", false));
+            Rooms.Add(new Room("Dreckroom", "dreck", false, true));
+            Rooms.Add(new Room("Randomkeller", "random", false, true));
+            Rooms.Add(new Room("BigWeinerClub", "random", false, true));
             for (int i = 1; i < 5; i++)
-                Rooms.Add(new Room($"Guest Room - {i}", $"guest{i}", true));
+                Rooms.Add(new Room($"Guest Room - {i}", $"guest{i}", true, false));
         }
 
         public static Room GetRoom(string UniqueId)

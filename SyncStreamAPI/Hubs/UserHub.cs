@@ -117,6 +117,11 @@ namespace SyncStreamAPI.Hubs
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
+            if (!CheckPrivileges(room))
+            {
+                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "You don't have permissions to change the host in this room", Answer1 = "Ok" });
+                return;
+            }
             Server MainServer = room.server;
             int idxHost = MainServer.members.FindIndex(x => x.ishost == true);
             int idxMember = MainServer.members.FindIndex(x => !x.ishost && (x.username == usernameMember || x.ConnectionId == usernameMember));
