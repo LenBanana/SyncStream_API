@@ -12,15 +12,19 @@ namespace SyncStreamAPI.Hubs
     {
         public async Task LoginRequest(User requestUser)
         {
+            var result = new User();
             User user = _maria.Users.FirstOrDefault(x => x.username == requestUser.username && x.password == requestUser.password);
             if (user != null)
+            {
                 user.password = "";
-            await Clients.Caller.userlogin(user);
+                result = user;
+            }
+            await Clients.Caller.userlogin(result);
         }
 
         public async Task RegisterRequest(User requestUser)
         {
-            User user = null;
+            var result = new User();
             if (!_maria.Users.Any(x => x.username == requestUser.username))
             {
                 if (requestUser.username.Length < 2 || requestUser.username.Length > 20)
@@ -30,10 +34,10 @@ namespace SyncStreamAPI.Hubs
                 }
                 await _maria.Users.AddAsync(requestUser);
                 await _maria.SaveChangesAsync();
-                user = requestUser;
-                user.password = "";
+                result = requestUser;
+                result.password = "";
             }
-            await Clients.Caller.userRegister(user);
+            await Clients.Caller.userRegister(result);
         }
 
         public async Task GenerateRememberToken(User requestUser, string userInfo)
@@ -224,7 +228,7 @@ namespace SyncStreamAPI.Hubs
             }
             else
             {
-                await Clients.Caller.userlogin(new User());
+                await Clients.Caller.userlogin(new User(""));
             }
         }
     }
