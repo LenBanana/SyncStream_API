@@ -304,6 +304,8 @@ namespace SyncStreamAPI.Hubs
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
+            if (!CheckPrivileges(room))
+                return;
             if (room.server.currentVideo.url.Contains("twitch.tv"))
                 await Clients.Group(UniqueId).twitchTimeUpdate(time);
             else
@@ -315,6 +317,8 @@ namespace SyncStreamAPI.Hubs
         {
             Room room = GetRoom(UniqueId);
             if (room == null)
+                return;
+            if (!CheckPrivileges(room))
                 return;
             room.server.isplaying = isplaying;
             if (room.server.currentVideo.url.Contains("twitch.tv"))
