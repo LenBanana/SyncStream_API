@@ -18,7 +18,10 @@ namespace SyncStreamAPI.Hubs
             Console.WriteLine(ip);
             Room room = GetRoom(UniqueId);
             if (room == null)
+            {
+                await Clients.Caller.adduserupdate((int)UserUpdate.RoomNotExist);
                 return;
+            }
             if (room.password != null && room.password != password)
             {
                 if (password.Length > 0)
