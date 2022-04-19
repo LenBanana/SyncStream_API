@@ -161,6 +161,8 @@ namespace SyncStreamAPI.Hubs
                         await AddPlaylist(key.url, UniqueId);
                         return;
                     }
+                    if (key.url.Contains("shorts"))
+                        key.url = $"https://www.youtube.com/watch?v={key.url.Split('/').Last()}";
                     if (key.title == null || key.title.Length == 0)
                         key.title = await General.ResolveURL(key.url, Configuration);
                 }
