@@ -29,7 +29,7 @@ namespace SyncStreamAPI
         {
             services.AddDbContext<MariaContext>(options =>
             {
-                options.UseMySql(Configuration.GetConnectionString("SyncStreamDB"));
+                options.UseNpgsql(Configuration.GetConnectionString("SyncStreamDB"));
             });
 #if DEBUG
             var origins = new string[8] { "https://dreckbu.de", "https://*.dreckbu.de", "https://dreckbu.de/*", "https://drecktu.be", "https://*.drecktu.be", "https://drecktu.be/*", "http://localhost:4200", "https://localhost:4200" };
@@ -72,8 +72,9 @@ namespace SyncStreamAPI
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, DataManager manager)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, DataManager manager, MariaContext maria)
         {
+            maria.Database.EnsureCreated();
             var forwardingOptions = new ForwardedHeadersOptions() { ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.All };
             app.UseForwardedHeaders(forwardingOptions);
             if (env.IsDevelopment())
