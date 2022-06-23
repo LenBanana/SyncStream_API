@@ -213,6 +213,7 @@ namespace SyncStreamAPI.Hubs
                 MainServer.members.Remove(member);
                 MainServer.bannedMembers.Add(member);
             }
+            await Clients.User(member.ConnectionId).adduserupdate((int)UserUpdate.Banned);
             await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
             await Clients.All.getrooms(DataManager.GetRooms());
         }

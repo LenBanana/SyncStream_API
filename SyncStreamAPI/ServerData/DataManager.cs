@@ -28,7 +28,7 @@ namespace SyncStreamAPI.ServerData
         {
             Rooms.Add(new Room("Dreckroom", "dreck", false, true));
             Rooms.Add(new Room("Randomkeller", "random", false, true));
-            Rooms.Add(new Room("BigWeinerClub", "random", false, true));
+            Rooms.Add(new Room("BigWeinerClub", "weiner", false, true));
             for (int i = 1; i < 5; i++)
                 Rooms.Add(new Room($"Guest Room - {i}", $"guest{i}", true, false));
         }
