@@ -22,7 +22,7 @@ namespace SyncStreamAPI.Hubs
                 await Clients.Caller.adduserupdate((int)UserUpdate.RoomNotExist);
                 return;
             }
-            if (room.password != null && room.password != password)
+            if (room.password != null && room.password.Length > 0 && room.password != password)
             {
                 if (password.Length > 0)
                     await Clients.Caller.adduserupdate((int)UserUpdate.WrongPassword);
