@@ -1,4 +1,4 @@
-﻿using SyncStreamAPI.MariaModels;
+﻿using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.Models;
 using System.Collections.Generic;
 using System.Threading.Tasks;

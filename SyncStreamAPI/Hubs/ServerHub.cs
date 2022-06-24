@@ -24,17 +24,17 @@ namespace SyncStreamAPI.Hubs
 
         DataManager _manager;
 
-        MariaContext _maria;
+        PostgresContext _postgres;
 
         GallowGameManager _gallowGameManager;
 
         BlackjackManager _blackjackManager;
 
-        public ServerHub(IConfiguration configuration, DataManager manager, MariaContext maria, GallowGameManager gallowGameManager, BlackjackManager blackjackManager)
+        public ServerHub(IConfiguration configuration, DataManager manager, PostgresContext postgres, GallowGameManager gallowGameManager, BlackjackManager blackjackManager)
         {
             Configuration = configuration;
             _manager = manager;
-            _maria = maria;
+            _postgres = postgres;
             _gallowGameManager = gallowGameManager;
             _blackjackManager = blackjackManager;
         }
@@ -99,7 +99,7 @@ namespace SyncStreamAPI.Hubs
                 {
                     if (member.ishost)
                         return true;
-                    var user = _maria.Users.FirstOrDefault(x => x.username == member.username);
+                    var user = _postgres.Users.FirstOrDefault(x => x.username == member.username);
                     if (user == null || user.userprivileges < 1)
                         return false;
                 }

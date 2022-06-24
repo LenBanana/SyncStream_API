@@ -27,7 +27,7 @@ namespace SyncStreamAPI
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddDbContext<MariaContext>(options =>
+            services.AddDbContext<PostgresContext>(options =>
             {
                 options.UseNpgsql(Configuration.GetConnectionString("SyncStreamDB"));
             });
@@ -72,9 +72,9 @@ namespace SyncStreamAPI
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, DataManager manager, MariaContext maria)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, DataManager manager, PostgresContext postgres)
         {
-            maria.Database.EnsureCreated();
+            postgres.Database.EnsureCreated();
             var forwardingOptions = new ForwardedHeadersOptions() { ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.All };
             app.UseForwardedHeaders(forwardingOptions);
             if (env.IsDevelopment())

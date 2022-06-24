@@ -1,5 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using SyncStreamAPI.MariaModels;
+using SyncStreamAPI.PostgresModels;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,9 +7,9 @@ using System.Threading.Tasks;
 
 namespace SyncStreamAPI.DataContext
 {
-    public class MariaContext : DbContext
+    public class PostgresContext : DbContext
     {
-        public MariaContext(DbContextOptions<MariaContext> options) : base(options)
+        public PostgresContext(DbContextOptions<PostgresContext> options) : base(options)
         {
 
         }

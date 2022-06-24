@@ -1,5 +1,5 @@
 ﻿using SyncStreamAPI.Helper;
-using SyncStreamAPI.MariaModels;
+using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.Models;
 using System;
 using System.Collections.Generic;
@@ -13,7 +13,7 @@ namespace SyncStreamAPI.Hubs
         public async Task LoginRequest(User requestUser)
         {
             var result = new User();
-            User user = _maria.Users.FirstOrDefault(x => x.username == requestUser.username && x.password == requestUser.password);
+            User user = _postgres.Users.FirstOrDefault(x => x.username == requestUser.username && x.password == requestUser.password);
             if (user != null)
             {
                 user.password = "";
@@ -25,15 +25,15 @@ namespace SyncStreamAPI.Hubs
         public async Task RegisterRequest(User requestUser)
         {
             var result = new User();
-            if (!_maria.Users.Any(x => x.username == requestUser.username))
+            if (!_postgres.Users.Any(x => x.username == requestUser.username))
             {
                 if (requestUser.username.Length < 2 || requestUser.username.Length > 20)
                 {
                     await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "Username must be between 2 and 20 characters", Answer1 = "Ok" });
                     return;
                 }
-                await _maria.Users.AddAsync(requestUser);
-                await _maria.SaveChangesAsync();
+                await _postgres.Users.AddAsync(requestUser);
+                await _postgres.SaveChangesAsync();
                 result = requestUser;
                 result.password = "";
             }
@@ -42,7 +42,7 @@ namespace SyncStreamAPI.Hubs
 
         public async Task GenerateRememberToken(User requestUser, string userInfo)
         {
-            if (_maria.Users.Any(x => x.ID == requestUser.ID))
+            if (_postgres.Users.Any(x => x.ID == requestUser.ID))
             {
                 try
                 {
@@ -52,20 +52,20 @@ namespace SyncStreamAPI.Hubs
                     token.ID = 0;
                     token.Token = shaToken;
                     token.userID = requestUser.ID;
-                    if (_maria.RememberTokens.Any(x => x.Token == shaToken && x.userID == token.userID))
+                    if (_postgres.RememberTokens.Any(x => x.Token == shaToken && x.userID == token.userID))
                     {
                         await Clients.Caller.rememberToken(token);
                         return;
                     }
-                    if (_maria.RememberTokens.Any(x => x.Token != shaToken && x.userID == token.userID))
+                    if (_postgres.RememberTokens.Any(x => x.Token != shaToken && x.userID == token.userID))
                     {
-                        _maria.RememberTokens.FirstOrDefault(x => x.userID == token.userID).Token = shaToken;
+                        _postgres.RememberTokens.FirstOrDefault(x => x.userID == token.userID).Token = shaToken;
                         await Clients.Caller.rememberToken(token);
-                        await _maria.SaveChangesAsync();
+                        await _postgres.SaveChangesAsync();
                         return;
                     }
-                    await _maria.RememberTokens.AddAsync(token);
-                    await _maria.SaveChangesAsync();
+                    await _postgres.RememberTokens.AddAsync(token);
+                    await _postgres.SaveChangesAsync();
                     await Clients.Caller.rememberToken(token);
                 }
                 catch (Exception ex)
@@ -77,15 +77,15 @@ namespace SyncStreamAPI.Hubs
 
         public async Task GetUsers(string token, int userID)
         {
-            RememberToken Token = _maria.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
+            RememberToken Token = _postgres.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
             if (Token != null)
             {
-                User user = _maria.Users.FirstOrDefault(x => x.ID == Token.userID);
+                User user = _postgres.Users.FirstOrDefault(x => x.ID == Token.userID);
                 if (user != null)
                     user.password = "";
                 if (user.userprivileges >= 3)
                 {
-                    List<User> users = _maria.Users.ToList();
+                    List<User> users = _postgres.Users.ToList();
                     users.ForEach(x => x.password = "");
                     await Clients.Caller.getusers(users);
                 }
@@ -94,7 +94,7 @@ namespace SyncStreamAPI.Hubs
 
         public async Task ChangeUser(User user, string password)
         {
-            User changeUser = _maria.Users.FirstOrDefault(x => x.ID == user.ID && password == x.password);
+            User changeUser = _postgres.Users.FirstOrDefault(x => x.ID == user.ID && password == x.password);
             if (changeUser != null)
             {
                 string endMsg = "";
@@ -120,9 +120,9 @@ namespace SyncStreamAPI.Hubs
                     endMsg += " successfully changed";
                 else
                     endMsg = "Nothing changed.";
-                await _maria.SaveChangesAsync();
+                await _postgres.SaveChangesAsync();
                 await Clients.Caller.dialog(new Dialog() { Header = "Success", Question = endMsg, Answer1 = "Ok" });
-                List<User> users = _maria.Users.ToList();
+                List<User> users = _postgres.Users.ToList();
                 users.ForEach(x => x.password = "");
                 await Clients.All.getusers(users);
             }
@@ -139,21 +139,21 @@ namespace SyncStreamAPI.Hubs
                 await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "Unable to delete own user", Answer1 = "Ok" });
                 return;
             }
-            RememberToken Token = _maria.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
+            RememberToken Token = _postgres.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
             if (Token != null)
             {
-                User user = _maria.Users.FirstOrDefault(x => x.ID == Token.userID);
+                User user = _postgres.Users.FirstOrDefault(x => x.ID == Token.userID);
                 if (user == null)
                     return;
                 if (user.userprivileges >= 3)
                 {
-                    var removeUser = _maria.Users.ToList().FirstOrDefault(x => x.ID == removeID);
+                    var removeUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == removeID);
                     if (removeUser != null)
                     {
-                        _maria.Users.Remove(removeUser);
-                        await _maria.SaveChangesAsync();
+                        _postgres.Users.Remove(removeUser);
+                        await _postgres.SaveChangesAsync();
                     }
-                    List<User> users = _maria.Users.ToList();
+                    List<User> users = _postgres.Users.ToList();
                     users.ForEach(x => x.password = "");
                     await Clients.All.getusers(users);
                 }
@@ -167,21 +167,21 @@ namespace SyncStreamAPI.Hubs
                 await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "Unable to change approve status of own user", Answer1 = "Ok" });
                 return;
             }
-            RememberToken Token = _maria.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
+            RememberToken Token = _postgres.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
             if (Token != null)
             {
-                User user = _maria.Users.FirstOrDefault(x => x.ID == Token.userID);
+                User user = _postgres.Users.FirstOrDefault(x => x.ID == Token.userID);
                 if (user == null)
                     return;
                 if (user.userprivileges >= 3)
                 {
-                    var approveUser = _maria.Users.ToList().FirstOrDefault(x => x.ID == approveID);
+                    var approveUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == approveID);
                     if (approveUser != null)
                     {
                         approveUser.approved = prove ? 1 : 0;
-                        await _maria.SaveChangesAsync();
+                        await _postgres.SaveChangesAsync();
                     }
-                    List<User> users = _maria.Users.ToList();
+                    List<User> users = _postgres.Users.ToList();
                     users.ForEach(x => x.password = "");
                     await Clients.All.getusers(users);
                 }
@@ -195,21 +195,21 @@ namespace SyncStreamAPI.Hubs
                 await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "Unable to change privileges of own user", Answer1 = "Ok" });
                 return;
             }
-            RememberToken Token = _maria.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
+            RememberToken Token = _postgres.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
             if (Token != null)
             {
-                User user = _maria.Users.FirstOrDefault(x => x.ID == Token.userID);
+                User user = _postgres.Users.FirstOrDefault(x => x.ID == Token.userID);
                 if (user == null)
                     return;
                 if (user.userprivileges >= 3)
                 {
-                    var changeUser = _maria.Users.ToList().FirstOrDefault(x => x.ID == changeID);
+                    var changeUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == changeID);
                     if (changeUser != null)
                     {
                         changeUser.userprivileges = privileges;
-                        await _maria.SaveChangesAsync();
+                        await _postgres.SaveChangesAsync();
                     }
-                    List<User> users = _maria.Users.ToList();
+                    List<User> users = _postgres.Users.ToList();
                     users.ForEach(x => x.password = "");
                     await Clients.All.getusers(users);
                 }
@@ -218,10 +218,10 @@ namespace SyncStreamAPI.Hubs
 
         public async Task ValidateToken(string token, int userID)
         {
-            RememberToken Token = _maria.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
+            RememberToken Token = _postgres.RememberTokens.FirstOrDefault(x => x.Token == token && x.userID == userID);
             if (Token != null)
             {
-                User user = _maria.Users.FirstOrDefault(x => x.ID == Token.userID);
+                User user = _postgres.Users.FirstOrDefault(x => x.ID == Token.userID);
                 if (user != null)
                     user.password = "";
                 await Clients.Caller.userlogin(user);

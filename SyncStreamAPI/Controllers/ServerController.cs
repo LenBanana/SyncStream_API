@@ -16,14 +16,14 @@ namespace SyncStreamAPI.Controllers
     public class ServerController : Controller
     {
         private IHubContext<ServerHub, IServerHub> _hub;
-        MariaContext _maria;
+        PostgresContext _postgres;
         IConfiguration Configuration { get; }
 
-        public ServerController(IConfiguration configuration, IHubContext<ServerHub, IServerHub> hub, MariaContext maria)
+        public ServerController(IConfiguration configuration, IHubContext<ServerHub, IServerHub> hub, PostgresContext postgres)
         {
             Configuration = configuration;
             _hub = hub;
-            _maria = maria;
+            _postgres = postgres;
         }
 
         [HttpGet("[action]")]
