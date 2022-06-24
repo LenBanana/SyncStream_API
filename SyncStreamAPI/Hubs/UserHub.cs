@@ -24,7 +24,7 @@ namespace SyncStreamAPI.Hubs
             }
             if (room.password != null && room.password.Length > 0 && room.password != password)
             {
-                if (password.Length > 0)
+                if (password == null || password.Length > 0)
                     await Clients.Caller.adduserupdate((int)UserUpdate.WrongPassword);
                 return;
             }
