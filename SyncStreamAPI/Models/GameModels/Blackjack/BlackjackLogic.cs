@@ -78,7 +78,7 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
             foreach (var member in members.ToList())
             {
                 DealCard(member);
-                await Task.Delay(500);
+                await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1500));
             }
             DealDealerCard();
         }
@@ -126,7 +126,7 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
 
         public async void EndRound()
         {
-            await Task.Delay(1500);
+            await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(1500), TimeSpan.FromMilliseconds(3000));
             RoundEnded?.Invoke(this);
             CheckDeckSize();
         }

@@ -66,11 +66,11 @@ namespace SyncStreamAPI.Games.Blackjack
             var game = blackjackGames.FirstOrDefault(x => x.members.FindIndex(y => y.ConnectionId == member.ConnectionId) != -1);
             if (game != null)
             {
-                await Task.Delay(1000);
+                await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(1000), TimeSpan.FromMilliseconds(2500));
                 game.DealCard(member);
-                await Task.Delay(1000);
+                await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(1000), TimeSpan.FromMilliseconds(2500));
                 game.DealSplitCard(member);
-                await Task.Delay(500);
+                await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1500));
                 AskForSplitPull(game, game.members.FindIndex(x => x.ConnectionId == member.ConnectionId), false);
             }
         }
@@ -206,7 +206,7 @@ namespace SyncStreamAPI.Games.Blackjack
                     }
                     else
                     {
-                        await Task.Delay(250);
+                        await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(1250));
                         member.SetBet(5);
                         game.dealer.money += member.Bet;
                         AskForBet(game, memberIdx + 1);
@@ -218,9 +218,9 @@ namespace SyncStreamAPI.Games.Blackjack
             else
             {
                 await game.PlayRound();
-                await Task.Delay(1000);
+                await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(1000), TimeSpan.FromMilliseconds(2500));
                 await game.PlayRound();
-                await Task.Delay(1000);
+                await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(1000), TimeSpan.FromMilliseconds(2500));
                 var idx = game.members.FindIndex(x => !x.notPlaying && !x.NewlyJoined && x.blackjack == false && x.points < 21);
                 if (idx > -1)
                     AskForPull(game, idx);
@@ -245,7 +245,7 @@ namespace SyncStreamAPI.Games.Blackjack
                     }
                     else
                     {
-                        await Task.Delay(500);
+                        await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1500));
                         switch (BlackjackAi.SmartPull(member, game.dealer, true, false))
                         {
                             case BlackjackSmartReaction.Stand:
@@ -289,7 +289,7 @@ namespace SyncStreamAPI.Games.Blackjack
                     }
                     else
                     {
-                        await Task.Delay(500);
+                        await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1500));
                         switch (BlackjackAi.SmartPull(member, game.dealer, false, pullForSplitHand))
                         {
                             case BlackjackSmartReaction.Stand:
@@ -318,7 +318,7 @@ namespace SyncStreamAPI.Games.Blackjack
                     }
                     else
                     {
-                        await Task.Delay(500);
+                        await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1500));
                         switch (BlackjackAi.SmartPull(member, game.dealer, false, pullForSplitHand))
                         {
                             case BlackjackSmartReaction.Stand:
@@ -340,11 +340,11 @@ namespace SyncStreamAPI.Games.Blackjack
         {
             game.dealer.cards[1].FaceUp = true;
             await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer);
-            await Task.Delay(1000);
+            await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(1000), TimeSpan.FromMilliseconds(2500));
             while (game.DealDealerCard())
             {
                 await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer);
-                await Task.Delay(1000);
+                await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(1000), TimeSpan.FromMilliseconds(2500));
             }
             game.EndRound();
         }

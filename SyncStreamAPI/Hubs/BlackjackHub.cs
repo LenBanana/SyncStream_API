@@ -1,4 +1,5 @@
-﻿using SyncStreamAPI.Models.GameModels.Members;
+﻿using SyncStreamAPI.Helper;
+using SyncStreamAPI.Models.GameModels.Members;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -91,7 +92,7 @@ namespace SyncStreamAPI.Hubs
                 if (member.waitingForPull)
                 {
                     member.waitingForPull = false;
-                    await Task.Delay(500);
+                    await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1500));
                     _blackjackManager.AskForPull(game, idx);
                 }
             }
@@ -109,7 +110,7 @@ namespace SyncStreamAPI.Hubs
             if (pull)
             {
                 game.DealCard(member);
-                await Task.Delay(500);
+                await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1500));
                 _blackjackManager.AskForPull(game, idx);
                 return;
             }
@@ -124,7 +125,7 @@ namespace SyncStreamAPI.Hubs
                 member.didSplit = splitOption;
                 return;
             }
-            await Task.Delay(500);
+            await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1500));
             _blackjackManager.AskForPull(game, idx + 1);
         }
 
@@ -136,7 +137,7 @@ namespace SyncStreamAPI.Hubs
             var member = game.members[idx];
             member.waitingForPull = false;
             await _blackjackManager.SendAllUsers(game);
-            await Task.Delay(500);
+            await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1500));
             if (pull)
             {
                 if (pullForSplitHand == true)
