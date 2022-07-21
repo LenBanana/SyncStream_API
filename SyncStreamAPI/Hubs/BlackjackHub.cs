@@ -1,4 +1,5 @@
 ﻿using SyncStreamAPI.Helper;
+using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.GameModels.Members;
 using System;
 using System.Collections.Generic;
@@ -83,6 +84,8 @@ namespace SyncStreamAPI.Hubs
                 var idx = game.members.FindIndex(x => x.ConnectionId == Context.ConnectionId);
                 var member = game.members[idx];
                 member.Ai = !member.Ai;
+                var errorMsg = new SystemMessage() { message = $"{(member.Ai ? "Activated" : "Deactivated")} AI" };
+                await Clients.Caller.sendmessage(errorMsg);
                 if (member.waitingForBet)
                 {
                     member.waitingForBet = false;

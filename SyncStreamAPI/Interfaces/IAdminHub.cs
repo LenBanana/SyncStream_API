@@ -7,12 +7,12 @@ namespace SyncStreamAPI.Interfaces
 {
     public partial interface IServerHub
     {
-        Task userlogin(User user);
+        Task userlogin(UserDTO user);
 
-        Task userRegister(User user);
+        Task userRegister(UserDTO user);
 
-        Task rememberToken(RememberToken token);
+        Task rememberToken(RememberTokenDTO token);
 
-        Task getusers(List<User> users);
+        Task getusers(List<UserDTO> users);
     }
 }

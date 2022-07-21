@@ -8,7 +8,11 @@ namespace SyncStreamAPI.PostgresModels
     public class RememberToken
     {
         public int ID { get; set; }
-        public int userID { get; set; }
         public string Token { get; set; }
+        public DateTime Created { get; set; }
+        public RememberToken()
+        {
+            Created = DateTime.Now;
+        }
     }
 }

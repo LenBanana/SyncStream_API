@@ -35,7 +35,7 @@ namespace SyncStreamAPI.Hubs
                     gallows.GameLength = gameLength;
                     gallows.UpdateGallowWord(false);
                     await Clients.Group(UniqueId).gallowusers(room.GallowGame.members);
-                    ChatMessage startGallowMessage = new ChatMessage() { time = DateTime.Now, username = "System", message = $"Started a round of gallows, have fun!", color = Helper.Colors.SystemColor, usercolor = Helper.Colors.SystemUserColor };
+                    var startGallowMessage = new SystemMessage() { username = "System", message = $"Started a round of gallows, have fun!" };
                     await Clients.Group(UniqueId).sendmessage(startGallowMessage);
                     return;
                 }

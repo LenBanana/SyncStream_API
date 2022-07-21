@@ -1,8 +1,10 @@
 ﻿using SyncStreamAPI.Enums.Games;
+using SyncStreamAPI.Helper;
 using SyncStreamAPI.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Hubs
@@ -14,13 +16,32 @@ namespace SyncStreamAPI.Hubs
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
+            var regEx = new Regex("\\/w (?<wName>.*) (?<wMsg>.*)");
+            var match = regEx.Match(message.message);
             Server MainServer = room.server;
-            message.time = DateTime.Now;
+            if (match.Success)
+            {
+                var wName = match.Groups["wName"].Value;
+                var wMsg = match.Groups["wMsg"].Value;
+                var receiverMember = MainServer.members.FirstOrDefault(x => x.username.ToLower() == wName.ToLower());
+                if (receiverMember != null)
+                {
+                    var wChatUserMsg = new WhisperUserMessage() { username = $"To {wName}", message = $"{wMsg}" };
+                    var wChatReceiverMsg = new WhisperReceiverMessage() { username = $"From {message.username}", message = $"{wMsg}" };
+                    await Clients.Caller.sendmessage(wChatUserMsg);
+                    await Clients.Client(receiverMember.ConnectionId).sendmessage(wChatReceiverMsg);
+                    return;
+                }
+                else
+                {
+                    var errorMsg = new SystemMessage() { message = $"Could not find user: {wName}" };
+                    await Clients.Caller.sendmessage(errorMsg);
+                    return;
+                }
+            }
             MainServer.chatmessages.Add(message);
             if (MainServer.chatmessages.Count >= 100)
                 MainServer.chatmessages.RemoveAt(0);
-            Member sender = MainServer.members.FirstOrDefault(x => Context.ConnectionId == x.ConnectionId);
-
             switch (room.GameMode)
             {
                 case GameMode.NotPlaying:
@@ -28,6 +49,7 @@ namespace SyncStreamAPI.Hubs
                     await Clients.Group(MainServer.RoomId).sendmessage(message);
                     break;
                 case GameMode.Gallows:
+                    Member sender = MainServer.members.FirstOrDefault(x => Context.ConnectionId == x.ConnectionId);
                     var game = room.GallowGame;
                     await _gallowGameManager.PlayGallow(game, sender, message, game.GallowTime);
                     break;

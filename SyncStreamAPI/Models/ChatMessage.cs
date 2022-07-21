@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SyncStreamAPI.Helper;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -12,5 +13,37 @@ namespace SyncStreamAPI.Models
         public DateTime time { get; set; }
         public string color { get; set; }
         public string usercolor { get; set; }
+        public ChatMessage()
+        {
+            time = DateTime.Now;
+        }
+    }
+
+    public class SystemMessage : ChatMessage
+    {
+        public SystemMessage()
+        {
+            username = "System";
+            color = Colors.SystemColor;
+            usercolor = Colors.SystemUserColor;
+        }
+    }
+
+    public class WhisperUserMessage : ChatMessage
+    {
+        public WhisperUserMessage()
+        {
+            color = Colors.WhisperMsgColor;
+            usercolor = Colors.WhisperUserColor;
+        }
+    }
+
+    public class WhisperReceiverMessage : ChatMessage
+    {
+        public WhisperReceiverMessage()
+        {
+            color = Colors.WhisperMsgColor;
+            usercolor = Colors.WhisperReceiverColor;
+        }
     }
 }

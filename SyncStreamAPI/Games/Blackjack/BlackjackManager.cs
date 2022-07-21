@@ -122,7 +122,7 @@ namespace SyncStreamAPI.Games.Blackjack
 
                 member.cards = new List<PlayingCard>();
                 member.didSplit = false;
-                ChatMessage roundEndMsg = new ChatMessage() { time = DateTime.Now, username = "System", message = totalText, color = Colors.SystemColor, usercolor = Colors.SystemUserColor };
+                SystemMessage roundEndMsg = new SystemMessage() { username = "System", message = totalText };
                 await _hub.Clients.Client(member.ConnectionId).sendmessage(roundEndMsg);
             }
             game.dealer.cards = new List<PlayingCard>();
