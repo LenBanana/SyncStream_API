@@ -210,20 +210,21 @@ namespace SyncStreamAPI.Hubs
         public async Task ValidateToken(string token, int userID)
         {
             var dbUser = _postgres.Users.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
-            RememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
-            if (Token != null)
+            RememberToken Token = _postgres.RememberTokens.FirstOrDefault(x => x.Token == token);
+            if (Token != null && dbUser != null)
             {
                 if ((DateTime.Now - Token.Created).TotalDays > 30)
                 {
                     _postgres.RememberTokens.Remove(Token);
                     await Clients.Caller.userlogin(new User("").ToDTO());
                     await _postgres.SaveChangesAsync();
-                    return;
                 }
-                if (dbUser != null)
-                    await Clients.Caller.userlogin(dbUser.ToDTO());
                 else
-                    await Clients.Caller.userlogin(new User("").ToDTO());
+                {
+                    await Clients.Caller.userlogin(dbUser.ToDTO());
+                    Token.Created = DateTime.Now;
+                    await _postgres.SaveChangesAsync();
+                }
             }
             else
             {
