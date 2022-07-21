@@ -16,28 +16,67 @@ namespace SyncStreamAPI.Hubs
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
-            var regEx = new Regex("^\\/w (?<wName>[^\\s]+) (?<wMsg>.*)$");
-            var match = regEx.Match(message.message);
             Server MainServer = room.server;
-            if (match.Success)
+            var lowerMessage = message.message.ToLower().Trim();
+            if (lowerMessage.StartsWith("/"))
             {
-                var wName = match.Groups["wName"].Value.Trim();
-                var wMsg = match.Groups["wMsg"].Value.Trim();
-                var receiverMember = MainServer.members.FirstOrDefault(x => x.username.ToLower() == wName.ToLower());
-                if (receiverMember != null)
+                if (lowerMessage.StartsWith("/w"))
                 {
-                    var wChatUserMsg = new WhisperUserMessage() { username = $"To {wName}", message = $"{wMsg}" };
-                    var wChatReceiverMsg = new WhisperReceiverMessage() { username = $"From {message.username}", message = $"{wMsg}" };
-                    await Clients.Caller.sendmessage(wChatUserMsg);
-                    await Clients.Client(receiverMember.ConnectionId).sendmessage(wChatReceiverMsg);
-                    return;
+                    var regEx = new Regex("^\\/[wW] (?<wName>[^\\s]+) (?<wMsg>.*)$");
+                    var match = regEx.Match(message.message);
+                    if (match.Success)
+                    {
+                        var wName = match.Groups["wName"].Value.Trim();
+                        var wMsg = match.Groups["wMsg"].Value.Trim();
+                        var receiverMember = MainServer.members.FirstOrDefault(x => x.username.ToLower() == wName.ToLower());
+                        if (receiverMember != null)
+                        {
+                            var wChatUserMsg = new WhisperUserMessage() { username = $"To {wName}", message = $"{wMsg}" };
+                            var wChatReceiverMsg = new WhisperReceiverMessage() { username = $"From {message.username}", message = $"{wMsg}" };
+                            await Clients.Caller.sendmessage(wChatUserMsg);
+                            await Clients.Client(receiverMember.ConnectionId).sendmessage(wChatReceiverMsg);
+                            return;
+                        }
+                        else
+                        {
+                            var errorMsg = new SystemMessage() { message = $"Could not find user: {wName}" };
+                            await Clients.Caller.sendmessage(errorMsg);
+                            return;
+                        }
+                    }
                 }
-                else
+                else if (lowerMessage.StartsWith("/c"))
                 {
-                    var errorMsg = new SystemMessage() { message = $"Could not find user: {wName}" };
-                    await Clients.Caller.sendmessage(errorMsg);
-                    return;
+                    await ClearChat(UniqueId);
                 }
+                else if (lowerMessage.StartsWith("/playgallows") || lowerMessage.StartsWith("/playgallow") || lowerMessage.StartsWith("/gallows") || lowerMessage.StartsWith("/gallow") || lowerMessage.StartsWith("/galgenraten") || lowerMessage.StartsWith("/galgen") || lowerMessage.StartsWith("/g"))
+                {
+                    var split = lowerMessage.Split(" ");
+                    var lang = Enums.Language.German;
+                    var length = 90;
+                    if (split.Length > 1)
+                        lang = split[1].StartsWith("e") ? Enums.Language.English : Enums.Language.German;
+                    if (split.Length > 2)
+                        int.TryParse(split[2], out length);
+                    await PlayGallows(UniqueId, lang, length);
+                }
+                else if (lowerMessage.StartsWith("/s") || lowerMessage.StartsWith("/spectate"))
+                {
+                    await SpectateBlackjack(UniqueId);
+                }
+                else if (lowerMessage.StartsWith("/ai"))
+                {
+                    await AddBlackjackAi(UniqueId);
+                }
+                else if (lowerMessage.StartsWith("/mai"))
+                {
+                    await MakeAi(UniqueId);
+                }
+                else if (lowerMessage.StartsWith("/playblackjack") || lowerMessage.StartsWith("/playbj") || lowerMessage.StartsWith("/blackjack") || lowerMessage.StartsWith("/bj") || lowerMessage.StartsWith("/b"))
+                {
+                    await PlayBlackjack(UniqueId);
+                }
+                return;
             }
             MainServer.chatmessages.Add(message);
             if (MainServer.chatmessages.Count >= 100)
