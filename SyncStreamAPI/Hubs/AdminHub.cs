@@ -209,7 +209,7 @@ namespace SyncStreamAPI.Hubs
 
         public async Task ValidateToken(string token, int userID)
         {
-            var dbUser = _postgres.Users.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
+            var dbUser = _postgres.Users.Where(x => x.ID == userID && x.RememberTokens.Any(y => y.Token == token)).Include(x => x.RememberTokens).FirstOrDefault();
             if (dbUser == null)
                 return;
             foreach (var t in dbUser.RememberTokens)
