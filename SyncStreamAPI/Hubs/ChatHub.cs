@@ -16,13 +16,13 @@ namespace SyncStreamAPI.Hubs
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
-            var regEx = new Regex("\\/w (?<wName>.*) (?<wMsg>.*)");
+            var regEx = new Regex("^\\/w (?<wName>[^\\s]+) (?<wMsg>.*)$");
             var match = regEx.Match(message.message);
             Server MainServer = room.server;
             if (match.Success)
             {
-                var wName = match.Groups["wName"].Value;
-                var wMsg = match.Groups["wMsg"].Value;
+                var wName = match.Groups["wName"].Value.Trim();
+                var wMsg = match.Groups["wMsg"].Value.Trim();
                 var receiverMember = MainServer.members.FirstOrDefault(x => x.username.ToLower() == wName.ToLower());
                 if (receiverMember != null)
                 {
