@@ -211,7 +211,10 @@ namespace SyncStreamAPI.Hubs
         {
             var dbUser = _postgres.Users.Where(x => x.ID == userID && x.RememberTokens.Any(y => y.Token == token)).Include(x => x.RememberTokens).FirstOrDefault();
             if (dbUser == null)
+            {
+                await Clients.Caller.userlogin(new User("").ToDTO());
                 return;
+            }
             foreach (var t in dbUser.RememberTokens)
             {
                 if ((DateTime.Now - t.Created).TotalDays > 30)

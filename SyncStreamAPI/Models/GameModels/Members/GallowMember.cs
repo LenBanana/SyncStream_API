@@ -14,7 +14,6 @@ namespace SyncStreamAPI.Models.GameModels.Members
             isDrawing = IsDrawing;
             ConnectionId = connectionId;
         }
-        public bool ShouldSerializeConnectionId() { return false; }
         public string ConnectionId { get; set; }
         public string username { get; set; }
         public bool isDrawing { get; set; }
