@@ -49,7 +49,7 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
         {
             member.Kicked += X_Kicked;
             var newMember = new BlackjackMember(member, manager);
-            if (members.Count > 5)
+            if (members.Count >= 5)
                 newMember.notPlaying = true;
             members.Add(newMember);
         }
