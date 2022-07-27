@@ -36,12 +36,28 @@ namespace SyncStreamAPI.Models.GameModels.Gallows
         public GallowLogic(Games.Gallows.GallowGameManager _manager, string roomId, List<GallowMember> members)
         {
             this.members = members;
+            this.members.ForEach(x => x.Kicked += X_Kicked);
             RoomId = roomId;
             _manager.GallowEvents(this);
             GallowCountdown();
             UpdateGallowWord(false);
         }
-        
+
+        private void X_Kicked(Member e)
+        {
+            var idx = this.members.FindIndex(x => x.ConnectionId == e.ConnectionId);
+            if (idx >= 0)
+            {
+                e.Kicked -= X_Kicked;
+                this.members.RemoveAt(idx);
+            }
+        }
+
+        public void AddMember(Member member)
+        {
+            member.Kicked += X_Kicked;
+            members.Add(new GallowMember(member));
+        }
 
         public async void GallowCountdown()
         {

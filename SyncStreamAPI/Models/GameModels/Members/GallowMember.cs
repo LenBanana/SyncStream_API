@@ -3,17 +3,26 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using static SyncStreamAPI.Models.Member;
 
 namespace SyncStreamAPI.Models.GameModels.Members
 {
     public class GallowMember
     {
-        public GallowMember(string Username, bool IsDrawing, string connectionId)
+        public GallowMember(Member member)
         {
-            username = Username;
-            isDrawing = IsDrawing;
-            ConnectionId = connectionId;
+            member.Kicked += Member_Kicked;
+            username = member.username;
+            isDrawing = member.ishost;
+            ConnectionId = member.ConnectionId;
         }
+
+        private void Member_Kicked(Member e)
+        {
+            Kicked?.Invoke(e);
+        }
+
+        public event KickEvent Kicked;
         public string ConnectionId { get; set; }
         public string username { get; set; }
         public bool isDrawing { get; set; }

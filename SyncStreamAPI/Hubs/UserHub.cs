@@ -51,7 +51,7 @@ namespace SyncStreamAPI.Hubs
                 var game = room.GallowGame;
                 if (game.members.FindIndex(x => x.ConnectionId == newMember.ConnectionId) == -1)
                 {
-                    game.members.Add(new Models.GameModels.Members.GallowMember(newMember.username, newMember.ishost, newMember.ConnectionId));
+                    game.AddMember(newMember);
                     await Clients.Caller.playinggallows(game.GallowWord);
                     await Clients.Caller.gallowusers(game.members);
                 }
@@ -61,10 +61,7 @@ namespace SyncStreamAPI.Hubs
                 var game = room.BlackjackGame;
                 if (game.members.FindIndex(x => x.ConnectionId == newMember.ConnectionId) == -1)
                 {
-                    var newBjMember = new Models.GameModels.Members.BlackjackMember(newMember.username, newMember.ConnectionId, _blackjackManager);
-                    if (game.members.Count > 5)
-                        newBjMember.notPlaying = true;
-                    game.members.Add(newBjMember);
+                    game.AddMember(newMember, _blackjackManager);
                     await Clients.Caller.playblackjack(true);
                     //give time to build component
                     await Task.Delay(250);

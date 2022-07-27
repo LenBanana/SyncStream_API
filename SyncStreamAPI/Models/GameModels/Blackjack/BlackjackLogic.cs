@@ -30,8 +30,28 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
         {
             RoomId = roomId;
             members = Members;
+            members.ForEach(x => x.Kicked += X_Kicked);
             manager.BlackjackGameEvents(this);
             ResetBlackjackDeck();
+        }
+
+        private void X_Kicked(Member e)
+        {
+            var idx = members.FindIndex(x => x.ConnectionId == e.ConnectionId);
+            if (idx >= 0)
+            {
+                e.Kicked -= X_Kicked;
+                members.RemoveAt(idx);
+            }
+        }
+
+        public void AddMember(Member member, BlackjackManager manager)
+        {
+            member.Kicked += X_Kicked;
+            var newMember = new BlackjackMember(member, manager);
+            if (members.Count > 5)
+                newMember.notPlaying = true;
+            members.Add(newMember);
         }
 
         public void ResetBlackjackDeck()

@@ -5,17 +5,44 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using static SyncStreamAPI.Models.Member;
 
 namespace SyncStreamAPI.Models.GameModels.Members
 {
     public class BlackjackMember
     {
+        /// <summary>
+        /// For normal members
+        /// </summary>
+        /// <param name="member"></param>
+        /// <param name="manager"></param>
+        public BlackjackMember(Member member, BlackjackManager manager)
+        {
+            username = member.username;
+            ConnectionId = member.ConnectionId;
+            member.Kicked += Member_Kicked;
+            manager.BlackjackMemberEvents(this);
+        }
+
+        /// <summary>
+        /// For Ai
+        /// </summary>
+        /// <param name="Username"></param>
+        /// <param name="connectionId"></param>
+        /// <param name="manager"></param>
         public BlackjackMember(string Username, string connectionId, BlackjackManager manager)
         {
             username = Username;
             ConnectionId = connectionId;
             manager.BlackjackMemberEvents(this);
         }
+
+        private void Member_Kicked(Member e)
+        {
+            Kicked?.Invoke(e);
+        }
+
+        public event KickEvent Kicked;
         public bool ShouldSerializeConnectionId() { return false; }
         public string ConnectionId { get; set; }
         public string username { get; set; }
