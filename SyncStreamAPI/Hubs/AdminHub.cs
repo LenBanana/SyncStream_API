@@ -22,12 +22,12 @@ namespace SyncStreamAPI.Hubs
                 if (dbToken == null)
                 {
                     user.RememberTokens.Add(token);
-                    await Clients.Caller.rememberToken(new RememberTokenDTO(token, requestUser.ID));
+                    await Clients.Caller.rememberToken(new RememberTokenDTO(token, user.ID));
                     await _postgres.SaveChangesAsync();
                 }
                 else
                 {
-                    await Clients.Caller.rememberToken(new RememberTokenDTO(dbToken, requestUser.ID));
+                    await Clients.Caller.rememberToken(new RememberTokenDTO(dbToken, user.ID));
                 }
 
                 result = user;
