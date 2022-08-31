@@ -209,12 +209,13 @@ namespace SyncStreamAPI.Hubs
 
         public async Task ValidateToken(string token, int userID)
         {
-            var dbUser = _postgres.Users.Where(x => x.ID == userID && x.RememberTokens.Any(y => y.Token == token)).Include(x => x.RememberTokens).FirstOrDefault();
+            var dbUser = _postgres.Users?.Where(x => x.RememberTokens != null && x.ID == userID && x.RememberTokens.Any(y => y.Token == token)).Include(x => x.RememberTokens).FirstOrDefault();
             if (dbUser == null)
             {
                 await Clients.Caller.userlogin(new User("").ToDTO());
                 return;
             }
+            dbUser.RememberTokens = dbUser.RememberTokens.GroupBy(x => x.Token).Select(x => x.First()).ToList();
             foreach (var t in dbUser.RememberTokens)
             {
                 if ((DateTime.Now - t.Created).TotalDays > 30)
