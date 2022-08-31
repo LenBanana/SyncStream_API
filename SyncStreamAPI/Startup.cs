@@ -74,7 +74,10 @@ namespace SyncStreamAPI
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env, DataManager manager, PostgresContext postgres)
         {
-            postgres.Database.EnsureCreated();
+            try
+            {
+                postgres.Database.EnsureCreated();
+            } catch { }
             var forwardingOptions = new ForwardedHeadersOptions() { ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.All };
             app.UseForwardedHeaders(forwardingOptions);
             if (env.IsDevelopment())

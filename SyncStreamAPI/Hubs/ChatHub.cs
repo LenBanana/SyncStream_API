@@ -58,7 +58,7 @@ namespace SyncStreamAPI.Hubs
                         lang = split[1].StartsWith("e") ? Enums.Language.English : Enums.Language.German;
                     if (split.Length > 2)
                         int.TryParse(split[2], out length);
-                    await PlayGallows(UniqueId, lang, length);
+                    await PlayGallowsSettings(UniqueId, lang, length);
                 }
                 else if (lowerMessage.StartsWith("/s") || lowerMessage.StartsWith("/spectate"))
                 {

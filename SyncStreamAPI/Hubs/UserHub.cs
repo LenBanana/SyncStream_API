@@ -158,7 +158,7 @@ namespace SyncStreamAPI.Hubs
                 var gallowGame = room.GallowGame;
                 if (gallowGame != null && gallowGame.PlayingGallows)
                     if (MainServer.members.Count < 2)
-                        await PlayGallows(UniqueId, gallowGame.GameLanguage, gallowGame.GameLength);
+                        await PlayGallowsSettings(UniqueId, gallowGame.GameLanguage, gallowGame.GameLength);
 
                 if (isHost)
                 {
