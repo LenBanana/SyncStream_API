@@ -15,8 +15,12 @@ namespace SyncStreamAPI.Models.GameModels.Chess
 
         public static ChessGame AddChessGame(string uniqueId, Member lightPlayer, Member darkPlayer)
         {
+            var idx = ChessGames.FindIndex(x => x.UniqueId == uniqueId);
             var game = new ChessGame(lightPlayer, darkPlayer, uniqueId);
-            ChessGames.Add(game);
+            if (idx == -1)
+                ChessGames.Add(game);
+            else
+                ChessGames[idx] = game;
             return game;
         }
 
