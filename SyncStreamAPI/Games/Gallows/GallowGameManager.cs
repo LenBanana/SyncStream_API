@@ -100,9 +100,9 @@ namespace SyncStreamAPI.Games.Gallows
                 gallowMember.gallowPoints += points > 0 ? points : 0;
                 gallowMember.guessedGallow = true;
 
-                var correntAnswerServerMsg = new SystemMessage() { username = "System", message = $"{message.username} answered correctly" };
+                var correntAnswerServerMsg = new SystemMessage($"{message.username} answered correctly");
                 await _hub.Clients.GroupExcept(game.RoomId, sender.ConnectionId).sendmessage(correntAnswerServerMsg);
-                var correntAnswerPrivateMsg = new SystemMessage() { username = "System", message = $"{message.username} you answered correct. You've been awarded {points} points" };
+                var correntAnswerPrivateMsg = new SystemMessage($"{message.username} you answered correct. You've been awarded {points} points");
                 await _hub.Clients.Client(sender.ConnectionId).sendmessage(correntAnswerPrivateMsg);
                 if (game.members.Where(x => !x.isDrawing).All(x => x.guessedGallow))
                     await EndGallow(game, Time);
@@ -111,7 +111,7 @@ namespace SyncStreamAPI.Games.Gallows
             }
             else if (StringExtensions.CalculateWordDifference(msg, gallowWord) == 1)
             {
-                var closeMsg = new SystemMessage() { username = "System", message = $"{message.username} {msg} was close!" };
+                var closeMsg = new SystemMessage($"{message.username} {msg} was close!");
                 await _hub.Clients.Client(sender.ConnectionId).sendmessage(closeMsg);
             }
             else
@@ -125,7 +125,7 @@ namespace SyncStreamAPI.Games.Gallows
             var guessedGallow = game.members.Where(x => x.guessedGallow).ToList();
             game.drawings = new List<Drawing>();
             game.members.ForEach(x => { x.guessedGallow = false; });
-            var gallowEndedMsg = new SystemMessage() { username = "System", message = $"Round has ended! The correct word was {game.GallowWord}" };
+            var gallowEndedMsg = new SystemMessage($"Round has ended! The correct word was {game.GallowWord}");
             await _hub.Clients.Group(game.RoomId).sendmessage(gallowEndedMsg);
             await _hub.Clients.Group(game.RoomId).whiteboardclear(true);
             game.UpdateGallowWord(false);
@@ -143,7 +143,7 @@ namespace SyncStreamAPI.Games.Gallows
                     hostPoints += General.GallowDrawBasePoints;
                     hostPoints += (int)((double)guessedGallow.Sum(x => x.guessedGallowTime) / (double)guessedGallow.Count());
                     game.members[idx].gallowPoints += hostPoints > 0 ? hostPoints : 0;
-                    var hostMsg = new SystemMessage() { username = "System", message = $"{game.members[idx].username} {guessedGallow.Count()} users got the word correct, good job. You've been awarded {hostPoints} points" };
+                    var hostMsg = new SystemMessage($"{game.members[idx].username} {guessedGallow.Count()} users got the word correct, good job. You've been awarded {hostPoints} points");
                     await _hub.Clients.Client(game.members[idx].ConnectionId).sendmessage(hostMsg);
                 }
 

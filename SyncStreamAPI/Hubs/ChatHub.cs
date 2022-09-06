@@ -39,13 +39,13 @@ namespace SyncStreamAPI.Hubs
                         }
                         else
                         {
-                            var errorMsg = new SystemMessage() { message = $"Could not find user: {wName}" };
+                            var errorMsg = new SystemMessage($"Could not find user: {wName}");
                             await Clients.Caller.sendmessage(errorMsg);
                             return;
                         }
                     }
                 }
-                else if (lowerMessage.StartsWith("/c"))
+                else if (lowerMessage.StartsWith("/c") && lowerMessage != "/chess")
                 {
                     await ClearChat(UniqueId);
                 }
@@ -76,6 +76,13 @@ namespace SyncStreamAPI.Hubs
                 {
                     await PlayBlackjack(UniqueId);
                 }
+                else if (lowerMessage.StartsWith("/chess"))
+                {
+                    if (room.GameMode != GameMode.Chess)
+                        await PlayChess(UniqueId);
+                    else
+                        await EndChess(UniqueId);
+                }
                 return;
             }
             MainServer.chatmessages.Add(message);
@@ -85,6 +92,7 @@ namespace SyncStreamAPI.Hubs
             {
                 case GameMode.NotPlaying:
                 case GameMode.Blackjack:
+                case GameMode.Chess:
                     await Clients.Group(MainServer.RoomId).sendmessage(message);
                     break;
                 case GameMode.Gallows:

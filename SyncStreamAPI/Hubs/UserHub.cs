@@ -1,6 +1,7 @@
 ﻿using SyncStreamAPI.Enums;
 using SyncStreamAPI.Enums.Games;
 using SyncStreamAPI.Models;
+using SyncStreamAPI.Models.GameModels.Chess;
 using SyncStreamAPI.ServerData;
 using System;
 using System.Collections.Generic;
@@ -45,7 +46,10 @@ namespace SyncStreamAPI.Hubs
             MainServer.members.Add(newMember);
 
             await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
-
+            if (room.GameMode == GameMode.Chess)
+            {
+                await Clients.Caller.playchess(ChessLogic.GetChessGame(room.uniqueId));
+            }
             if (room.GameMode == GameMode.Gallows)
             {
                 var game = room.GallowGame;
@@ -167,6 +171,14 @@ namespace SyncStreamAPI.Hubs
                     if (MainServer.members.Count > 0 && MainServer.members[0] != null)
                         MainServer.members[0].ishost = true;
                     await Clients.Client(MainServer.members[0].ConnectionId).hostupdate(true);
+                }
+            }
+            if (room.GameMode == Enums.Games.GameMode.Chess)
+            {
+                var game = ChessLogic.GetChessGame(room.uniqueId);
+                if (game != null && (game.LightPlayer.ConnectionId == Context.ConnectionId || game.DarkPlayer.ConnectionId == Context.ConnectionId))
+                {
+                    await EndChess(room.uniqueId);
                 }
             }
             var blackjack = room.BlackjackGame;

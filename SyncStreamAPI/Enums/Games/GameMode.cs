@@ -9,6 +9,7 @@ namespace SyncStreamAPI.Enums.Games
     {
         NotPlaying,
         Blackjack,
-        Gallows
+        Gallows,
+        Chess
     }
 }

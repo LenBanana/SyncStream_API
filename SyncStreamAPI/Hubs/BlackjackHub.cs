@@ -84,7 +84,7 @@ namespace SyncStreamAPI.Hubs
                 var idx = game.members.FindIndex(x => x.ConnectionId == Context.ConnectionId);
                 var member = game.members[idx];
                 member.Ai = !member.Ai;
-                var errorMsg = new SystemMessage() { message = $"{(member.Ai ? "Activated" : "Deactivated")} AI" };
+                var errorMsg = new SystemMessage($"{(member.Ai ? "Activated" : "Deactivated")} AI");
                 await Clients.Caller.sendmessage(errorMsg);
                 if (member.waitingForBet)
                 {

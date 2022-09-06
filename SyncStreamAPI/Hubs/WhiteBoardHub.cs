@@ -49,7 +49,7 @@ namespace SyncStreamAPI.Hubs
                     gallows.GameLength = gameLength;
                     gallows.UpdateGallowWord(false);
                     await Clients.Group(UniqueId).gallowusers(room.GallowGame.members);
-                    var startGallowMessage = new SystemMessage() { username = "System", message = $"Started a round of gallows, have fun!" };
+                    var startGallowMessage = new SystemMessage($"Started a round of gallows, have fun!");
                     await Clients.Group(UniqueId).sendmessage(startGallowMessage);
                     return;
                 }

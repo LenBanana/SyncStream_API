@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.Models;
+using SyncStreamAPI.Models.GameModels.Chess;
 using SyncStreamAPI.Models.GameModels.Gallows;
 using System;
 using System.Collections.Generic;
@@ -17,17 +18,41 @@ namespace SyncStreamAPI.Hubs
             if (room == null)
                 return;
             Server MainServer = room.server;
-            if (MainServer.members.Count > 2)
+            if (MainServer.members.Count < 2)
                 return;
-            await Clients.Group(UniqueId).playchess();
+            var lightPlayer = MainServer.members[0];
+            var darkPlayer = MainServer.members[1];
+            var game = ChessLogic.AddChessGame(UniqueId, lightPlayer, darkPlayer);
+            await Clients.Client(lightPlayer.ConnectionId).sendmessage(new SystemMessage("You are now chess player light!"));
+            await Clients.Client(darkPlayer.ConnectionId).sendmessage(new SystemMessage("You are now chess player dark!"));
+            await Clients.Group(UniqueId).playchess(game);
         }
 
-        public async Task MoveChessPiece(string UniqueId, string move)
+        public async Task EndChess(string UniqueId)
+        {
+            ChessLogic.RemoveChessGame(UniqueId);
+            await Clients.Group(UniqueId).endchess();
+        }
+
+        public async Task ResetChess(string UniqueId)
+        {
+            await Clients.GroupExcept(UniqueId, Context.ConnectionId).resetchess();
+        }
+
+        public async Task MoveChessPiece(string UniqueId, ChessMove move)
         {
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;
             Server MainServer = room.server;
+            var game = ChessLogic.GetChessGame(UniqueId);
+            if (game == null)
+                return;
+            if (move.Check)
+                await Clients.Group(UniqueId).sendmessage(new SystemMessage($"Player {move.Color} made a check!"));
+            if (move.Checkmate)
+                await Clients.Group(UniqueId).sendmessage(new SystemMessage($"Player {move.Color} made a checkmate!"));
+            game.GameFEN = move.FEN;
             await Clients.GroupExcept(UniqueId, Context.ConnectionId).moveChessPiece(move);
         }
     }

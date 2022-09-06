@@ -9,6 +9,7 @@ using SyncStreamAPI.Games.Gallows;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
+using SyncStreamAPI.Models.GameModels.Chess;
 using SyncStreamAPI.ServerData;
 using System;
 using System.Collections.Generic;
@@ -51,6 +52,14 @@ namespace SyncStreamAPI.Hubs
                 e.InvokeKick();
 
                 var gameMode = room.GameMode;
+                if (gameMode == Enums.Games.GameMode.Chess)
+                {
+                    var game = ChessLogic.GetChessGame(room.uniqueId);
+                    if (game != null && (game.LightPlayer.ConnectionId == Context.ConnectionId || game.DarkPlayer.ConnectionId == Context.ConnectionId))
+                    {
+                        await EndChess(room.uniqueId);
+                    }
+                }
                 if (gameMode == Enums.Games.GameMode.Gallows)
                 {
                     var game = room.GallowGame;

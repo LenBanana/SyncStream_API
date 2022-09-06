@@ -1,5 +1,6 @@
 ﻿using SyncStreamAPI.DTOModel;
 using SyncStreamAPI.Models;
+using SyncStreamAPI.Models.GameModels.Chess;
 using SyncStreamAPI.Models.GameModels.Members;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -8,7 +9,9 @@ namespace SyncStreamAPI.Interfaces
 {
     public partial interface IServerHub
     {
-        Task playchess();
-        Task moveChessPiece(string move);
+        Task playchess(ChessGame game);
+        Task endchess();
+        Task resetchess();
+        Task moveChessPiece(ChessMove move);
     }
 }

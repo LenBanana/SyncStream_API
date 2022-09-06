@@ -21,11 +21,12 @@ namespace SyncStreamAPI.Models
 
     public class SystemMessage : ChatMessage
     {
-        public SystemMessage()
+        public SystemMessage(string msg)
         {
             username = "System";
             color = Colors.SystemColor;
             usercolor = Colors.SystemUserColor;
+            message = msg;
         }
     }
 
