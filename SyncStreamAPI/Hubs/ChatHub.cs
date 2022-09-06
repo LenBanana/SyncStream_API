@@ -78,10 +78,20 @@ namespace SyncStreamAPI.Hubs
                 }
                 else if (lowerMessage.StartsWith("/chess"))
                 {
-                    if (room.GameMode != GameMode.Chess)
-                        await PlayChess(UniqueId);
-                    else
-                        await EndChess(UniqueId);
+                    lowerMessage += " ";
+                    var regEx = new Regex("^\\/chess (?<wName1>[^\\s]+) (?<wName2>[^\\s]+)?$");
+                    var match = regEx.Match(message.message);
+                    if (match.Success)
+                    {
+                        var user1 = match.Groups["wName1"].Value.Trim();
+                        var user2 = match.Groups["wName2"].Value.Trim();
+                        var member1 = MainServer.members.FirstOrDefault(x => x.username == user1);
+                        var member2 = MainServer.members.FirstOrDefault(x => x.username == user1);
+                        if (room.GameMode != GameMode.Chess)
+                            await PlayChess(UniqueId, member1 != null ? member1.username : "", member2 != null ? member2.username : "");
+                        else
+                            await EndChess(UniqueId);
+                    }
                 }
                 return;
             }
