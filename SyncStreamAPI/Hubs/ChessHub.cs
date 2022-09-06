@@ -11,6 +11,24 @@ namespace SyncStreamAPI.Hubs
 {
     public partial class ServerHub
     {
-       
+        public async Task PlayChess(string UniqueId)
+        {
+            Room room = GetRoom(UniqueId);
+            if (room == null)
+                return;
+            Server MainServer = room.server;
+            if (MainServer.members.Count > 2)
+                return;
+            await Clients.Group(UniqueId).playchess();
+        }
+
+        public async Task MoveChessPiece(string UniqueId, string move)
+        {
+            Room room = GetRoom(UniqueId);
+            if (room == null)
+                return;
+            Server MainServer = room.server;
+            await Clients.GroupExcept(UniqueId, Context.ConnectionId).moveChessPiece(move);
+        }
     }
 }

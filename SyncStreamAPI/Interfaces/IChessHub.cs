@@ -9,5 +9,6 @@ namespace SyncStreamAPI.Interfaces
     public partial interface IServerHub
     {
         Task playchess();
+        Task moveChessPiece(string move);
     }
 }

@@ -209,32 +209,39 @@ namespace SyncStreamAPI.Hubs
 
         public async Task ValidateToken(string token, int userID)
         {
-            var dbUser = _postgres.Users?.Where(x => x.RememberTokens != null && x.ID == userID && x.RememberTokens.Any(y => y.Token == token)).Include(x => x.RememberTokens).FirstOrDefault();
-            if (dbUser == null)
+            try
             {
-                await Clients.Caller.userlogin(new User("").ToDTO());
-                return;
-            }
-            dbUser.RememberTokens = dbUser.RememberTokens.GroupBy(x => x.Token).Select(x => x.First()).ToList();
-            foreach (var t in dbUser.RememberTokens)
-            {
-                if ((DateTime.Now - t.Created).TotalDays > 30)
+                var dbUser = _postgres.Users?.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
+                if (dbUser == null || (dbUser?.RememberTokens?.Any(x => x.Token == token) == false))
                 {
-                    dbUser.RememberTokens.Remove(t);
-                    _postgres.RememberTokens.Remove(t);
+                    await Clients.Caller.userlogin(new User("").ToDTO());
+                    return;
                 }
-            }
-            RememberToken Token = dbUser.RememberTokens.FirstOrDefault(x => x.Token == token);
-            if (Token != null)
-            {
-                await Clients.Caller.userlogin(dbUser.ToDTO());
-                Token.Created = DateTime.Now;
-            }
-            else
+                dbUser.RememberTokens = dbUser.RememberTokens.GroupBy(x => x.Token).Select(x => x.First()).ToList();
+                foreach (var t in dbUser.RememberTokens)
+                {
+                    if ((DateTime.Now - t.Created).TotalDays > 30)
+                    {
+                        dbUser.RememberTokens.Remove(t);
+                        _postgres.RememberTokens.Remove(t);
+                    }
+                }
+                RememberToken Token = dbUser.RememberTokens.FirstOrDefault(x => x.Token == token);
+                if (Token != null)
+                {
+                    await Clients.Caller.userlogin(dbUser.ToDTO());
+                    Token.Created = DateTime.Now;
+                }
+                else
+                {
+                    await Clients.Caller.userlogin(new User("").ToDTO());
+                }
+                await _postgres.SaveChangesAsync();
+            } catch (Exception ex)
             {
                 await Clients.Caller.userlogin(new User("").ToDTO());
+                Console.WriteLine(ex.Message);
             }
-            await _postgres.SaveChangesAsync();
         }
     }
 }
