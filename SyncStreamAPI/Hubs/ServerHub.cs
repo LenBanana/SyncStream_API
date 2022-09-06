@@ -55,7 +55,7 @@ namespace SyncStreamAPI.Hubs
                 if (gameMode == Enums.Games.GameMode.Chess)
                 {
                     var game = ChessLogic.GetChessGame(room.uniqueId);
-                    if (game != null && (game.LightPlayer.ConnectionId == Context.ConnectionId || game.DarkPlayer.ConnectionId == Context.ConnectionId))
+                    if (game != null && (game.LightPlayer.ConnectionId == e.ConnectionId || game.DarkPlayer.ConnectionId == e.ConnectionId))
                     {
                         await EndChess(room.uniqueId);
                     }
@@ -63,14 +63,14 @@ namespace SyncStreamAPI.Hubs
                 if (gameMode == Enums.Games.GameMode.Gallows)
                 {
                     var game = room.GallowGame;
-                    var gameMemberIdx = game.members.FindIndex(x => x.ConnectionId == Context.ConnectionId);
+                    var gameMemberIdx = game.members.FindIndex(x => x.ConnectionId == e.ConnectionId);
                     if (gameMemberIdx > -1)
                         game.members.RemoveAt(gameMemberIdx);
                 }
                 if (gameMode == Enums.Games.GameMode.Blackjack)
                 {
                     var blackjack = room.BlackjackGame;
-                    var gameMemberIdx = blackjack.members.FindIndex(x => x.ConnectionId == Context.ConnectionId);
+                    var gameMemberIdx = blackjack.members.FindIndex(x => x.ConnectionId == e.ConnectionId);
                     if (gameMemberIdx > -1)
                     {
                         var bjMember = blackjack.members[gameMemberIdx];

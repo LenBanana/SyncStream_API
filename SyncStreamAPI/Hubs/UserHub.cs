@@ -48,7 +48,9 @@ namespace SyncStreamAPI.Hubs
             await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
             if (room.GameMode == GameMode.Chess)
             {
-                await Clients.Caller.playchess(ChessLogic.GetChessGame(room.uniqueId));
+                var game = ChessLogic.GetChessGame(room.uniqueId);
+                if (game != null)
+                    await Clients.Caller.playchess(game);
             }
             if (room.GameMode == GameMode.Gallows)
             {
