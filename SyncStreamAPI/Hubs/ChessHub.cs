@@ -12,7 +12,7 @@ namespace SyncStreamAPI.Hubs
 {
     public partial class ServerHub
     {
-        public async Task PlayChess(string UniqueId, string user1 = "", string user2 = "")
+        public async Task PlayChess(string UniqueId, string user1 = "", string user2 = "", bool lightPlayerAi = false, bool darkPlayerAi = false)
         {
             Room room = GetRoom(UniqueId);
             if (room == null)
@@ -24,7 +24,7 @@ namespace SyncStreamAPI.Hubs
             var member2 = MainServer.members.FirstOrDefault(x => x.username == user2);
             var lightPlayer = member1 != null ? member1 : MainServer.members[0];
             var darkPlayer = member2 != null ? member2 : MainServer.members[1];
-            var game = ChessLogic.AddChessGame(UniqueId, lightPlayer, darkPlayer);
+            var game = ChessLogic.AddChessGame(UniqueId, lightPlayer, darkPlayer, lightPlayerAi, darkPlayerAi);
             await Clients.Client(lightPlayer.ConnectionId).sendmessage(new SystemMessage("You are now chess player light!"));
             await Clients.Client(darkPlayer.ConnectionId).sendmessage(new SystemMessage("You are now chess player dark!"));
             await Clients.Group(UniqueId).playchess(game);

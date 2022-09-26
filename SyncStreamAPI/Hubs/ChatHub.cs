@@ -45,7 +45,7 @@ namespace SyncStreamAPI.Hubs
                         }
                     }
                 }
-                else if (lowerMessage.StartsWith("/c") && lowerMessage != "/chess")
+                else if (lowerMessage.StartsWith("/c") && !lowerMessage.StartsWith("/chess"))
                 {
                     await ClearChat(UniqueId);
                 }
@@ -81,14 +81,16 @@ namespace SyncStreamAPI.Hubs
                     lowerMessage += " ";
                     var regEx = new Regex("^\\/chess (?<wName1>[^\\s]+) (?<wName2>[^\\s]+)?$");
                     var match = regEx.Match(message.message);
-                    if (match.Success)
+                    if (match.Success || lowerMessage.Trim() == "/chess")
                     {
                         var user1 = match.Groups["wName1"].Value.Trim();
                         var user2 = match.Groups["wName2"].Value.Trim();
+                        var lightPlayerAi = user1.ToLower() == "ai";
+                        var darkPlayerAi = user2.ToLower() == "ai";
                         var member1 = MainServer.members.FirstOrDefault(x => x.username == user1);
                         var member2 = MainServer.members.FirstOrDefault(x => x.username == user1);
                         if (room.GameMode != GameMode.Chess)
-                            await PlayChess(UniqueId, member1 != null ? member1.username : "", member2 != null ? member2.username : "");
+                            await PlayChess(UniqueId, member1 != null ? member1.username : "", member2 != null ? member2.username : "", lightPlayerAi, darkPlayerAi);
                         else
                             await EndChess(UniqueId);
                     }

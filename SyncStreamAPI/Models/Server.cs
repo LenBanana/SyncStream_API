@@ -18,7 +18,7 @@ namespace SyncStreamAPI.Models
         public List<Member> members { get; set; } = new List<Member>();
         public List<Member> bannedMembers { get; set; } = new List<Member>();
         public List<ChatMessage> chatmessages { get; set; } = new List<ChatMessage>();
-        public string RoomId { get { return members.Count > 0 ? members[0].RoomId : ""; } }
+        public string RoomId { get { return members.Count > 0 ? members[0]?.RoomId : ""; } }
 
         public Server()
         {

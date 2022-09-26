@@ -44,7 +44,7 @@ namespace SyncStreamAPI.Hubs
         public override async Task OnDisconnectedAsync(Exception? ex)
         {
             var Rooms = DataManager.GetRooms();
-            int idx = Rooms.FindIndex(x => x.server.members.FirstOrDefault(y => y.ConnectionId == Context.ConnectionId) != null);
+            int idx = Rooms.FindIndex(x => x.server.members.FirstOrDefault(y => y?.ConnectionId == Context.ConnectionId) != null);
             if (idx > -1)
             {
                 Room room = Rooms[idx];

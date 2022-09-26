@@ -14,7 +14,7 @@ namespace SyncStreamAPI.Hubs
         public async Task LoginRequest(User requestUser, string userInfo)
         {
             var result = new User();
-            User user = _postgres.Users.FirstOrDefault(x => x.username == requestUser.username && x.password == requestUser.password);
+            User user = _postgres.Users.Include(x => x.RememberTokens).FirstOrDefault(x => x.username == requestUser.username && x.password == requestUser.password);
             if (user != null)
             {
                 var token = user.GenerateToken(userInfo);

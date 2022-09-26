@@ -45,7 +45,7 @@ namespace SyncStreamAPI.Hubs
             await Groups.AddToGroupAsync(Context.ConnectionId, UniqueId);
             MainServer.members.Add(newMember);
 
-            await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
+            await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x?.ToDTO()).ToList());
             if (room.GameMode == GameMode.Chess)
             {
                 var game = ChessLogic.GetChessGame(room.uniqueId);
@@ -172,7 +172,7 @@ namespace SyncStreamAPI.Hubs
                         gallowGame.UpdateGallowWord(true);
                     if (MainServer.members.Count > 0 && MainServer.members[0] != null)
                         MainServer.members[0].ishost = true;
-                    await Clients.Client(MainServer.members[0].ConnectionId).hostupdate(true);
+                    await Clients.Client(MainServer.members[0]?.ConnectionId).hostupdate(true);
                 }
             }
             if (room.GameMode == Enums.Games.GameMode.Chess)
@@ -208,7 +208,7 @@ namespace SyncStreamAPI.Hubs
                 if (blackjack.members.Count < 1)
                     await _blackjackManager.PlayNewRound(UniqueId);
             }
-            await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
+            await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x?.ToDTO()).ToList());
             await Clients.All.getrooms(DataManager.GetRooms());
         }
 
