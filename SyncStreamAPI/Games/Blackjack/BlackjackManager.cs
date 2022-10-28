@@ -99,7 +99,7 @@ namespace SyncStreamAPI.Games.Blackjack
         private async Task AddMoney(BlackjackLogic game)
         {
             string dealerText = $"Dealer had {game.dealer.pointsDTO}. ";
-            foreach (var member in game.members.Where(x => !x.notPlaying && !x.NewlyJoined))
+            foreach (var member in game.members.Where(x => !x.notPlaying && !x.NewlyJoined).ToList())
             {
                 var totalText = $"You had {member.points}";
 
@@ -139,7 +139,7 @@ namespace SyncStreamAPI.Games.Blackjack
 
         public async Task SendAllUsers(BlackjackLogic game)
         {
-            foreach (var member in game.members.Where(x => x.ConnectionId.Length > 0))
+            foreach (var member in game.members.Where(x => x.ConnectionId.Length > 0).ToList())
             {
                 await _hub.Clients.Client(member.ConnectionId).sendblackjackself(member);
                 await _hub.Clients.Client(member.ConnectionId).sendblackjackmembers(game.members.Where(x => x.ConnectionId != member.ConnectionId).ToList());
@@ -154,12 +154,12 @@ namespace SyncStreamAPI.Games.Blackjack
             {
                 Room room = DataManager.GetRoom(UniqueId);
                 List<BlackjackMember> bjMember = new List<BlackjackMember>();
-                foreach (var member in room.server.members.Take(5))
+                foreach (var member in room.server.members.Take(5).ToList())
                     bjMember.Add(member.ToBlackjackMember(this));
 
                 if (room.server.members.Count > 5)
                 {
-                    foreach (var member in room.server.members.Skip(5))
+                    foreach (var member in room.server.members.Skip(5).ToList())
                     {
                         var bjMem = member.ToBlackjackMember(this);
                         bjMem.notPlaying = true;

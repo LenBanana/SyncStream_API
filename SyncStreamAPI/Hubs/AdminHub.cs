@@ -218,7 +218,7 @@ namespace SyncStreamAPI.Hubs
                     return;
                 }
                 dbUser.RememberTokens = dbUser.RememberTokens.GroupBy(x => x.Token).Select(x => x.First()).ToList();
-                foreach (var t in dbUser.RememberTokens)
+                foreach (var t in dbUser.RememberTokens.ToList())
                 {
                     if ((DateTime.Now - t.Created).TotalDays > 30)
                     {
