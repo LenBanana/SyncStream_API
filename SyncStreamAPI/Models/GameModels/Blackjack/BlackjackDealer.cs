@@ -17,7 +17,7 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
         public List<PlayingCard> cards { get; set; } = new List<PlayingCard>();
         public bool ShouldSerializepoints() { return false; }
         public int points => cards.CalculatePoints();
-        public int pointsDTO => cards.Where(x => x.FaceUp).ToList().CalculatePoints();
+        public int? pointsDTO => cards?.Where(x => x.FaceUp).ToList().CalculatePoints();
         public double money { get; set; } = 0;
         public bool blackjack => (cards.Count == 2 && points == 21);
     }

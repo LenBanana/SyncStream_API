@@ -99,7 +99,7 @@ namespace SyncStreamAPI.Games.Blackjack
         private async Task AddMoney(BlackjackLogic game)
         {
             string dealerText = $"Dealer had {game.dealer.pointsDTO}. ";
-            foreach (var member in game.members.Where(x => !x.notPlaying && !x.NewlyJoined).ToList())
+            foreach (var member in game.members?.Where(x => !x.notPlaying && !x.NewlyJoined).ToList())
             {
                 var totalText = $"You had {member.points}";
 
@@ -139,10 +139,10 @@ namespace SyncStreamAPI.Games.Blackjack
 
         public async Task SendAllUsers(BlackjackLogic game)
         {
-            foreach (var member in game.members.Where(x => x.ConnectionId.Length > 0).ToList())
+            foreach (var member in game.members?.Where(x => x.ConnectionId.Length > 0).ToList())
             {
                 await _hub.Clients.Client(member.ConnectionId).sendblackjackself(member);
-                await _hub.Clients.Client(member.ConnectionId).sendblackjackmembers(game.members.Where(x => x.ConnectionId != member.ConnectionId).ToList());
+                await _hub.Clients.Client(member.ConnectionId).sendblackjackmembers(game.members?.Where(x => x.ConnectionId != member.ConnectionId).ToList());
             }
             await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer);
         }

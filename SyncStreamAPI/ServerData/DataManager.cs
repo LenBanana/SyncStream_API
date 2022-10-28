@@ -76,7 +76,7 @@ namespace SyncStreamAPI.ServerData
                                 await _hub.Clients.Client(room.server.members[0].ConnectionId).hostupdate(true);
                             }
                         }
-                        await _hub.Clients.Group(room.uniqueId).userupdate(room.server.members.Select(x => x.ToDTO()).ToList());
+                        await _hub.Clients.Group(room.uniqueId).userupdate(room.server.members?.Select(x => x.ToDTO()).ToList());
                         await _hub.Clients.All.getrooms(Rooms);
                     }
                 }

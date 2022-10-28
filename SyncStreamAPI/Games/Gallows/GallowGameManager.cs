@@ -32,7 +32,7 @@ namespace SyncStreamAPI.Games.Gallows
             if (idx < 0)
             {
                 Room room = DataManager.GetRoom(UniqueId);
-                gallowGames.Add(new GallowLogic(this, UniqueId, room.server.members.Select(x => x.ToGallowMember()).ToList()));
+                gallowGames.Add(new GallowLogic(this, UniqueId, room.server.members?.Select(x => x.ToGallowMember()).ToList()));
                 return true;
             }
             var game = gallowGames[idx];
@@ -94,17 +94,17 @@ namespace SyncStreamAPI.Games.Gallows
             string gallowWord = game.GallowWord.ToLower();
             if (msg == gallowWord)
             {
-                var guessedGallow = game.members.Where(x => x.guessedGallow).Count();
+                var guessedGallow = game.members?.Where(x => x.guessedGallow).Count();
                 var points = General.GallowGuessPoints - guessedGallow + Time + (game.GallowWord.Length * General.GallowWordLengthMultiplierPlayer);
                 gallowMember.guessedGallowTime = Time;
-                gallowMember.gallowPoints += points > 0 ? points : 0;
+                gallowMember.gallowPoints +=  points != null && points > 0 ? (int)points : 0;
                 gallowMember.guessedGallow = true;
 
                 var correntAnswerServerMsg = new SystemMessage($"{message.username} answered correctly");
                 await _hub.Clients.GroupExcept(game.RoomId, sender.ConnectionId).sendmessage(correntAnswerServerMsg);
                 var correntAnswerPrivateMsg = new SystemMessage($"{message.username} you answered correct. You've been awarded {points} points");
                 await _hub.Clients.Client(sender.ConnectionId).sendmessage(correntAnswerPrivateMsg);
-                if (game.members.Where(x => !x.isDrawing).All(x => x.guessedGallow))
+                if (game.members?.Where(x => !x.isDrawing).All(x => x.guessedGallow) == true)
                     await EndGallow(game, Time);
 
                 await _hub.Clients.Group(game.RoomId).gallowusers(game.members);
@@ -122,7 +122,7 @@ namespace SyncStreamAPI.Games.Gallows
 
         public async Task EndGallow(GallowLogic game, int Time)
         {
-            var guessedGallow = game.members.Where(x => x.guessedGallow).ToList();
+            var guessedGallow = game.members?.Where(x => x.guessedGallow).ToList();
             game.drawings = new List<Drawing>();
             game.members.ForEach(x => { x.guessedGallow = false; });
             var gallowEndedMsg = new SystemMessage($"Round has ended! The correct word was {game.GallowWord}");

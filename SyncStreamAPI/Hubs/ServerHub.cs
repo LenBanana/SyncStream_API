@@ -147,7 +147,7 @@ namespace SyncStreamAPI.Hubs
                 await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "You don't have permissions to add a video to this room", Answer1 = "Ok" });
                 return;
             }
-            if (!room.server.playlist.Select(x => x.url).Contains(key.url))
+            if (room.server.playlist?.Select(x => x.url).Contains(key.url) == false)
             {
                 if (!key.url.Contains("youtube") && !key.url.Contains("youtu.be")
                     && !key.url.Contains("twitch.tv"))
@@ -344,7 +344,7 @@ namespace SyncStreamAPI.Hubs
         {
             var Rooms = DataManager.GetRooms();
             int RoomCount = 0;
-            while (Rooms.Any(x => x.uniqueId == room.uniqueId))
+            while (Rooms?.Any(x => x.uniqueId == room.uniqueId) == true)
                 room.uniqueId = room.uniqueId + RoomCount++;
             room.deletable = true;
             Rooms.Add(room);

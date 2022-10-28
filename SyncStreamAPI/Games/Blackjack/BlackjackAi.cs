@@ -16,15 +16,15 @@ namespace SyncStreamAPI.Games.Blackjack
             var dealerCard = dealer.cards[0].Rank;
             var dealerPoints = dealer.pointsDTO;
             if (member.splitable && !member.didSplit)
-                return ReactToSplit(member.cards[0].Rank, dealerPoints, doubleOption);
+                return ReactToSplit(member.cards[0].Rank, (int)dealerPoints, doubleOption);
 
             if ((!forSplitHand && member.cards.Count == 2) || (forSplitHand && member.splitCards.Count == 2))
             {
                 var aceIdx = forSplitHand ? member.splitCards.FindIndex(x => x.Rank == PlayingCardRank.Ace) : member.cards.FindIndex(x => x.Rank == PlayingCardRank.Ace);
                 if (aceIdx != -1)
-                    return ReactToSingleAce(forSplitHand ? member.splitCards[aceIdx == 1 ? 0 : 1].Rank : member.cards[aceIdx == 1 ? 0 : 1].Rank, dealerPoints, doubleOption);
+                    return ReactToSingleAce(forSplitHand ? member.splitCards[aceIdx == 1 ? 0 : 1].Rank : member.cards[aceIdx == 1 ? 0 : 1].Rank, (int)dealerPoints, doubleOption);
             }
-            return ReactToNormalHand(forSplitHand ? member.splitPoints : member.points, dealerPoints, doubleOption);
+            return ReactToNormalHand(forSplitHand ? member.splitPoints : member.points, (int)dealerPoints, doubleOption);
         }
 
         private static BlackjackSmartReaction ReactToSplit(PlayingCardRank rank, int dealerPoints, bool doubleOption)

@@ -35,7 +35,7 @@ namespace SyncStreamAPI.Hubs
                 MainServer.members = new List<Member>();
             }
             Member newMember = new Member(_manager) { username = username, ishost = MainServer.members.Count == 0 ? true : false, ConnectionId = ip, RoomId = UniqueId };
-            if (MainServer.bannedMembers.Any(x => x.ConnectionId == newMember.ConnectionId))
+            if (MainServer.bannedMembers?.Any(x => x.ConnectionId == newMember.ConnectionId) == true)
             {
                 await Clients.Caller.adduserupdate((int)UserUpdate.Banned);
                 return;
@@ -45,7 +45,7 @@ namespace SyncStreamAPI.Hubs
             await Groups.AddToGroupAsync(Context.ConnectionId, UniqueId);
             MainServer.members.Add(newMember);
 
-            await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x?.ToDTO()).ToList());
+            await Clients.Group(UniqueId).userupdate(MainServer.members?.Select(x => x?.ToDTO()).ToList());
             if (room.GameMode == GameMode.Chess)
             {
                 var game = ChessLogic.GetChessGame(room.uniqueId);
@@ -93,11 +93,11 @@ namespace SyncStreamAPI.Hubs
             {
                 var ip = Context.ConnectionId;
                 MainServer.members[idx].ConnectionId = ip;
-                if (MainServer.bannedMembers.Any(x => x.ConnectionId == MainServer.members[idx].ConnectionId))
+                if (MainServer.bannedMembers?.Any(x => x.ConnectionId == MainServer.members[idx].ConnectionId) == true)
                 {
                     MainServer.members.RemoveAt(idx);
                     await Clients.Caller.adduserupdate((int)UserUpdate.Banned);
-                    await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
+                    await Clients.Group(UniqueId).userupdate(MainServer.members?.Select(x => x.ToDTO()).ToList());
                     await Groups.RemoveFromGroupAsync(Context.ConnectionId, UniqueId);
                     return;
                 }
@@ -108,7 +108,7 @@ namespace SyncStreamAPI.Hubs
                     {
                         MainServer.members[idx].ishost = true;
                         await Clients.Client(MainServer.members[idx].ConnectionId).hostupdate(true);
-                        await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
+                        await Clients.Group(UniqueId).userupdate(MainServer.members?.Select(x => x.ToDTO()).ToList());
                     }
                 }
             }
@@ -143,7 +143,7 @@ namespace SyncStreamAPI.Hubs
                 MainServer.members[idxMember].ishost = true;
                 await Clients.Client(MainServer.members[idxHost].ConnectionId).hostupdate(false);
                 await Clients.Client(MainServer.members[idxMember].ConnectionId).hostupdate(true);
-                await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
+                await Clients.Group(UniqueId).userupdate(MainServer.members?.Select(x => x.ToDTO()).ToList());
             }
         }
 
@@ -208,7 +208,7 @@ namespace SyncStreamAPI.Hubs
                 if (blackjack.members.Count < 1)
                     await _blackjackManager.PlayNewRound(UniqueId);
             }
-            await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x?.ToDTO()).ToList());
+            await Clients.Group(UniqueId).userupdate(MainServer.members?.Select(x => x?.ToDTO()).ToList());
             await Clients.All.getrooms(DataManager.GetRooms());
         }
 
@@ -225,7 +225,7 @@ namespace SyncStreamAPI.Hubs
                 MainServer.bannedMembers.Add(member);
             }
             await Clients.User(member.ConnectionId).adduserupdate((int)UserUpdate.Banned);
-            await Clients.Group(UniqueId).userupdate(MainServer.members.Select(x => x.ToDTO()).ToList());
+            await Clients.Group(UniqueId).userupdate(MainServer.members?.Select(x => x.ToDTO()).ToList());
             await Clients.All.getrooms(DataManager.GetRooms());
         }
     }

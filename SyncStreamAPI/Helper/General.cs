@@ -83,7 +83,7 @@ namespace SyncStreamAPI.Helper
                             source = client.DownloadString(infoUrl);
                             if (source.Length > 0)
                             {
-                                List<string> attributes = source.Split('&').Select(x => HttpUtility.UrlDecode(x)).ToList();
+                                List<string> attributes = source.Split('&')?.Select(x => HttpUtility.UrlDecode(x)).ToList();
                                 int idx = attributes.FindIndex(x => x.StartsWith("player_response="));
                                 if (idx != -1)
                                 {
