@@ -47,7 +47,7 @@ namespace SyncStreamAPI.ServerData
                     {
                         var totalDownload = Convert.ToInt64(webClient.ResponseHeaders["Content-Length"]);
                         var mb = ((double)totalDownload / 1024d / 1024d);
-                        if (totalDownload <= 0 || mb > 500)
+                        if (totalDownload <= 0)
                         {
                             await _hub.Clients.Client(connectionId).dialog(new Dialog() { Header = "Error", Question = $"Not allowed to download anything above 500mb file was {mb}mb", Answer1 = "Ok" });
                             return null;
