@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using SyncStreamAPI.DataContext;
+using SyncStreamAPI.DTOModel;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.Games.Blackjack;
 using SyncStreamAPI.Games.Gallows;
@@ -189,18 +190,44 @@ namespace SyncStreamAPI.Hubs
             await Clients.All.getrooms(DataManager.GetRooms());
         }
 
+        public async Task GetDownloads(string token)
+        {
+            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+            if (dbUser == null)
+                return;
+            if (dbUser.userprivileges >= 3)
+            {
+                var result = _postgres.Users.Include(x => x.Files).First(x => x.ID == dbUser.ID).Files.Select(x => new FileDto(x)).ToList();
+                await Clients.Caller.getDownloads(result);
+            }
+        }
+
         public async Task DownloadFile(string token, string url, string fileName)
         {
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
                 return;
-            RememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
-            if (Token == null)
-                return;
             if (dbUser.userprivileges >= 3)
             {
                 var listenId = _manager.AddDownload(url, fileName, Context.ConnectionId, token);
                 await Clients.Caller.downloadListen(listenId);
+            }
+        }
+
+        public async Task RemoveFile(string token, int id)
+        {
+            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+            if (dbUser == null)
+                return;
+            if (dbUser.userprivileges >= 3)
+            {
+                var file = _postgres.Files.ToList().FirstOrDefault(x => x.ID == id);
+                if (file != null)
+                {
+                    _postgres.Files.Remove(file);
+                    await _postgres.SaveChangesAsync();
+                    await Clients.Caller.downloadRemoved(id.ToString());
+                }
             }
         }
 

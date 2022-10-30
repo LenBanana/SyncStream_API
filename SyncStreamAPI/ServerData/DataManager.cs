@@ -78,6 +78,8 @@ namespace SyncStreamAPI.ServerData
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
                 var id = userDownloads[sender as WebClient];
                 var perc = e.BytesReceived / (double)e.TotalBytesToReceive * 100d;
+                if (perc < 0)
+                    perc = -1;
                 var result = new DownloadInfo();
                 result.Id = id.UniqueId;
                 result.Progress = perc;

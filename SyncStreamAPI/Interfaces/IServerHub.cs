@@ -1,4 +1,5 @@
-﻿using SyncStreamAPI.Models;
+﻿using SyncStreamAPI.DTOModel;
+using SyncStreamAPI.Models;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -27,7 +28,9 @@ namespace SyncStreamAPI.Interfaces
 
         Task PingTest(DateTime dateSend);
         Task savedToDb(string id);
+        Task getDownloads(List<FileDto> files);
         Task downloadListen(string id);
+        Task downloadRemoved(string id);
         Task downloadProgress(DownloadInfo info);
         Task downloadFinished(string id);
 
