@@ -7,8 +7,12 @@ using Microsoft.Extensions.Configuration;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
+using SyncStreamAPI.Models;
 using SyncStreamAPI.PostgresModels;
+using System;
+using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Controllers
@@ -20,6 +24,7 @@ namespace SyncStreamAPI.Controllers
         private IHubContext<ServerHub, IServerHub> _hub;
         PostgresContext _postgres;
         IConfiguration Configuration { get; }
+        CancellationTokenSource source = new CancellationTokenSource();
 
         public VideoController(IConfiguration configuration, IHubContext<ServerHub, IServerHub> hub, PostgresContext postgres)
         {
@@ -53,12 +58,28 @@ namespace SyncStreamAPI.Controllers
             {
                 if (file.Length <= 0)
                     return StatusCode(StatusCodes.Status405MethodNotAllowed);
-                using (var ms = new System.IO.MemoryStream())
+                var read = 0;
+                var bytesRead = new byte[file.Length];
+                var progress = new DownloadInfo();
+                double lastReported = -1;
+                var sc = Stopwatch.StartNew();
+                using (var stream = file.OpenReadStream())
                 {
-                    await file.CopyToAsync(ms);
-                    var bytes = ms.ToArray();
-                    _postgres.Files?.Add(new DbFile(file.FileName, bytes, "." + file.FileName.Split('.').Last(), dbUser));
+                    await _hub.Clients.Group(token).downloadListen(progress.Id);
+                    while (read < file.Length)
+                    {
+                        await stream.ReadAsync(bytesRead, read, (int)file.Length);
+                        var perc = read++ / (double)file.Length * 100d;
+                        progress.Progress = perc;
+                        if (lastReported == -1 || sc.ElapsedMilliseconds - lastReported > 500)
+                        {
+                            lastReported = sc.ElapsedMilliseconds;
+                            await _hub.Clients.Group(token).downloadProgress(progress);
+                        }
+                    }
+                    _postgres.Files?.Add(new DbFile(file.FileName, bytesRead, "." + file.FileName.Split('.').Last(), dbUser));
                     await _postgres.SaveChangesAsync();
+                    await _hub.Clients.Group(token).downloadFinished(progress.Id);
                     return Ok();
                 }
             }

@@ -21,12 +21,14 @@ namespace SyncStreamAPI.Hubs
                 var dbToken = user.RememberTokens.FirstOrDefault(x => x.Token == token.Token);
                 if (dbToken == null)
                 {
+                    await Groups.AddToGroupAsync(Context.ConnectionId, token.Token);
                     user.RememberTokens.Add(token);
                     await Clients.Caller.rememberToken(new RememberTokenDTO(token, user.ID));
                     await _postgres.SaveChangesAsync();
                 }
                 else
                 {
+                    await Groups.AddToGroupAsync(Context.ConnectionId, dbToken.Token);
                     await Clients.Caller.rememberToken(new RememberTokenDTO(dbToken, user.ID));
                 }
 
@@ -229,6 +231,7 @@ namespace SyncStreamAPI.Hubs
                 RememberToken Token = dbUser.RememberTokens.FirstOrDefault(x => x.Token == token);
                 if (Token != null)
                 {
+                    await Groups.AddToGroupAsync(Context.ConnectionId, Token.Token);
                     await Clients.Caller.userlogin(dbUser.ToDTO());
                     Token.Created = DateTime.Now;
                 }
