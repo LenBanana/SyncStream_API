@@ -1,13 +1,20 @@
 ﻿using Microsoft.AspNetCore.Cors;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
-using SyncStreamAPI.Models.GameModels.Blackjack;
+using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Controllers
 {
@@ -37,22 +44,20 @@ namespace SyncStreamAPI.Controllers
         }
 
         [HttpGet("[action]")]
-        public IActionResult GetServer(string UniqueId)
+        public IActionResult GetDbFile(int UniqueId, string Token)
         {
-            Room room = DataManager.GetRoom(UniqueId);
-            if (room == null)
-                return StatusCode(204);
-            _hub.Clients.Group(UniqueId).sendserver(room.server);
-
-            return Ok(new { Message = "Request Completed" });
-        }
-
-        [HttpGet("[action]")]
-        public IActionResult GetRooms()
-        {
-            _hub.Clients.All.getrooms(DataManager.GetRooms());
-
-            return Ok(new { Message = "Request Completed" });
+            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == Token)).FirstOrDefault();
+            if (dbUser == null)
+                return StatusCode(StatusCodes.Status403Forbidden);
+            if (dbUser.userprivileges >= 3)
+            {
+                var file = _postgres.Files.FirstOrDefault(x => x.ID == UniqueId);
+                if (file == null)
+                    return StatusCode(StatusCodes.Status404NotFound);
+                return new FileContentResult(file.VideoFile, "application/octet-stream");
+            }
+            else
+                return StatusCode(StatusCodes.Status403Forbidden);
         }
     }
 }

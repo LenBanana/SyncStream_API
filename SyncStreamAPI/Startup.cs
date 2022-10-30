@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.OpenApi.Models;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Games.Blackjack;
 using SyncStreamAPI.Games.Gallows;
@@ -52,8 +53,9 @@ namespace SyncStreamAPI
             }).AddNewtonsoftJsonProtocol();
             services.AddSingleton(provider =>
             {
-                var hubContext = provider.GetService<IHubContext<ServerHub, IServerHub>>();
-                DataManager manager = new DataManager(hubContext);
+                //var hubContext = provider.GetService<IHubContext<ServerHub, IServerHub>>();
+                //var dbContext = provider.GetService<DbContextOptions<PostgresContext>>();
+                DataManager manager = new DataManager(provider);
                 return manager;
             });
             services.AddSingleton(provider =>
@@ -69,6 +71,10 @@ namespace SyncStreamAPI
                 return manager;
             });
             services.AddControllers();
+            services.AddSwaggerGen(c =>
+            {
+                c.SwaggerDoc("v1", new OpenApiInfo { Title = "Drecktube API", Version = "v1" });
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -83,6 +89,11 @@ namespace SyncStreamAPI
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
+                app.UseSwagger();
+                app.UseSwaggerUI(c =>
+                {
+                    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Drecktube API");
+                });
             }
             app.UseHttpsRedirection();
             app.UseRouting();

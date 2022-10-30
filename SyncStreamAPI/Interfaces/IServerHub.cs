@@ -26,6 +26,10 @@ namespace SyncStreamAPI.Interfaces
         Task twitchPlaying(bool playing);
 
         Task PingTest(DateTime dateSend);
+        Task savedToDb(string id);
+        Task downloadListen(string id);
+        Task downloadProgress(DownloadInfo info);
+        Task downloadFinished(string id);
 
     }
 }

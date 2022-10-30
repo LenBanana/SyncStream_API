@@ -1,6 +1,7 @@
 ﻿using HtmlAgilityPack;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Enums;
@@ -10,10 +11,12 @@ using SyncStreamAPI.Helper;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.GameModels.Chess;
+using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Hubs
@@ -99,7 +102,7 @@ namespace SyncStreamAPI.Hubs
         }
 #nullable disable
 
-        public bool CheckPrivileges(Room room)
+        public bool CheckPrivileges(Room room, int minPriv = 1)
         {
             if (room.isPrivileged)
             {
@@ -109,7 +112,7 @@ namespace SyncStreamAPI.Hubs
                     if (member.ishost)
                         return true;
                     var user = _postgres.Users.FirstOrDefault(x => x.username == member.username);
-                    if (user == null || user.userprivileges < 1)
+                    if (user == null || user.userprivileges < minPriv)
                         return false;
                 }
                 else
@@ -184,6 +187,21 @@ namespace SyncStreamAPI.Hubs
             }
             await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
             await Clients.All.getrooms(DataManager.GetRooms());
+        }
+
+        public async Task DownloadFile(string token, string url, string fileName)
+        {
+            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+            if (dbUser == null)
+                return;
+            RememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
+            if (Token == null)
+                return;
+            if (dbUser.userprivileges >= 3)
+            {
+                var listenId = _manager.AddDownload(url, fileName, Context.ConnectionId, token);
+                await Clients.Caller.downloadListen(listenId);
+            }
         }
 
         public async Task AddPlaylist(string url, string UniqueId)

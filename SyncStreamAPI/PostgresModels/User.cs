@@ -14,10 +14,12 @@ namespace SyncStreamAPI.PostgresModels
         public int userprivileges { get; set; }
         public string usersalt { get; set; }
         public List<RememberToken> RememberTokens { get; set; }
+        public List<DbFile> Files { get; set; }
         public User()
         {
             username = null;
             RememberTokens = new List<RememberToken>();
+            Files = new List<DbFile>();
             usersalt = Guid.NewGuid().ToString();
         }
         public User(string user)
@@ -25,6 +27,7 @@ namespace SyncStreamAPI.PostgresModels
             username = user;
             approved = -1;
             RememberTokens = new List<RememberToken>();
+            Files = new List<DbFile>();
         }
     }
 }
