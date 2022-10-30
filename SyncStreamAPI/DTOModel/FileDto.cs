@@ -1,4 +1,5 @@
-﻿using SyncStreamAPI.PostgresModels;
+﻿using SyncStreamAPI.Helper;
+using SyncStreamAPI.PostgresModels;
 
 namespace SyncStreamAPI.DTOModel
 {
@@ -8,7 +9,7 @@ namespace SyncStreamAPI.DTOModel
         public string Name { get; set; }
         public string FileEnding { get; set; }
         public string FileKey { get; set; }
-        public long Length { get; set; }
+        public long Length => new System.IO.FileInfo($"{General.FilePath}\\{FileKey}{FileEnding}").Length;
         public FileDto(int id, string name, string fileEnding, string fileKey)
         {
             ID = id;
@@ -22,7 +23,6 @@ namespace SyncStreamAPI.DTOModel
             ID = file.ID;
             Name = file.Name;
             FileEnding = file.FileEnding;
-            Length = file.VideoFile.Length;
             FileKey = file.FileKey;
         }
     }

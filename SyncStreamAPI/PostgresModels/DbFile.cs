@@ -11,13 +11,11 @@ namespace SyncStreamAPI.PostgresModels
         public string FileEnding { get; set; }
         [NotNull]
         public string FileKey { get; set; }
-        public byte[] VideoFile { get; set; }
-        public DbFile(string name, byte[] videoFile, string fileEnding, User user)
+        public DbFile(string name, string fileEnding, User user)
         {
             ID = 0;
             UserID = user.ID;
-            Name = name;
-            VideoFile = videoFile;
+            Name = name;            
             FileEnding = fileEnding;
             FileKey = user.GenerateToken(name).Token;
         }

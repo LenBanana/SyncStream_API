@@ -15,6 +15,7 @@ namespace SyncStreamAPI.Helper
     public class General
     {
         public static Random random = new Random();        
+        public static string FilePath = System.IO.Directory.GetCurrentDirectory() + "\\VideoFiles";
 
         public static int GallowGameLength = 90;
         public static int GallowGameLengthMin = 60;

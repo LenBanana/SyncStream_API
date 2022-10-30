@@ -10,6 +10,7 @@ using SyncStreamAPI.PostgresModels;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
@@ -70,10 +71,10 @@ namespace SyncStreamAPI.ServerData
             var client = sender as WebClient;
             var id = userDownloads[client];
             userDownloads.Remove(client);
-            SaveFileToDb(id, e.Result);
+            SaveFileToFilesystem(id, e.Result);
         }
 
-        public async void SaveFileToDb(DownloadClientValue client, byte[] file)
+        public async void SaveFileToFilesystem(DownloadClientValue client, byte[] file)
         {
             using (var scope = _serviceProvider.CreateScope())
             {
@@ -88,7 +89,11 @@ namespace SyncStreamAPI.ServerData
                     return;
                 if (dbUser.userprivileges >= 3)
                 {
-                    dbUser.Files.Add(new DbFile(client.FileName, file, $".{client.Url.Split('.').Last()}", dbUser));
+                    if (!Directory.Exists(General.FilePath))
+                        Directory.CreateDirectory(General.FilePath);
+                    var dbFile = new DbFile(client.FileName, $".{client.Url.Split('.').Last()}", dbUser);
+                    File.WriteAllBytes($"{General.FilePath}\\{dbFile.FileKey}{dbFile.FileEnding}", file);
+                    dbUser.Files.Add(dbFile);
                     await _postgres.SaveChangesAsync();
                     await _hub.Clients.Client(client.ConnectionId).downloadFinished(client.UniqueId);
                 }
