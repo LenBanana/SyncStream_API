@@ -63,9 +63,9 @@ namespace SyncStreamAPI.Controllers
                 var progress = new DownloadInfo();
                 double lastReported = -1;
                 var sc = Stopwatch.StartNew();
+                await _hub.Clients.Group(token).downloadListen(progress.Id);
                 using (var stream = file.OpenReadStream())
                 {
-                    await _hub.Clients.Group(token).downloadListen(progress.Id);
                     while (read < file.Length)
                     {
                         await stream.ReadAsync(bytesRead, read, (int)file.Length);
