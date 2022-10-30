@@ -25,19 +25,43 @@ namespace SyncStreamAPI.ServerData
         IServiceProvider _serviceProvider;
         public Dictionary<WebClient, DownloadClientValue> userDownloads = new Dictionary<WebClient, DownloadClientValue>();
         public DataManager(IServiceProvider provider)
-        {         
+        {
             _serviceProvider = provider;
             AddDefaultRooms();
         }
 
-        public string AddDownload(string url, string fileName, string connectionId, string token)
+        public async Task<string?> AddDownload(string url, string fileName, string connectionId, string token)
         {
             var uniqueId = connectionId;
             var webClient = new WebClient();
             webClient.DownloadProgressChanged += WebClient_DownloadProgressChanged;
             webClient.DownloadDataCompleted += WebClient_DownloadDataCompleted;
-            userDownloads.Add(webClient, new (fileName, connectionId, token, url));
-            webClient.DownloadDataAsync(new Uri(url));
+            webClient.Headers.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:106.0) Gecko/20100101 Firefox/106.0");
+            userDownloads.Add(webClient, new(fileName, connectionId, token, url)); using (var scope = _serviceProvider.CreateScope())
+            {
+                var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+                try
+                {
+                    using (var stream = webClient.OpenRead(url))
+                    {
+                        var totalDownload = Convert.ToInt64(webClient.ResponseHeaders["Content-Length"]);
+                        var mb = ((double)totalDownload / 1024d / 1024d);
+                        if (totalDownload <= 0 || mb > 500)
+                        {
+                            await _hub.Clients.Client(connectionId).dialog(new Dialog() { Header = "Error", Question = $"Not allowed to download anything above 500mb file was {mb}mb", Answer1 = "Ok" });
+                            return null;
+                        }
+                        webClient.DownloadDataAsync(new Uri(url));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    userDownloads.Remove(webClient);
+                    webClient.Dispose();
+                    await _hub.Clients.Client(connectionId).dialog(new Dialog() { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
+                    return null;
+                }
+            }
             return uniqueId;
         }
 
@@ -64,7 +88,7 @@ namespace SyncStreamAPI.ServerData
                     return;
                 if (dbUser.userprivileges >= 3)
                 {
-                    dbUser.Files.Add(new DbFile(client.FileName, file, $".{client.Url.Split('.').Last()}"));
+                    dbUser.Files.Add(new DbFile(client.FileName, file, $".{client.Url.Split('.').Last()}", dbUser));
                     await _postgres.SaveChangesAsync();
                     await _hub.Clients.Client(client.ConnectionId).downloadFinished(client.UniqueId);
                 }

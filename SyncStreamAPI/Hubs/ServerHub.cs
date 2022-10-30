@@ -209,8 +209,9 @@ namespace SyncStreamAPI.Hubs
                 return;
             if (dbUser.userprivileges >= 3)
             {
-                var listenId = _manager.AddDownload(url, fileName, Context.ConnectionId, token);
-                await Clients.Caller.downloadListen(listenId);
+                var listenId = await _manager.AddDownload(url, fileName, Context.ConnectionId, token);
+                if (listenId != null)
+                    await Clients.Caller.downloadListen(listenId);
             }
         }
 
