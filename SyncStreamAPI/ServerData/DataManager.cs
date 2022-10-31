@@ -9,7 +9,6 @@ using SyncStreamAPI.Models;
 using SyncStreamAPI.PostgresModels;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -109,7 +108,7 @@ namespace SyncStreamAPI.ServerData
                 var perc = e.BytesReceived / (double)e.TotalBytesToReceive * 100d;
                 if (perc < 0)
                     perc = -1;
-                var result = new DownloadInfo($"Download progress... {e.BytesReceived / 1024d / 1024d}/{e.TotalBytesToReceive / 1024d / 1024d}");
+                var result = new DownloadInfo($"Download progress... {Math.Round(e.BytesReceived / 1024d / 1024d, 2)}/{Math.Round(e.TotalBytesToReceive / 1024d / 1024d, 2)}");
                 result.Id = id.UniqueId;
                 result.Progress = perc;
                 await _hub.Clients.Client(id.ConnectionId).downloadProgress(result);
