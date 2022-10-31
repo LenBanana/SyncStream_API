@@ -5,9 +5,6 @@ FROM mcr.microsoft.com/dotnet/sdk:5.0-buster-slim AS build
 WORKDIR /app
 EXPOSE 80
 EXPOSE 443
-RUN apt-get -y update
-RUN apt-get -y upgrade
-RUN apt-get install -y ffmpeg
 
 WORKDIR /src
 COPY ["SyncStreamAPI/SyncStreamAPI.csproj", "SyncStreamAPI/"]
