@@ -1,4 +1,5 @@
 ﻿using SyncStreamAPI.Helper;
+using System;
 using System.Diagnostics.CodeAnalysis;
 
 namespace SyncStreamAPI.PostgresModels
@@ -17,7 +18,7 @@ namespace SyncStreamAPI.PostgresModels
             UserID = user.ID;
             Name = name;            
             FileEnding = fileEnding;
-            FileKey = user.GenerateToken(ID + name).Token;
+            FileKey = user.GenerateToken(Guid.NewGuid().ToString() + name).Token;
         }
 
         public DbFile()
