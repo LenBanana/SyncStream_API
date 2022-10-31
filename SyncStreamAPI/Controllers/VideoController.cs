@@ -43,7 +43,7 @@ namespace SyncStreamAPI.Controllers
                 var dbFile = _postgres.Files?.Where(x => x.FileKey != null && x.FileKey == token && x.ID == uniqueId).FirstOrDefault();
                 if (dbFile == null)
                     return StatusCode(StatusCodes.Status403Forbidden);
-                var path = General.FilePath + $"\\{dbFile.FileKey}{dbFile.FileEnding}";
+                var path = General.FilePath + $"/{dbFile.FileKey}{dbFile.FileEnding}";
                 if (!System.IO.File.Exists(path))
                     return StatusCode(StatusCodes.Status404NotFound);
                 var fileBytes = await System.IO.File.ReadAllBytesAsync(path);
@@ -80,7 +80,7 @@ namespace SyncStreamAPI.Controllers
                         await file.CopyToAsync(ms);
                         var bytes = ms.ToArray();
                         var dbfile = new DbFile(file.FileName, "." + file.FileName.Split('.').Last(), dbUser);
-                        var path = General.FilePath + $"\\{dbfile.FileKey}{dbfile.FileEnding}";
+                        var path = General.FilePath + $"/{dbfile.FileKey}{dbfile.FileEnding}";
                         if (!Directory.Exists(General.FilePath))
                             Directory.CreateDirectory(General.FilePath);
                         System.IO.File.WriteAllBytes(path, bytes);

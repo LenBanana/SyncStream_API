@@ -92,7 +92,7 @@ namespace SyncStreamAPI.ServerData
                     if (!Directory.Exists(General.FilePath))
                         Directory.CreateDirectory(General.FilePath);
                     var dbFile = new DbFile(client.FileName, $".{client.Url.Split('.').Last()}", dbUser);
-                    File.WriteAllBytes($"{General.FilePath}\\{dbFile.FileKey}{dbFile.FileEnding}", file);
+                    File.WriteAllBytes($"{General.FilePath}/{dbFile.FileKey}{dbFile.FileEnding}", file);
                     dbUser.Files.Add(dbFile);
                     await _postgres.SaveChangesAsync();
                     await _hub.Clients.Client(client.ConnectionId).downloadFinished(client.UniqueId);

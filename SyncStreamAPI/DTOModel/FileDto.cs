@@ -9,7 +9,7 @@ namespace SyncStreamAPI.DTOModel
         public string Name { get; set; }
         public string FileEnding { get; set; }
         public string FileKey { get; set; }
-        public long Length => new System.IO.FileInfo($"{General.FilePath}\\{FileKey}{FileEnding}").Length;
+        public long Length => new System.IO.FileInfo($"{General.FilePath}/{FileKey}{FileEnding}").Length;
         public FileDto(int id, string name, string fileEnding, string fileKey)
         {
             ID = id;

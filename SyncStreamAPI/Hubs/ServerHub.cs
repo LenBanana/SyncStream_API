@@ -225,7 +225,7 @@ namespace SyncStreamAPI.Hubs
                 var file = _postgres.Files.ToList().FirstOrDefault(x => x.ID == id);
                 if (file != null)
                 {
-                    var path = $"{General.FilePath}\\{file.FileKey}{file.FileEnding}";
+                    var path = $"{General.FilePath}/{file.FileKey}{file.FileEnding}";
                     if (System.IO.File.Exists(path))
                         System.IO.File.Delete(path);
                     _postgres.Files.Remove(file);
