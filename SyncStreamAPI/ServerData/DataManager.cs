@@ -109,7 +109,7 @@ namespace SyncStreamAPI.ServerData
                 var perc = e.BytesReceived / (double)e.TotalBytesToReceive * 100d;
                 if (perc < 0)
                     perc = -1;
-                var result = new DownloadInfo();
+                var result = new DownloadInfo($"Download progress... {e.BytesReceived / 1024d / 1024d}/{e.TotalBytesToReceive / 1024d / 1024d}");
                 result.Id = id.UniqueId;
                 result.Progress = perc;
                 await _hub.Clients.Client(id.ConnectionId).downloadProgress(result);

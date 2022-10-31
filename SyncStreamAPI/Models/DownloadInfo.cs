@@ -6,14 +6,17 @@ namespace SyncStreamAPI.Models
     {
         public string Id { get; set; }
         public double Progress { get; set; }
-        public DownloadInfo()
+        public string Type { get; set; }
+        public DownloadInfo(string type)
         {
             Id = Guid.NewGuid().ToString();
+            Type = type;
         }
-        public DownloadInfo(double progress)
+        public DownloadInfo(double progress, string type)
         {
             Progress = progress;
             Id = Guid.NewGuid().ToString();
+            Type = type;
         }
     }
 }

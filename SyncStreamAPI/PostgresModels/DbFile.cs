@@ -17,7 +17,7 @@ namespace SyncStreamAPI.PostgresModels
             UserID = user.ID;
             Name = name;            
             FileEnding = fileEnding;
-            FileKey = user.GenerateToken(name).Token;
+            FileKey = user.GenerateToken(ID + name).Token;
         }
 
         public DbFile()
