@@ -9,6 +9,7 @@ using SyncStreamAPI.Models;
 using SyncStreamAPI.PostgresModels;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -29,6 +30,7 @@ namespace SyncStreamAPI.ServerData
         public Dictionary<WebClient, DownloadClientValue> userDownloads = new Dictionary<WebClient, DownloadClientValue>();
         public CancellationTokenSource conversionCancelToken = null;
         public string conversionId { get; set; } = "";
+        Stopwatch conversionTime = null;
         public DataManager(IServiceProvider provider)
         {
             FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official).Wait();
@@ -113,6 +115,7 @@ namespace SyncStreamAPI.ServerData
                 var filePath = $"{General.FilePath}/{dbFile.FileKey}.mp4".Replace('\\', '/');
                 try
                 {
+                    conversionTime = Stopwatch.StartNew();
                     var conversion = await FFmpeg.Conversions.FromSnippet.SaveM3U8Stream(new Uri(url), filePath);
                     conversion.OnProgress += Conversion_OnProgress;
                     conversionCancelToken = new CancellationTokenSource();
@@ -123,18 +126,19 @@ namespace SyncStreamAPI.ServerData
                         await _hub.Clients.Client(connectionId).dialog(new Dialog() { Header = "Error", Question = "There has been an error trying to save the file", Answer1 = "Ok" });
                         return;
                     }
-                    dbUser.Files.Add(dbFile);
-                    await _postgres.SaveChangesAsync();
+                    if (!conversionCancelToken.IsCancellationRequested)
+                    {
+                        dbUser.Files.Add(dbFile);
+                        await _postgres.SaveChangesAsync();
+                    }
                 }
                 catch (Exception ex)
                 {
-                    CancelM3U8Conversion(connectionId);
                     await _hub.Clients.Client(connectionId).dialog(new Dialog() { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
                 }
                 if (File.Exists(filePath) && dbUser.Files.FirstOrDefault(x => x.FileKey == dbFile.FileKey) == null)
                     File.Delete(filePath);
-                conversionCancelToken?.Dispose();
-                conversionCancelToken = null;
+                CancelM3U8Conversion(connectionId);
                 await _hub.Clients.Client(connectionId).downloadFinished("m3u8" + conversionId);
             }
         }
@@ -153,7 +157,14 @@ namespace SyncStreamAPI.ServerData
             using (var scope = _serviceProvider.CreateScope())
             {
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                var result = new DownloadInfo($"{args.Duration} of {args.TotalLength}");
+                var text = $"{args.Duration} of {args.TotalLength}";
+                if (conversionTime != null)
+                {
+                    var millis = conversionTime.ElapsedMilliseconds;
+                    var timeLeft = args.Percent / millis * 100 * 100;
+                    text += $" - {timeLeft} remaining time";
+                }
+                var result = new DownloadInfo(text);
                 result.Id = "m3u8" + conversionId;
                 result.Progress = args.Percent;
                 await _hub.Clients.Client(conversionId).downloadProgress(result);
