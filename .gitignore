@@ -341,3 +341,6 @@ ASALocalRun/
 # BeatPulse healthcheck temp database
 healthchecksdb
 /SyncStreamAPI/VideoFiles
+/SyncStreamAPI/ffmpeg.exe
+/SyncStreamAPI/ffprobe.exe
+/SyncStreamAPI/version.json

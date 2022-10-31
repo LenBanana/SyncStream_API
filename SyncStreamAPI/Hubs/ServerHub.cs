@@ -47,6 +47,7 @@ namespace SyncStreamAPI.Hubs
 #nullable enable
         public override async Task OnDisconnectedAsync(Exception? ex)
         {
+            _manager.CancelM3U8Conversion(Context.ConnectionId);
             var Rooms = DataManager.GetRooms();
             int idx = Rooms.FindIndex(x => x.server.members.FirstOrDefault(y => y?.ConnectionId == Context.ConnectionId) != null);
             if (idx > -1)
@@ -209,9 +210,19 @@ namespace SyncStreamAPI.Hubs
                 return;
             if (dbUser.userprivileges >= 3)
             {
-                var listenId = await _manager.AddDownload(url, fileName, Context.ConnectionId, token);
-                if (listenId != null)
-                    await Clients.Caller.downloadListen(listenId);
+                _manager.AddDownload(url, fileName, Context.ConnectionId, token);
+            }
+        }
+
+        public async Task CancelConversion(string token)
+        {
+            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+            if (dbUser == null)
+                return;
+            if (dbUser.userprivileges >= 3)
+            {
+                _manager.CancelM3U8Conversion(Context.ConnectionId);
+                await Clients.Caller.downloadFinished("m3u8" + Context.ConnectionId);
             }
         }
 

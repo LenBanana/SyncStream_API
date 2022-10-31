@@ -109,7 +109,7 @@ namespace SyncStreamAPI.Games.Gallows
 
                 await _hub.Clients.Group(game.RoomId).gallowusers(game.members);
             }
-            else if (StringExtensions.CalculateWordDifference(msg, gallowWord) == 1)
+            else if (Helper.StringExtensions.CalculateWordDifference(msg, gallowWord) == 1)
             {
                 var closeMsg = new SystemMessage($"{message.username} {msg} was close!");
                 await _hub.Clients.Client(sender.ConnectionId).sendmessage(closeMsg);
