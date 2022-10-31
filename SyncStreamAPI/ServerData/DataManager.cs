@@ -133,6 +133,8 @@ namespace SyncStreamAPI.ServerData
                 }
                 if (File.Exists(filePath) && dbUser.Files.FirstOrDefault(x => x.FileKey == dbFile.FileKey) == null)
                     File.Delete(filePath);
+                conversionCancelToken.Dispose();
+                conversionCancelToken = null;
                 await _hub.Clients.Client(connectionId).downloadFinished("m3u8" + conversionId);
             }
         }
