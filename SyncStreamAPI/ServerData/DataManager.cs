@@ -154,26 +154,31 @@ namespace SyncStreamAPI.ServerData
 
         private async void Conversion_OnProgress(object sender, Xabe.FFmpeg.Events.ConversionProgressEventArgs args)
         {
-            using (var scope = _serviceProvider.CreateScope())
+            try
             {
-                var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                var text = $"{args.Duration}/{args.TotalLength}";
-                if (conversionTime != null)
+                using (var scope = _serviceProvider.CreateScope())
                 {
-                    var millis = conversionTime.ElapsedMilliseconds;
-                    var perc = args.Percent * (100 - args.Percent);
-                    var timeLeft = (double)millis / perc <= 0 ? .1 : perc;
-                    if (timeLeft < 0)
-                        timeLeft = 0;
-                    if (timeLeft > TimeSpan.MaxValue.TotalMilliseconds)
-                        timeLeft = TimeSpan.MaxValue.TotalMilliseconds;
-                    var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"mm\:ss");
-                    text += $" - {timeString}s remaining";
+                    var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+                    var text = $"{args.Duration}/{args.TotalLength}";
+                    if (conversionTime != null)
+                    {
+                        var millis = conversionTime.ElapsedMilliseconds;
+                        var timeLeft = (double)millis / args.Percent * (100 - args.Percent);
+                        if (timeLeft < 0)
+                            timeLeft = 0;
+                        if (timeLeft > TimeSpan.MaxValue.TotalMilliseconds)
+                            timeLeft = TimeSpan.MaxValue.TotalMilliseconds;
+                        var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"mm\:ss");
+                        text += $" - {timeString}s remaining";
+                    }
+                    var result = new DownloadInfo(text);
+                    result.Id = "m3u8" + conversionId;
+                    result.Progress = args.Percent;
+                    await _hub.Clients.Client(conversionId).downloadProgress(result);
                 }
-                var result = new DownloadInfo(text);
-                result.Id = "m3u8" + conversionId;
-                result.Progress = args.Percent;
-                await _hub.Clients.Client(conversionId).downloadProgress(result);
+            } catch (Exception ex)
+            {
+
             }
         }
 
