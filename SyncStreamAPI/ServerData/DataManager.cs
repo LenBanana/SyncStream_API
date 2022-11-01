@@ -157,14 +157,15 @@ namespace SyncStreamAPI.ServerData
             using (var scope = _serviceProvider.CreateScope())
             {
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                var text = $"{args.Duration} of {args.TotalLength}";
+                var text = $"{args.Duration}/{args.TotalLength}";
                 if (conversionTime != null)
                 {
                     var millis = conversionTime.ElapsedMilliseconds;
-                    var timeLeft = Math.Round((double)millis / args.Percent * (100 - args.Percent) / 1000, 0);
+                    var timeLeft = (double)millis / args.Percent * (100 - args.Percent);
                     if (timeLeft < 0)
                         timeLeft = 0;
-                    text += $" - {timeLeft}s remaining";
+                    var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"mm\:ss");
+                    text += $" - {timeString}s remaining";
                 }
                 var result = new DownloadInfo(text);
                 result.Id = "m3u8" + conversionId;

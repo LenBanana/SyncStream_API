@@ -198,7 +198,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             if (dbUser.userprivileges >= 3)
             {
-                var result = _postgres.Users.Include(x => x.Files).First(x => x.ID == dbUser.ID).Files.Select(x => new FileDto(x)).ToList();
+                var result = _postgres.Users.Include(x => x.Files).First(x => x.ID == dbUser.ID).Files.Select(x => new FileDto(x)).OrderBy(x => x.Name).ToList();
                 await Clients.Caller.getDownloads(result);
             }
         }
