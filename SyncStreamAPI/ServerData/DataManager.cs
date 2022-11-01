@@ -161,9 +161,12 @@ namespace SyncStreamAPI.ServerData
                 if (conversionTime != null)
                 {
                     var millis = conversionTime.ElapsedMilliseconds;
-                    var timeLeft = (double)millis / args.Percent * (100 - args.Percent);
+                    var perc = args.Percent * (100 - args.Percent);
+                    var timeLeft = (double)millis / perc <= 0 ? .1 : perc;
                     if (timeLeft < 0)
                         timeLeft = 0;
+                    if (timeLeft > TimeSpan.MaxValue.TotalMilliseconds)
+                        timeLeft = TimeSpan.MaxValue.TotalMilliseconds;
                     var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"mm\:ss");
                     text += $" - {timeString}s remaining";
                 }
