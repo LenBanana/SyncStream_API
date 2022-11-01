@@ -161,8 +161,10 @@ namespace SyncStreamAPI.ServerData
                 if (conversionTime != null)
                 {
                     var millis = conversionTime.ElapsedMilliseconds;
-                    var timeLeft = args.Percent / millis * 100 * 100;
-                    text += $" - {timeLeft} remaining time";
+                    var timeLeft = Math.Round((double)millis / args.Percent * (100 - args.Percent) / 1000, 0);
+                    if (timeLeft < 0)
+                        timeLeft = 0;
+                    text += $" - {timeLeft}s remaining";
                 }
                 var result = new DownloadInfo(text);
                 result.Id = "m3u8" + conversionId;
