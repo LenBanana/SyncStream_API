@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SyncStreamAPI.DataContext;
+using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
@@ -51,7 +52,7 @@ namespace SyncStreamAPI.ServerData
                 {
                     if (conversionCancelToken != null)
                     {
-                        await _hub.Clients.Client(connectionId).dialog(new Dialog() { Header = "Error", Question = $"There is already a m3u8 conversion in progress", Answer1 = "Ok" });
+                        await _hub.Clients.Client(connectionId).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = $"There is already a m3u8 conversion in progress", Answer1 = "Ok" });
                         return;
                     }
                     //var info = await FFmpeg.GetMediaInfo(url);
@@ -72,7 +73,7 @@ namespace SyncStreamAPI.ServerData
                         var mb = ((double)totalDownload / 1024d / 1024d);
                         if (totalDownload <= 0)
                         {
-                            await _hub.Clients.Client(connectionId).dialog(new Dialog() { Header = "Error", Question = $"Not allowed to download anything above 500mb file was {mb}mb", Answer1 = "Ok" });
+                            await _hub.Clients.Client(connectionId).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = $"Not allowed to download anything above 500mb file was {mb}mb", Answer1 = "Ok" });
                             return;
                         }
                         await _hub.Clients.Client(connectionId).downloadListen(connectionId);
@@ -83,7 +84,7 @@ namespace SyncStreamAPI.ServerData
                 {
                     userDownloads.Remove(webClient);
                     webClient.Dispose();
-                    await _hub.Clients.Client(connectionId).dialog(new Dialog() { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
+                    await _hub.Clients.Client(connectionId).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
                     return;
                 }
             }
@@ -104,7 +105,7 @@ namespace SyncStreamAPI.ServerData
                     return;
                 if (dbUser.userprivileges < 3)
                 {
-                    await _hub.Clients.Client(connectionId).dialog(new Dialog() { Header = "Error", Question = "No privileges to convert m3u8", Answer1 = "Ok" });
+                    await _hub.Clients.Client(connectionId).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "No privileges to convert m3u8", Answer1 = "Ok" });
                     return;
                 }
                 var info = new DownloadInfo($"00:00:00 of 00:00:00");
@@ -123,7 +124,7 @@ namespace SyncStreamAPI.ServerData
                     var result = await conversion.Start(conversionCancelToken.Token);
                     if (!File.Exists(filePath))
                     {
-                        await _hub.Clients.Client(connectionId).dialog(new Dialog() { Header = "Error", Question = "There has been an error trying to save the file", Answer1 = "Ok" });
+                        await _hub.Clients.Client(connectionId).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "There has been an error trying to save the file", Answer1 = "Ok" });
                         return;
                     }
                     if (!conversionCancelToken.IsCancellationRequested)
@@ -134,7 +135,7 @@ namespace SyncStreamAPI.ServerData
                 }
                 catch (Exception ex)
                 {
-                    await _hub.Clients.Client(connectionId).dialog(new Dialog() { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
+                    await _hub.Clients.Client(connectionId).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
                 }
                 if (File.Exists(filePath) && dbUser.Files.FirstOrDefault(x => x.FileKey == dbFile.FileKey) == null)
                     File.Delete(filePath);
@@ -219,7 +220,7 @@ namespace SyncStreamAPI.ServerData
                 }
                 catch (Exception ex)
                 {
-                    await _hub.Clients.Client(client.ConnectionId).dialog(new Dialog() { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
+                    await _hub.Clients.Client(client.ConnectionId).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
                 }
                 await _hub.Clients.Client(client.ConnectionId).downloadFinished(client.UniqueId);
             }

@@ -149,7 +149,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             if (!CheckPrivileges(room))
             {
-                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "You don't have permissions to add a video to this room", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to add a video to this room", Answer1 = "Ok" });
                 return;
             }
             if (room.server.playlist?.Select(x => x.url).Contains(key.url) == false)
@@ -191,6 +191,26 @@ namespace SyncStreamAPI.Hubs
             await Clients.All.getrooms(DataManager.GetRooms());
         }
 
+        public async Task ChangeDownload(string token, int fileId, string name)
+        {
+            if (name == null || name.Length <= 2)
+            {
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Filename has to be at least 3 characters long", Answer1 = "Ok" });
+                await GetDownloads(token);
+                return;
+            }
+            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+            if (dbUser == null)
+                return;
+            if (dbUser.userprivileges >= 3)
+            {
+                var result = _postgres.Users.Include(x => x.Files).FirstOrDefault(x => x.ID == dbUser.ID)?.Files.FirstOrDefault(x => x.ID == fileId);
+                result.Name = name;
+                await _postgres.SaveChangesAsync();
+                await GetDownloads(token);
+            }
+        }
+
         public async Task GetDownloads(string token)
         {
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
@@ -198,7 +218,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             if (dbUser.userprivileges >= 3)
             {
-                var result = _postgres.Users.Include(x => x.Files).First(x => x.ID == dbUser.ID).Files.Select(x => new FileDto(x)).OrderBy(x => x.Name).ToList();
+                var result = _postgres.Users.Include(x => x.Files).FirstOrDefault(x => x.ID == dbUser.ID)?.Files.Select(x => new FileDto(x)).OrderBy(x => x.Name).ToList();
                 await Clients.Caller.getDownloads(result);
             }
         }
@@ -273,7 +293,7 @@ namespace SyncStreamAPI.Hubs
             catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
-                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "There has been an error trying to add the playlist", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "There has been an error trying to add the playlist", Answer1 = "Ok" });
             }
         }
 
@@ -284,7 +304,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             if (!CheckPrivileges(room))
             {
-                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "You don't have permissions to remove videos from this room", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to remove videos from this room", Answer1 = "Ok" });
                 return;
             }
             int idx = room.server.playlist.FindIndex(x => x.url == key);
@@ -303,7 +323,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             if (!CheckPrivileges(room))
             {
-                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "You don't have permissions to skip videos in this room", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to skip videos in this room", Answer1 = "Ok" });
                 return;
             }
             Server MainServer = room.server;
@@ -335,7 +355,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             if (!CheckPrivileges(room))
             {
-                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "You don't have permissions to skip videos in this room", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to skip videos in this room", Answer1 = "Ok" });
                 return;
             }
             Server MainServer = room.server;
@@ -361,7 +381,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             if (!CheckPrivileges(room))
             {
-                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "You don't have permissions to move videos in this room", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to move videos in this room", Answer1 = "Ok" });
                 return;
             }
             DreckVideo vid = room.server.playlist[fromIndex];

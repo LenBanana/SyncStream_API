@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using SyncStreamAPI.Enums;
 
 namespace SyncStreamAPI.Hubs
 {
@@ -44,7 +45,7 @@ namespace SyncStreamAPI.Hubs
             {
                 if (requestUser.username.Length < 2 || requestUser.username.Length > 20)
                 {
-                    await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "Username must be between 2 and 20 characters", Answer1 = "Ok" });
+                    await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Username must be between 2 and 20 characters", Answer1 = "Ok" });
                     return;
                 }
                 await _postgres.Users.AddAsync(requestUser);
@@ -99,7 +100,7 @@ namespace SyncStreamAPI.Hubs
                 {
                     if (changeUser.username.Length < 2 || changeUser.username.Length > 20)
                     {
-                        await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "Username must be between 2 and 20 characters", Answer1 = "Ok" });
+                        await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Username must be between 2 and 20 characters", Answer1 = "Ok" });
                     }
                     else
                     {
@@ -124,7 +125,7 @@ namespace SyncStreamAPI.Hubs
             }
             else
             {
-                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "You password was not correct", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You password was not correct", Answer1 = "Ok" });
             }
         }
 
@@ -132,7 +133,7 @@ namespace SyncStreamAPI.Hubs
         {
             if (userID == removeID)
             {
-                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "Unable to delete own user", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Unable to delete own user", Answer1 = "Ok" });
                 return;
             }
             var dbUser = _postgres.Users?.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
@@ -159,7 +160,7 @@ namespace SyncStreamAPI.Hubs
         {
             if (userID == approveID)
             {
-                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "Unable to change approve status of own user", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Unable to change approve status of own user", Answer1 = "Ok" });
                 return;
             }
             var dbUser = _postgres.Users?.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
@@ -186,7 +187,7 @@ namespace SyncStreamAPI.Hubs
         {
             if (userID == changeID)
             {
-                await Clients.Caller.dialog(new Dialog() { Header = "Error", Question = "Unable to change privileges of own user", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Unable to change privileges of own user", Answer1 = "Ok" });
                 return;
             }
             var dbUser = _postgres.Users?.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
