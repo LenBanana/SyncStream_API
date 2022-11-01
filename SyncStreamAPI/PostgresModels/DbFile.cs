@@ -12,6 +12,7 @@ namespace SyncStreamAPI.PostgresModels
         public string FileEnding { get; set; }
         [NotNull]
         public string FileKey { get; set; }
+        public DateTime Created { get; set; }
         public DbFile(string name, string fileEnding, User user)
         {
             ID = 0;
@@ -19,11 +20,13 @@ namespace SyncStreamAPI.PostgresModels
             Name = name;            
             FileEnding = fileEnding;
             FileKey = user.GenerateToken(Guid.NewGuid().ToString() + name).Token;
+            Created = DateTime.Now;
         }
 
         public DbFile()
         {
             ID = 0;
+            Created = DateTime.Now;
         }
     }
 }
