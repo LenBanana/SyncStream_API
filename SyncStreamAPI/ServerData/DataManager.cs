@@ -64,7 +64,7 @@ namespace SyncStreamAPI.ServerData
                 webClient.DownloadProgressChanged += WebClient_DownloadProgressChanged;
                 webClient.DownloadDataCompleted += WebClient_DownloadDataCompleted;
                 webClient.Headers.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:106.0) Gecko/20100101 Firefox/106.0");
-                userDownloads.Add(webClient, new(fileName, connectionId, token, url));
+                userDownloads.Add(webClient, new(fileName, connectionId, token, url, Stopwatch.StartNew()));
                 try
                 {
                     using (var stream = webClient.OpenRead(url))
@@ -170,14 +170,15 @@ namespace SyncStreamAPI.ServerData
                         if (timeLeft > TimeSpan.MaxValue.TotalMilliseconds)
                             timeLeft = TimeSpan.MaxValue.TotalMilliseconds;
                         var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"mm\:ss");
-                        text += $" - {timeString}s remaining";
+                        text += $" - {timeString} remaining";
                     }
                     var result = new DownloadInfo(text);
                     result.Id = "m3u8" + conversionId;
                     result.Progress = args.Percent;
                     await _hub.Clients.Client(conversionId).downloadProgress(result);
                 }
-            } catch (Exception ex)
+            }
+            catch (Exception ex)
             {
 
             }
@@ -237,7 +238,14 @@ namespace SyncStreamAPI.ServerData
                     var perc = e.BytesReceived / (double)e.TotalBytesToReceive * 100d;
                     if (perc < 0)
                         perc = -1;
-                    var result = new DownloadInfo($"{Math.Round(e.BytesReceived / 1024d / 1024d, 2)}MB of {Math.Round(e.TotalBytesToReceive / 1024d / 1024d, 2)}MB");
+                    var millis = id.Stopwatch.ElapsedMilliseconds;
+                    var timeLeft = (double)millis / perc * (100 - perc);
+                    if (timeLeft < 0)
+                        timeLeft = 0;
+                    if (timeLeft > TimeSpan.MaxValue.TotalMilliseconds)
+                        timeLeft = TimeSpan.MaxValue.TotalMilliseconds;
+                    var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"mm\:ss");
+                    var result = new DownloadInfo($"{Math.Round(e.BytesReceived / 1024d / 1024d, 2)}MB of {Math.Round(e.TotalBytesToReceive / 1024d / 1024d, 2)}MB - {timeString} remaining");
                     result.Id = id.UniqueId;
                     result.Progress = perc;
                     await _hub.Clients.Client(id.ConnectionId).downloadProgress(result);
