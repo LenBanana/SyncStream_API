@@ -169,7 +169,7 @@ namespace SyncStreamAPI.ServerData
                             timeLeft = 0;
                         if (timeLeft > TimeSpan.MaxValue.TotalMilliseconds)
                             timeLeft = TimeSpan.MaxValue.TotalMilliseconds;
-                        var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"mm\:ss");
+                        var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"HH\:mm\:ss");
                         text += $" - {timeString} remaining";
                     }
                     var result = new DownloadInfo(text);
@@ -244,7 +244,7 @@ namespace SyncStreamAPI.ServerData
                         timeLeft = 0;
                     if (timeLeft > TimeSpan.MaxValue.TotalMilliseconds)
                         timeLeft = TimeSpan.MaxValue.TotalMilliseconds;
-                    var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"mm\:ss");
+                    var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"HH\:mm\:ss");
                     var result = new DownloadInfo($"{Math.Round(e.BytesReceived / 1024d / 1024d, 2)}MB of {Math.Round(e.TotalBytesToReceive / 1024d / 1024d, 2)}MB - {timeString} remaining");
                     result.Id = id.UniqueId;
                     result.Progress = perc;
