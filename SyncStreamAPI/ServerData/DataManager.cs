@@ -24,13 +24,14 @@ namespace SyncStreamAPI.ServerData
     public class DataManager
     {
         public static List<Room> Rooms { get; set; } = new List<Room>();
+        public Dictionary<int, string> UserToMemberList { get; set; } = new Dictionary<int, string>();
         public static bool checking { get; set; } = false;
         //private readonly IHubContext<ServerHub, IServerHub> _hub;
         //PostgresContext _postgres;
         IServiceProvider _serviceProvider;
         public Dictionary<WebClient, DownloadClientValue> userDownloads = new Dictionary<WebClient, DownloadClientValue>();
         public CancellationTokenSource conversionCancelToken = null;
-        public string conversionId { get; set; } = "";
+        public int conversionId { get; set; }
         Stopwatch conversionTime = null;
         public DataManager(IServiceProvider provider)
         {
@@ -120,7 +121,7 @@ namespace SyncStreamAPI.ServerData
                     var conversion = await FFmpeg.Conversions.FromSnippet.SaveM3U8Stream(new Uri(url), filePath);
                     conversion.OnProgress += Conversion_OnProgress;
                     conversionCancelToken = new CancellationTokenSource();
-                    conversionId = connectionId;
+                    conversionId = dbUser.ID;
                     var result = await conversion.Start(conversionCancelToken.Token);
                     if (!File.Exists(filePath))
                     {
@@ -139,14 +140,14 @@ namespace SyncStreamAPI.ServerData
                 }
                 if (File.Exists(filePath) && dbUser.Files.FirstOrDefault(x => x.FileKey == dbFile.FileKey) == null)
                     File.Delete(filePath);
-                CancelM3U8Conversion(connectionId);
+                CancelM3U8Conversion(dbUser.ID);
                 await _hub.Clients.Client(connectionId).downloadFinished("m3u8" + conversionId);
             }
         }
 
-        public void CancelM3U8Conversion(string connectionId)
+        public void CancelM3U8Conversion(int userId)
         {
-            if (conversionCancelToken != null && conversionId == connectionId)
+            if (conversionCancelToken != null && conversionId == userId)
             {
                 conversionCancelToken?.Cancel();
                 conversionCancelToken = null;
@@ -169,13 +170,13 @@ namespace SyncStreamAPI.ServerData
                             timeLeft = 0;
                         if (timeLeft > TimeSpan.MaxValue.TotalMilliseconds)
                             timeLeft = TimeSpan.MaxValue.TotalMilliseconds;
-                        var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"HH\:mm\:ss");
+                        var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"hh\:mm\:ss");
                         text += $" - {timeString} remaining";
                     }
                     var result = new DownloadInfo(text);
                     result.Id = "m3u8" + conversionId;
                     result.Progress = args.Percent;
-                    await _hub.Clients.Client(conversionId).downloadProgress(result);
+                    await _hub.Clients.Client(UserToMemberList[conversionId]).downloadProgress(result);
                 }
             }
             catch (Exception ex)

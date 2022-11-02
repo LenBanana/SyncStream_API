@@ -47,20 +47,23 @@ namespace SyncStreamAPI.Hubs
 #nullable enable
         public override async Task OnDisconnectedAsync(Exception? ex)
         {
-            _manager.CancelM3U8Conversion(Context.ConnectionId);
+            //_manager.CancelM3U8Conversion(Context.ConnectionId);
             var Rooms = DataManager.GetRooms();
             int idx = Rooms.FindIndex(x => x.server.members.FirstOrDefault(y => y?.ConnectionId == Context.ConnectionId) != null);
             if (idx > -1)
             {
                 Room room = Rooms[idx];
-                Member e = room.server.members.First(x => x.ConnectionId == Context.ConnectionId);
-                e.InvokeKick();
+                Member? e = room.server.members.FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
+                var idxKey = _manager.UserToMemberList.Values.ToList().FindIndex(x => x == Context.ConnectionId);
+                if (idxKey >= 0)
+                    _manager.UserToMemberList.Remove(_manager.UserToMemberList.ElementAt(idxKey).Key);
+                e?.InvokeKick();
 
                 var gameMode = room.GameMode;
                 if (gameMode == Enums.Games.GameMode.Chess)
                 {
                     var game = ChessLogic.GetChessGame(room.uniqueId);
-                    if (game != null && (game.LightPlayer.ConnectionId == e.ConnectionId || game.DarkPlayer.ConnectionId == e.ConnectionId))
+                    if (game != null && (game.LightPlayer.ConnectionId == e?.ConnectionId || game.DarkPlayer.ConnectionId == e?.ConnectionId))
                     {
                         await EndChess(room.uniqueId);
                     }
@@ -68,14 +71,14 @@ namespace SyncStreamAPI.Hubs
                 if (gameMode == Enums.Games.GameMode.Gallows)
                 {
                     var game = room.GallowGame;
-                    var gameMemberIdx = game.members.FindIndex(x => x.ConnectionId == e.ConnectionId);
+                    var gameMemberIdx = game.members.FindIndex(x => x.ConnectionId == e?.ConnectionId);
                     if (gameMemberIdx > -1)
                         game.members.RemoveAt(gameMemberIdx);
                 }
                 if (gameMode == Enums.Games.GameMode.Blackjack)
                 {
                     var blackjack = room.BlackjackGame;
-                    var gameMemberIdx = blackjack.members.FindIndex(x => x.ConnectionId == e.ConnectionId);
+                    var gameMemberIdx = blackjack.members.FindIndex(x => x.ConnectionId == e?.ConnectionId);
                     if (gameMemberIdx > -1)
                     {
                         var bjMember = blackjack.members[gameMemberIdx];
@@ -241,7 +244,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             if (dbUser.userprivileges >= 3)
             {
-                _manager.CancelM3U8Conversion(Context.ConnectionId);
+                _manager.CancelM3U8Conversion(dbUser.ID);
                 await Clients.Caller.downloadFinished("m3u8" + Context.ConnectionId);
             }
         }

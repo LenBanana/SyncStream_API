@@ -16,7 +16,6 @@ namespace SyncStreamAPI.Hubs
         public async Task AddUser(string username, string UniqueId, string password)
         {
             var ip = Context.ConnectionId;
-            Console.WriteLine(ip);
             Room room = GetRoom(UniqueId);
             if (room == null)
             {
