@@ -141,7 +141,7 @@ namespace SyncStreamAPI.ServerData
                 if (File.Exists(filePath) && dbUser.Files.FirstOrDefault(x => x.FileKey == dbFile.FileKey) == null)
                     File.Delete(filePath);
                 CancelM3U8Conversion(dbUser.ID);
-                await _hub.Clients.Client(connectionId).downloadFinished("m3u8" + conversionId);
+                await _hub.Clients.Client(connectionId).downloadFinished("m3u8" + UserToMemberList[conversionId]);
             }
         }
 
@@ -174,7 +174,7 @@ namespace SyncStreamAPI.ServerData
                         text += $" - {timeString} remaining";
                     }
                     var result = new DownloadInfo(text);
-                    result.Id = "m3u8" + conversionId;
+                    result.Id = "m3u8" + UserToMemberList[conversionId];
                     result.Progress = args.Percent;
                     await _hub.Clients.Client(UserToMemberList[conversionId]).downloadProgress(result);
                 }
