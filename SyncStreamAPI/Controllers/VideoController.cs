@@ -75,19 +75,17 @@ namespace SyncStreamAPI.Controllers
                 {
                     if (file.Length <= 0)
                         return StatusCode(StatusCodes.Status405MethodNotAllowed);
-                    using (var ms = new MemoryStream())
+                    var dbfile = new DbFile(file.FileName, "." + file.FileName.Split('.').Last(), dbUser);
+                    var path = General.FilePath + $"/{dbfile.FileKey}{dbfile.FileEnding}";
+                    if (!Directory.Exists(General.FilePath))
+                        Directory.CreateDirectory(General.FilePath);
+                    using (var ms = System.IO.File.OpenWrite(path))
                     {
                         await file.CopyToAsync(ms);
-                        var bytes = ms.ToArray();
-                        var dbfile = new DbFile(file.FileName, "." + file.FileName.Split('.').Last(), dbUser);
-                        var path = General.FilePath + $"/{dbfile.FileKey}{dbfile.FileEnding}";
-                        if (!Directory.Exists(General.FilePath))
-                            Directory.CreateDirectory(General.FilePath);
-                        System.IO.File.WriteAllBytes(path, bytes);
-                        _postgres.Files?.Add(dbfile);
-                        await _postgres.SaveChangesAsync();
-                        return Ok();
                     }
+                    _postgres.Files?.Add(dbfile);
+                    await _postgres.SaveChangesAsync();
+                    return Ok();
                 }
                 return StatusCode(StatusCodes.Status403Forbidden);
             }
