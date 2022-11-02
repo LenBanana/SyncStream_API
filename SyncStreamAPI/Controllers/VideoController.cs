@@ -46,8 +46,8 @@ namespace SyncStreamAPI.Controllers
                 var path = General.FilePath + $"/{dbFile.FileKey}{dbFile.FileEnding}";
                 if (!System.IO.File.Exists(path))
                     return StatusCode(StatusCodes.Status404NotFound);
-                var fileBytes = await System.IO.File.ReadAllBytesAsync(path);
-                return File(fileBytes, "application/octet-stream", dbFile.Name.EndsWith(dbFile.FileEnding) ? dbFile.Name : dbFile.Name + dbFile.FileEnding, true);
+                var fileReturn = System.IO.File.OpenRead(path);
+                return File(fileReturn, "application/octet-stream", dbFile.Name.EndsWith(dbFile.FileEnding) ? dbFile.Name : dbFile.Name + dbFile.FileEnding, true);
             }
             catch (Exception ex)
             {
