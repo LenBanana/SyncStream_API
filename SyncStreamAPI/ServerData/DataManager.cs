@@ -32,6 +32,7 @@ namespace SyncStreamAPI.ServerData
         public Dictionary<WebClient, DownloadClientValue> userDownloads = new Dictionary<WebClient, DownloadClientValue>();
         public CancellationTokenSource conversionCancelToken = null;
         public int conversionId { get; set; }
+        public string conversionName { get; set; }
         Stopwatch conversionTime = null;
         public DataManager(IServiceProvider provider)
         {
@@ -109,7 +110,8 @@ namespace SyncStreamAPI.ServerData
                     await _hub.Clients.Client(connectionId).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "No privileges to convert m3u8", Answer1 = "Ok" });
                     return;
                 }
-                var info = new DownloadInfo($"00:00:00 of 00:00:00");
+                conversionName = fileName;
+                var info = new DownloadInfo($"00:00:00 of 00:00:00", fileName);
                 info.Id = "m3u8" + connectionId;
                 info.Progress = 0;
                 await _hub.Clients.Client(connectionId).downloadProgress(info);
@@ -174,7 +176,7 @@ namespace SyncStreamAPI.ServerData
                         var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"hh\:mm\:ss");
                         text += $" - {timeString} remaining";
                     }
-                    var result = new DownloadInfo(text);
+                    var result = new DownloadInfo(text, conversionName);
                     result.Id = "m3u8" + UserToMemberList[conversionId];
                     result.Progress = args.Percent;
                     await _hub.Clients.Client(UserToMemberList[conversionId]).downloadProgress(result);
@@ -247,7 +249,7 @@ namespace SyncStreamAPI.ServerData
                     if (timeLeft > TimeSpan.MaxValue.TotalMilliseconds)
                         timeLeft = TimeSpan.MaxValue.TotalMilliseconds;
                     var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"HH\:mm\:ss");
-                    var result = new DownloadInfo($"{Math.Round(e.BytesReceived / 1024d / 1024d, 2)}MB of {Math.Round(e.TotalBytesToReceive / 1024d / 1024d, 2)}MB - {timeString} remaining");
+                    var result = new DownloadInfo($"{Math.Round(e.BytesReceived / 1024d / 1024d, 2)}MB of {Math.Round(e.TotalBytesToReceive / 1024d / 1024d, 2)}MB - {timeString} remaining", id.FileName);
                     result.Id = id.UniqueId;
                     result.Progress = perc;
                     await _hub.Clients.Client(id.ConnectionId).downloadProgress(result);
