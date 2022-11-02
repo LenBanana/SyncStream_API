@@ -22,6 +22,11 @@ namespace SyncStreamAPI.Hubs
                 {
                     _manager.UserToMemberList.Add(user.ID, Context.ConnectionId);
                 }
+                else
+                {
+                    if (_manager.UserToMemberList[user.ID] != Context.ConnectionId)
+                        _manager.UserToMemberList[user.ID] = Context.ConnectionId;
+                }
                 var token = user.GenerateToken(userInfo);
                 var dbToken = user.RememberTokens.FirstOrDefault(x => x.Token == token.Token);
                 if (dbToken == null)
@@ -240,6 +245,11 @@ namespace SyncStreamAPI.Hubs
                     {
                         _manager.UserToMemberList.Add(dbUser.ID, Context.ConnectionId);
                     }
+                    else
+                    {
+                        if (_manager.UserToMemberList[dbUser.ID] != Context.ConnectionId)
+                            _manager.UserToMemberList[dbUser.ID] = Context.ConnectionId;
+                    }
                     await Groups.AddToGroupAsync(Context.ConnectionId, Token.Token);
                     await Clients.Caller.userlogin(dbUser.ToDTO());
                     Token.Created = DateTime.Now;
@@ -249,7 +259,8 @@ namespace SyncStreamAPI.Hubs
                     await Clients.Caller.userlogin(new User("").ToDTO());
                 }
                 await _postgres.SaveChangesAsync();
-            } catch (Exception ex)
+            }
+            catch (Exception ex)
             {
                 await Clients.Caller.userlogin(new User("").ToDTO());
                 Console.WriteLine(ex.Message);

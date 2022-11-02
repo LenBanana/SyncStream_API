@@ -54,9 +54,6 @@ namespace SyncStreamAPI.Hubs
             {
                 Room room = Rooms[idx];
                 Member? e = room.server.members.FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
-                var idxKey = _manager.UserToMemberList.Values.ToList().FindIndex(x => x == Context.ConnectionId);
-                if (idxKey >= 0)
-                    _manager.UserToMemberList.Remove(_manager.UserToMemberList.ElementAt(idxKey).Key);
                 e?.InvokeKick();
 
                 var gameMode = room.GameMode;

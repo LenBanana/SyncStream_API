@@ -147,10 +147,11 @@ namespace SyncStreamAPI.ServerData
 
         public void CancelM3U8Conversion(int userId)
         {
-            if (conversionCancelToken != null && conversionId == userId)
+            if (conversionCancelToken != null && UserToMemberList.ContainsKey(userId))
             {
                 conversionCancelToken?.Cancel();
                 conversionCancelToken = null;
+                UserToMemberList.Remove(userId);
             }
         }
 
@@ -181,7 +182,7 @@ namespace SyncStreamAPI.ServerData
             }
             catch (Exception ex)
             {
-
+                Console.WriteLine(ex.Message);
             }
         }
 
