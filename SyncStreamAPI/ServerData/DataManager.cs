@@ -145,6 +145,8 @@ namespace SyncStreamAPI.ServerData
                     {
                         dbUser.Files.Add(dbFile);
                         await _postgres.SaveChangesAsync();
+                        if (currentDownload != null)
+                            await _hub.Clients.Client(currentDownload.ConnectionId).downloadFinished("m3u8" + currentDownload.UniqueId);
                         StartNextDownload();
                         return;
                     }
