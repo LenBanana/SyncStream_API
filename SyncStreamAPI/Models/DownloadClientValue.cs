@@ -15,6 +15,7 @@ namespace SyncStreamAPI.Models
             Token = token;
             FileName = fileName;
             Url = url;
+            Running = false;
             UniqueId = Guid.NewGuid().ToString();
             CancellationToken = new CancellationTokenSource();
             KeepUrlAlive();
@@ -25,12 +26,14 @@ namespace SyncStreamAPI.Models
         public string ConnectionId { get; set; }
         public string Token { get; set; }
         public string UniqueId { get; set; }
+        public bool Running { get; set; }
         public Stopwatch Stopwatch { get; set; }
         public CancellationTokenSource CancellationToken { get; set; }
         WebClient keepAliveClient = new WebClient();
-        public async void KeepUrlAlive()
+        bool stopKeepAlive = false;
+        async void KeepUrlAlive()
         {
-            if (Stopwatch == null)
+            if (Stopwatch == null && !stopKeepAlive)
             {
                 try
                 {
@@ -41,6 +44,11 @@ namespace SyncStreamAPI.Models
                 KeepUrlAlive();
             }
             keepAliveClient?.Dispose();
+        }
+
+        public void StopKeepAlive()
+        {
+            stopKeepAlive = true;
         }
     }
 }
