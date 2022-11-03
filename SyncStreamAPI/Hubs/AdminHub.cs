@@ -18,15 +18,7 @@ namespace SyncStreamAPI.Hubs
             User user = _postgres.Users.Include(x => x.RememberTokens).FirstOrDefault(x => x.username == requestUser.username && x.password == requestUser.password);
             if (user != null)
             {
-                if (!_manager.UserToMemberList.ContainsKey(user.ID))
-                {
-                    _manager.UserToMemberList.Add(user.ID, Context.ConnectionId);
-                }
-                else
-                {
-                    if (_manager.UserToMemberList[user.ID] != Context.ConnectionId)
-                        _manager.UserToMemberList[user.ID] = Context.ConnectionId;
-                }
+                _manager.AddMember(user.ID, Context.ConnectionId);
                 var token = user.GenerateToken(userInfo);
                 var dbToken = user.RememberTokens.FirstOrDefault(x => x.Token == token.Token);
                 if (dbToken == null)
@@ -241,15 +233,7 @@ namespace SyncStreamAPI.Hubs
                 RememberToken Token = dbUser.RememberTokens.FirstOrDefault(x => x.Token == token);
                 if (Token != null)
                 {
-                    if (!_manager.UserToMemberList.ContainsKey(dbUser.ID))
-                    {
-                        _manager.UserToMemberList.Add(dbUser.ID, Context.ConnectionId);
-                    }
-                    else
-                    {
-                        if (_manager.UserToMemberList[dbUser.ID] != Context.ConnectionId)
-                            _manager.UserToMemberList[dbUser.ID] = Context.ConnectionId;
-                    }
+                    _manager.AddMember(dbUser.ID, Context.ConnectionId);
                     await Groups.AddToGroupAsync(Context.ConnectionId, Token.Token);
                     await Clients.Caller.userlogin(dbUser.ToDTO());
                     Token.Created = DateTime.Now;

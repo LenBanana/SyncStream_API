@@ -16,6 +16,7 @@ using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
@@ -230,18 +231,18 @@ namespace SyncStreamAPI.Hubs
                 return;
             if (dbUser.userprivileges >= 3)
             {
-                _manager.AddDownload(url, fileName, Context.ConnectionId, token);
+                _manager.AddDownload(new(dbUser.ID, fileName, Context.ConnectionId, token, url, null));
             }
         }
 
-        public async Task CancelConversion(string token)
+        public async Task CancelConversion(string token, string downloadId)
         {
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
                 return;
             if (dbUser.userprivileges >= 3)
             {
-                _manager.CancelM3U8Conversion(dbUser.ID);
+                _manager.CancelM3U8Conversion(downloadId);
                 await Clients.Caller.downloadFinished("m3u8" + Context.ConnectionId);
             }
         }
