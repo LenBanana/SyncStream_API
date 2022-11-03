@@ -146,6 +146,7 @@ namespace SyncStreamAPI.ServerData
                         dbUser.Files.Add(dbFile);
                         await _postgres.SaveChangesAsync();
                         StartNextDownload();
+                        return;
                     }
                 }
                 catch (OperationCanceledException) { }
