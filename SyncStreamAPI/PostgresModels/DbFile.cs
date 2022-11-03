@@ -16,10 +16,10 @@ namespace SyncStreamAPI.PostgresModels
         public DbFile(string name, string fileEnding, User user)
         {
             ID = 0;
-            UserID = user.ID;
+            UserID = user == null ? -1 : user.ID;
             Name = name;            
             FileEnding = fileEnding;
-            FileKey = user.GenerateToken(Guid.NewGuid().ToString() + name).Token;
+            FileKey = user?.GenerateToken(Guid.NewGuid().ToString() + name).Token;
             Created = DateTime.Now;
         }
 

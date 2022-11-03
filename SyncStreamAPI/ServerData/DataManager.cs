@@ -105,14 +105,14 @@ namespace SyncStreamAPI.ServerData
             {
                 var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+                await _hub.Clients.Client(downloadClient.ConnectionId).downloadListen("m3u8" + downloadClient.ConnectionId);
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == downloadClient.Token)).FirstOrDefault();
+                var dbFile = new DbFile(downloadClient.FileName, ".mp4", dbUser);
+                var filePath = $"{General.FilePath}/{dbFile.FileKey}.mp4".Replace('\\', '/');
                 try
                 {
-                    await _hub.Clients.Client(downloadClient.ConnectionId).downloadListen("m3u8" + downloadClient.ConnectionId);
-                    var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == downloadClient.Token)).FirstOrDefault();
                     if (dbUser == null)
                         throw new Exception($"Unable to find user");
-                    var dbFile = new DbFile(downloadClient.FileName, ".mp4", dbUser);
-                    var filePath = $"{General.FilePath}/{dbFile.FileKey}.mp4".Replace('\\', '/');
                     var conversion = (await FFmpeg.Conversions.FromSnippet.SaveM3U8Stream(new Uri(downloadClient.Url), filePath))
                     //.UseMultiThread(2)
                     .SetOverwriteOutput(true);
@@ -160,6 +160,12 @@ namespace SyncStreamAPI.ServerData
                 {
                     await _hub.Clients.Client(downloadClient.ConnectionId).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
                 }
+                try
+                {
+                    if (File.Exists(filePath) && dbUser.Files.FirstOrDefault(x => x.FileKey == dbFile.FileKey) == null)
+                        File.Delete(filePath);
+                }
+                catch { }
                 await _hub.Clients.Client(downloadClient.ConnectionId).downloadFinished("m3u8" + downloadClient.UniqueId);
                 if (userM3U8Conversions.Count > 0)
                 {
