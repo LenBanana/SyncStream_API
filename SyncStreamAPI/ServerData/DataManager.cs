@@ -105,26 +105,17 @@ namespace SyncStreamAPI.ServerData
             {
                 var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                await _hub.Clients.Client(downloadClient.ConnectionId).downloadListen("m3u8" + downloadClient.ConnectionId);
-                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == downloadClient.Token)).FirstOrDefault();
-                if (dbUser == null)
-                    return;
-                RememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == downloadClient.Token);
-                if (Token == null)
-                    return;
-                if (dbUser.userprivileges < 3)
-                {
-                    await _hub.Clients.Client(downloadClient.ConnectionId).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "No privileges to convert m3u8", Answer1 = "Ok" });
-                    return;
-                }
-                var dbFile = new DbFile(downloadClient.FileName, ".mp4", dbUser);
-                var filePath = $"{General.FilePath}/{dbFile.FileKey}.mp4".Replace('\\', '/');
                 try
                 {
+                    await _hub.Clients.Client(downloadClient.ConnectionId).downloadListen("m3u8" + downloadClient.ConnectionId);
+                    var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == downloadClient.Token)).FirstOrDefault();
+                    if (dbUser == null)
+                        throw new Exception($"Unable to find user");
+                    var dbFile = new DbFile(downloadClient.FileName, ".mp4", dbUser);
+                    var filePath = $"{General.FilePath}/{dbFile.FileKey}.mp4".Replace('\\', '/');
                     var conversion = (await FFmpeg.Conversions.FromSnippet.SaveM3U8Stream(new Uri(downloadClient.Url), filePath))
                     .UseMultiThread(2)
                     .SetOverwriteOutput(true);
-                    //conversion.OnProgress += Conversion_OnProgress;
                     conversion.OnProgress += async (sender, args) =>
                     {
                         try
@@ -169,12 +160,6 @@ namespace SyncStreamAPI.ServerData
                 {
                     await _hub.Clients.Client(downloadClient.ConnectionId).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
                 }
-                try
-                {
-                    if (File.Exists(filePath) && dbUser.Files.FirstOrDefault(x => x.FileKey == dbFile.FileKey) == null)
-                        File.Delete(filePath);
-                }
-                catch { }
                 await _hub.Clients.Client(downloadClient.ConnectionId).downloadFinished("m3u8" + downloadClient.UniqueId);
                 if (userM3U8Conversions.Count > 0)
                 {
@@ -236,39 +221,6 @@ namespace SyncStreamAPI.ServerData
                         }
                     }
                 }
-            }
-        }
-
-        private async void Conversion_OnProgress(object sender, Xabe.FFmpeg.Events.ConversionProgressEventArgs args)
-        {
-            try
-            {
-                if (UserToMemberList.ContainsKey(userM3U8Conversions[0].UserId))
-                {
-                    using (var scope = _serviceProvider.CreateScope())
-                    {
-                        var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                        var text = $"{args.Duration}/{args.TotalLength}";
-                        if (userM3U8Conversions[0].Stopwatch != null)
-                        {
-                            var millis = userM3U8Conversions[0].Stopwatch.ElapsedMilliseconds;
-                            var timeLeft = (double)millis / args.Percent * (100 - args.Percent);
-                            if (timeLeft < 0)
-                                timeLeft = 0;
-                            if (timeLeft > TimeSpan.MaxValue.TotalMilliseconds)
-                                timeLeft = TimeSpan.MaxValue.TotalMilliseconds;
-                            var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"hh\:mm\:ss");
-                            text += $" - {timeString} remaining";
-                        }
-                        var result = new DownloadInfo(text, userM3U8Conversions[0].FileName, userM3U8Conversions[0].UniqueId);
-                        result.Progress = args.Percent;
-                        await _hub.Clients.Client(UserToMemberList[userM3U8Conversions[0].UserId]).downloadProgress(result);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
             }
         }
 

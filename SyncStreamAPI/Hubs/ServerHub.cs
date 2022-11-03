@@ -17,6 +17,7 @@ using SyncStreamAPI.ServerData;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
@@ -242,16 +243,24 @@ namespace SyncStreamAPI.Hubs
                 return;
             if (dbUser.userprivileges >= 4)
             {
-                var files = System.IO.Directory.GetFiles(General.FilePath);
+                var files = Directory.GetFiles(General.FilePath);
                 if (files.Count() > 0)
                 {
-                    var dbFiles = _postgres.Files;
+                    var dbFiles = _postgres.Files.ToList();
                     if (dbFiles != null)
                     {
-                        var result = files.Where(f => dbFiles.All(df => df.FileKey != new System.IO.FileInfo(f).Name));
+                        var result = files.Where(f => dbFiles.FindIndex(df => (df.FileKey + df.FileEnding) != new System.IO.FileInfo(f).Name) != -1);
+                        foreach (var file in result)
+                        {
+                            if (File.Exists(file))
+                                File.Delete(file);
+                        }
                     }
                 }
             }
+            else
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to clean up the video files", Answer1 = "Ok" });
+
         }
 
         public async Task DownloadFile(string token, string url, string fileName)
