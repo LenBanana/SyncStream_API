@@ -114,7 +114,7 @@ namespace SyncStreamAPI.ServerData
                     var dbFile = new DbFile(downloadClient.FileName, ".mp4", dbUser);
                     var filePath = $"{General.FilePath}/{dbFile.FileKey}.mp4".Replace('\\', '/');
                     var conversion = (await FFmpeg.Conversions.FromSnippet.SaveM3U8Stream(new Uri(downloadClient.Url), filePath))
-                    .UseMultiThread(2)
+                    //.UseMultiThread(2)
                     .SetOverwriteOutput(true);
                     conversion.OnProgress += async (sender, args) =>
                     {

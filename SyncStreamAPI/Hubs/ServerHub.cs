@@ -250,12 +250,15 @@ namespace SyncStreamAPI.Hubs
                     if (dbFiles != null)
                     {
                         var result = files.Where(f => dbFiles.FindIndex(df => (df.FileKey + df.FileEnding) != new System.IO.FileInfo(f).Name) != -1);
+                        var text = "Files\n";
                         foreach (var file in result)
                         {
                             if (File.Exists(file))
-                                File.Delete(file);
+                                text += "\n" + file;
+                                //File.Delete(file);
                         }
-                        await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Clean up", Question = $"Removed {result?.Count()} files", Answer1 = "Ok" });
+                        //await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Clean up", Question = $"Removed {result?.Count()} files", Answer1 = "Ok" });
+                        await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Clean up", Question = text, Answer1 = "Ok" });
                     }
                 }
             }
