@@ -13,20 +13,6 @@ namespace SyncStreamAPI
     {
         public static void Main(string[] args)
         {
-            //var host = new WebHostBuilder()
-            // .UseKestrel()
-            // .UseContentRoot(System.IO.Directory.GetCurrentDirectory())
-            // .UseIISIntegration()
-            // .UseStartup<Startup>()
-            // .UseUrls("http://*:1337") // <-----
-            // .Build();
-
-            //host.Run();
-            //RtmpServer server = new RtmpServerBuilder()
-            //    .UseStartup<Startup>()
-            //    .Build();
-            //var tsk = server.StartAsync();
-            //tsk.Wait();
             CreateHostBuilder(args).Build().Run();
         }
 

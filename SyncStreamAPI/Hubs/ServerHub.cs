@@ -48,7 +48,6 @@ namespace SyncStreamAPI.Hubs
 #nullable enable
         public override async Task OnDisconnectedAsync(Exception? ex)
         {
-            //_manager.CancelM3U8Conversion(Context.ConnectionId);
             var Rooms = DataManager.GetRooms();
             int idx = Rooms.FindIndex(x => x.server.members.FirstOrDefault(y => y?.ConnectionId == Context.ConnectionId) != null);
             if (idx > -1)

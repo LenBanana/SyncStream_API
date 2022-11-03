@@ -25,7 +25,6 @@ namespace SyncStreamAPI
 
         public IConfiguration Configuration { get; }
 
-        // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddDbContext<PostgresContext>(options =>
@@ -53,8 +52,6 @@ namespace SyncStreamAPI
             }).AddNewtonsoftJsonProtocol();
             services.AddSingleton(provider =>
             {
-                //var hubContext = provider.GetService<IHubContext<ServerHub, IServerHub>>();
-                //var dbContext = provider.GetService<DbContextOptions<PostgresContext>>();
                 DataManager manager = new DataManager(provider);
                 return manager;
             });
@@ -77,7 +74,6 @@ namespace SyncStreamAPI
             });
         }
 
-        // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env, DataManager manager, PostgresContext postgres)
         {
             try
