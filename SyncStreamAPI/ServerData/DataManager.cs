@@ -183,7 +183,7 @@ namespace SyncStreamAPI.ServerData
                 {
                     for (int i = 0; i < userM3U8Conversions.Count; i++)
                     {
-                        if (UserToMemberList.ContainsKey(userM3U8Conversions[i].UserId))
+                        if (UserToMemberList.ContainsKey(userM3U8Conversions[i].UserId) && !userM3U8Conversions[i].CancellationToken.IsCancellationRequested)
                         {
                             var clientResult = new DownloadInfo($"Starting next download...", userM3U8Conversions[i].FileName, userM3U8Conversions[i].UniqueId);
                             await _hub.Clients.Client(UserToMemberList[userM3U8Conversions[i].UserId]).downloadProgress(clientResult);
@@ -222,7 +222,7 @@ namespace SyncStreamAPI.ServerData
                         await _hub.Clients.Client(UserToMemberList[userM3U8Conversions[0].UserId]).downloadProgress(result);
                         for (int i = 1; i < userM3U8Conversions.Count; i++)
                         {
-                            if (UserToMemberList.ContainsKey(userM3U8Conversions[i].UserId))
+                            if (UserToMemberList.ContainsKey(userM3U8Conversions[i].UserId) && !userM3U8Conversions[i].CancellationToken.IsCancellationRequested)
                             {
                                 var clientResult = new DownloadInfo($"{i} download{((i) > 1 ? "s" : "")} infront of you", userM3U8Conversions[i].FileName, userM3U8Conversions[i].UniqueId);
                                 clientResult.Progress = args.Percent;
