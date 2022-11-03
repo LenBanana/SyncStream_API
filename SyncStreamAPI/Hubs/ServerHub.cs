@@ -243,7 +243,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             if (dbUser.userprivileges >= 3)
             {
-                _manager.AddDownload(new(dbUser.ID, fileName, Context.ConnectionId, token, url, null));
+                _manager.AddDownload(new(dbUser.ID, fileName, Context.ConnectionId, token, url));
             }
         }
 

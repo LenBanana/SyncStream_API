@@ -145,7 +145,7 @@ namespace SyncStreamAPI.ServerData
                     {
                         dbUser.Files.Add(dbFile);
                         await _postgres.SaveChangesAsync();
-                        StartNextDownload(downloadClient.UserId);
+                        StartNextDownload();
                     }
                 }
                 catch (OperationCanceledException) { }
@@ -155,7 +155,7 @@ namespace SyncStreamAPI.ServerData
                 }
                 if (File.Exists(filePath) && dbUser.Files.FirstOrDefault(x => x.FileKey == dbFile.FileKey) == null)
                     File.Delete(filePath);
-                StartNextDownload(downloadClient.UserId);
+                StartNextDownload();
             }
         }
 
@@ -177,7 +177,7 @@ namespace SyncStreamAPI.ServerData
             }
         }
 
-        public async void StartNextDownload(int userId)
+        public async void StartNextDownload()
         {
             using (var scope = _serviceProvider.CreateScope())
             {
