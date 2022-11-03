@@ -182,7 +182,8 @@ namespace SyncStreamAPI.ServerData
             using (var scope = _serviceProvider.CreateScope())
             {
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                await _hub.Clients.Client(currentDownload.ConnectionId).downloadFinished("m3u8" + currentDownload.UniqueId);
+                if (currentDownload != null)
+                    await _hub.Clients.Client(currentDownload.ConnectionId).downloadFinished("m3u8" + currentDownload.UniqueId);
                 if (downloadClientQueue.Count > 0)
                 {
                     var nextDownload = downloadClientQueue[0];

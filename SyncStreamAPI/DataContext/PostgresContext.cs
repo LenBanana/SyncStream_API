@@ -16,6 +16,7 @@ namespace SyncStreamAPI.DataContext
 
         public DbSet<User> Users { get; set; }
         public DbSet<DbFile> Files { get; set; }
+        public DbSet<DbFileFolder> Folders { get; set; }
         public DbSet<RememberToken> RememberTokens { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
