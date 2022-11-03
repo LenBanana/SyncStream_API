@@ -255,6 +255,7 @@ namespace SyncStreamAPI.Hubs
                             if (File.Exists(file))
                                 File.Delete(file);
                         }
+                        await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Clean up", Question = $"Removed {result?.Count()} files", Answer1 = "Ok" });
                     }
                 }
             }
