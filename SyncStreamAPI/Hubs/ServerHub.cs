@@ -236,6 +236,25 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
+        public async Task CleanUpFiles(string token)
+        {
+            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+            if (dbUser == null)
+                return;
+            if (dbUser.userprivileges >= 4)
+            {
+                var files = System.IO.Directory.GetFiles(General.FilePath);
+                if (files.Count() > 0)
+                {
+                    var dbFiles = _postgres.Files;
+                    if (dbFiles != null)
+                    {
+                        var result = files.Where(f => dbFiles.All(df => df.FileKey != new System.IO.FileInfo(f).Name));
+                    }
+                }
+            }
+        }
+
         public async Task DownloadFile(string token, string url, string fileName)
         {
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
