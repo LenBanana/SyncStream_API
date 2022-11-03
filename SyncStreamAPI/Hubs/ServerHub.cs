@@ -250,7 +250,7 @@ namespace SyncStreamAPI.Hubs
                     if (dbFiles != null)
                     {
                         var result = files.Where(f => dbFiles.FindIndex(df => (df.FileKey + df.FileEnding) != new System.IO.FileInfo(f).Name) != -1);
-                        var text = "Files\n";
+                        var text = $"{result?.Count()} Files\n";
                         foreach (var file in result)
                         {
                             if (File.Exists(file))
