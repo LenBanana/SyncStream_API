@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Enums;
@@ -29,7 +30,9 @@ namespace SyncStreamAPI.ServerData
         public List<DownloadClientValue> userM3U8Conversions { get; set; } = new List<DownloadClientValue>();
 
         IServiceProvider _serviceProvider { get; set; }
+        IConfiguration Configuration { get; }
         Dictionary<int, string> UserToMemberList { get; set; } = new Dictionary<int, string>();
+        int MaxParallelConversions = 4;
         public DataManager(IServiceProvider provider)
         {
             FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official).Wait();
@@ -37,7 +40,19 @@ namespace SyncStreamAPI.ServerData
             if (path == null)
                 FFmpeg.SetExecutablesPath(Directory.GetCurrentDirectory());
             _serviceProvider = provider;
+            using (var scope = _serviceProvider.CreateScope())
+            {
+                var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+                Configuration = config;
+            }
+            ReadConnectionSettings();
             AddDefaultRooms();
+        }
+
+        public void ReadConnectionSettings()
+        {
+            var section = Configuration.GetSection("MaxParallelConversions");
+            MaxParallelConversions = Convert.ToInt32(section.Value);
         }
 
         public void AddMember(int id, string connectionId)
@@ -61,7 +76,7 @@ namespace SyncStreamAPI.ServerData
                 {
                     userM3U8Conversions.Add(downloadClient);
                     SendStatusToM3U8Clients();
-                    if (userM3U8Conversions.Count > 2)
+                    if (userM3U8Conversions.Count > MaxParallelConversions)
                         return;
                     RunM3U8Conversion(downloadClient);
                     return;
@@ -216,7 +231,7 @@ namespace SyncStreamAPI.ServerData
                 if (userM3U8Conversions.Count > 0)
                 {
                     SendStatusToM3U8Clients();
-                    if (userM3U8Conversions.Where(x => x.Running).Count() < 2)
+                    if (userM3U8Conversions.Where(x => x.Running).Count() < MaxParallelConversions)
                     {
                         var nextDownload = userM3U8Conversions.FirstOrDefault(x => !x.Running);
                         if (nextDownload != null)

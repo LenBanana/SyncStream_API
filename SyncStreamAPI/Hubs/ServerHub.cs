@@ -264,7 +264,18 @@ namespace SyncStreamAPI.Hubs
             }
             else
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to clean up the video files", Answer1 = "Ok" });
+        }
 
+        public async Task ReloadDownloadConfig(string token)
+        {
+            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+            if (dbUser == null)
+                return;
+            if (dbUser.userprivileges >= 4)
+            {
+                _manager.ReadConnectionSettings();
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Reload configuration", Question = "Reload successful", Answer1 = "Ok" });
+            }
         }
 
         public async Task DownloadFile(string token, string url, string fileName)

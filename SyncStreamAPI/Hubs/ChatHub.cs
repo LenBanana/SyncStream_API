@@ -34,7 +34,10 @@ namespace SyncStreamAPI.Hubs
                             var wChatUserMsg = new WhisperUserMessage() { username = $"To {wName}", message = $"{wMsg}" };
                             var wChatReceiverMsg = new WhisperReceiverMessage() { username = $"From {message.username}", message = $"{wMsg}" };
                             await Clients.Caller.sendmessage(wChatUserMsg);
-                            await Clients.Client(receiverMember.ConnectionId).sendmessage(wChatReceiverMsg);
+                            if (wName.ToLower() == "all")
+                                await Clients.Others.sendmessage(wChatReceiverMsg);
+                            else
+                                await Clients.Client(receiverMember.ConnectionId).sendmessage(wChatReceiverMsg);
                             return;
                         }
                         else
