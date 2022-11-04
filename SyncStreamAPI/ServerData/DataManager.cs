@@ -31,7 +31,7 @@ namespace SyncStreamAPI.ServerData
 
         IServiceProvider _serviceProvider { get; set; }
         IConfiguration Configuration { get; }
-        Dictionary<int, string> UserToMemberList { get; set; } = new Dictionary<int, string>();
+        //Dictionary<int, string> UserToMemberList { get; set; } = new Dictionary<int, string>();
         int MaxParallelConversions = 4;
         public DataManager(IServiceProvider provider)
         {
@@ -55,13 +55,13 @@ namespace SyncStreamAPI.ServerData
             MaxParallelConversions = Convert.ToInt32(section.Value);
         }
 
-        public void AddMember(int id, string connectionId)
+        public async void AddMember(int id, string connectionId)
         {
-            if (!UserToMemberList.ContainsKey(id))
-                UserToMemberList.Add(id, connectionId);
-            else
-                if (UserToMemberList[id] != connectionId)
-                UserToMemberList[id] = connectionId;
+            using (var scope = _serviceProvider.CreateScope())
+            {
+                var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+                await _hub.Groups.AddToGroupAsync(connectionId, id.ToString());
+            }
             var clientQueueIdx = userM3U8Conversions.FindIndex(x => x.UserId == id);
             if (clientQueueIdx >= 0)
                 userM3U8Conversions[clientQueueIdx].ConnectionId = connectionId;
@@ -135,21 +135,18 @@ namespace SyncStreamAPI.ServerData
                     {
                         try
                         {
-                            if (UserToMemberList.ContainsKey(downloadClient.UserId))
+                            var text = $"{args.Duration}/{args.TotalLength}";
+                            if (downloadClient.Stopwatch != null)
                             {
-                                var text = $"{args.Duration}/{args.TotalLength}";
-                                if (downloadClient.Stopwatch != null)
-                                {
-                                    var millis = downloadClient.Stopwatch.ElapsedMilliseconds;
-                                    var timeLeft = (double)millis / args.Percent * (100 - args.Percent);
-                                    timeLeft = timeLeft < 0 || timeLeft > TimeSpan.MaxValue.TotalMilliseconds ? 0 : timeLeft;
-                                    var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"hh\:mm\:ss");
-                                    text += $" - {timeString} remaining";
-                                }
-                                var result = new DownloadInfo(text, downloadClient.FileName, downloadClient.UniqueId);
-                                result.Progress = args.Percent;
-                                await _hub.Clients.Client(UserToMemberList[downloadClient.UserId]).downloadProgress(result);
+                                var millis = downloadClient.Stopwatch.ElapsedMilliseconds;
+                                var timeLeft = (double)millis / args.Percent * (100 - args.Percent);
+                                timeLeft = timeLeft < 0 || timeLeft > TimeSpan.MaxValue.TotalMilliseconds ? 0 : timeLeft;
+                                var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"hh\:mm\:ss");
+                                text += $" - {timeString} remaining";
                             }
+                            var result = new DownloadInfo(text, downloadClient.FileName, downloadClient.UniqueId);
+                            result.Progress = args.Percent;
+                            await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadProgress(result);
                         }
                         catch (Exception ex) { Console.WriteLine(ex.Message); }
                     };
@@ -198,10 +195,10 @@ namespace SyncStreamAPI.ServerData
                 var waitingClients = userM3U8Conversions.Where(x => !x.Running).ToList();
                 for (int i = 0; i < waitingClients.Count; i++)
                 {
-                    if (UserToMemberList.ContainsKey(waitingClients[i].UserId) && !waitingClients[i].CancellationToken.IsCancellationRequested)
+                    if (!waitingClients[i].CancellationToken.IsCancellationRequested)
                     {
                         var clientResult = new DownloadInfo(i > 0 ? $"{i} download{((i) > 1 ? "s" : "")} infront of you" : $"You're up next, please wait...", waitingClients[i].FileName, waitingClients[i].UniqueId);
-                        await _hub.Clients.Client(UserToMemberList[waitingClients[i].UserId]).downloadProgress(clientResult);
+                        await _hub.Clients.Group(waitingClients[i].UserId.ToString()).downloadProgress(clientResult);
                     }
                 }
             }
@@ -237,7 +234,7 @@ namespace SyncStreamAPI.ServerData
                         if (nextDownload != null)
                         {
                             var clientResult = new DownloadInfo("Your download is starting, please wait...", nextDownload.FileName, nextDownload.UniqueId);
-                            await _hub.Clients.Client(UserToMemberList[nextDownload.UserId]).downloadProgress(clientResult);
+                            await _hub.Clients.Group(nextDownload.UserId.ToString()).downloadProgress(clientResult);
                             RunM3U8Conversion(nextDownload);
                         }
                     }

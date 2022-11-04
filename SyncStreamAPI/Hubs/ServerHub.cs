@@ -249,12 +249,12 @@ namespace SyncStreamAPI.Hubs
                     var dbFiles = _postgres.Files.ToList();
                     if (dbFiles != null)
                     {
-                        var result = files.Where(f => dbFiles.FindIndex(df => (df.FileKey + df.FileEnding) != new System.IO.FileInfo(f).Name) != -1);
+                        var result = files.Where(f => dbFiles.FindIndex(df => (df.FileKey + df.FileEnding) != new FileInfo(f).Name) != -1);
                         var text = $"{result?.Count()} Files\n";
                         foreach (var file in result)
                         {
                             if (File.Exists(file))
-                                text += "\n" + file;
+                                text += "\n" + $"{file} - {new FileInfo(file).Name}";
                                 //File.Delete(file);
                         }
                         //await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Clean up", Question = $"Removed {result?.Count()} files", Answer1 = "Ok" });
