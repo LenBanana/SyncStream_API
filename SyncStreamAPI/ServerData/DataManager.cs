@@ -120,7 +120,7 @@ namespace SyncStreamAPI.ServerData
             {
                 var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                await _hub.Clients.Client(downloadClient.ConnectionId).downloadListen("m3u8" + downloadClient.ConnectionId);
+                await _hub.Clients.Client(downloadClient.ConnectionId).downloadListen(downloadClient.UniqueId);
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == downloadClient.Token)).FirstOrDefault();
                 var dbFile = new DbFile(downloadClient.FileName, ".mp4", dbUser);
                 var filePath = $"{General.FilePath}/{dbFile.FileKey}.mp4".Replace('\\', '/');
@@ -163,8 +163,6 @@ namespace SyncStreamAPI.ServerData
                     {
                         dbUser.Files.Add(dbFile);
                         await _postgres.SaveChangesAsync();
-                        if (downloadClient != null)
-                            await _hub.Clients.Client(downloadClient.ConnectionId).downloadFinished("m3u8" + downloadClient.UniqueId);
                     }
                 }
                 catch (OperationCanceledException) { }
@@ -178,11 +176,9 @@ namespace SyncStreamAPI.ServerData
                         File.Delete(filePath);
                 }
                 catch { }
-                await _hub.Clients.Client(downloadClient.ConnectionId).downloadFinished("m3u8" + downloadClient.UniqueId);
-                if (userM3U8Conversions.Count > 0)
-                {
+                await _hub.Clients.Client(downloadClient.ConnectionId).downloadFinished(downloadClient.UniqueId);
+                if (userM3U8Conversions.Contains(downloadClient))
                     userM3U8Conversions.Remove(downloadClient);
-                }
                 StartNextDownload();
             }
         }

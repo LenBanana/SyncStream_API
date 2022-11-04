@@ -297,7 +297,6 @@ namespace SyncStreamAPI.Hubs
             if (dbUser.userprivileges >= 3)
             {
                 _manager.CancelM3U8Conversion(downloadId);
-                await Clients.Caller.downloadFinished("m3u8" + Context.ConnectionId);
             }
         }
 
