@@ -17,7 +17,7 @@ namespace SyncStreamAPI.Helper
             _serviceProvider = provider;
         }
 
-        public async Task<bool> Init()
+        public async void Init()
         {
             try
             {
@@ -37,17 +37,17 @@ namespace SyncStreamAPI.Helper
                     }
                 });
                 Console.WriteLine("Successfully initiated browser");
-                return true;
             }
             catch (Exception ex)
             {
                 Console.WriteLine("Error initiating browser\n\n" + ex.Message);
-                return false;
             }
         }
 
         public async Task<BrowserM3U8Response> GetM3U8FromUrl(string url)
         {
+            if (browser == null)
+                return new BrowserM3U8Response();
             var result = new BrowserM3U8Response();
             result.InputUrl = url;
             var page = await browser.NewPageAsync();

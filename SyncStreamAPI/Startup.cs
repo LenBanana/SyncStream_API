@@ -60,10 +60,8 @@ namespace SyncStreamAPI
             services.AddSingleton(provider =>
             {
                 BrowserAutomation browser = new BrowserAutomation(provider);
-                if (browser.Init().Result)
-                    return browser;
-                else
-                    return null;
+                browser.Init();
+                return browser;
             });
             services.AddSingleton(provider =>
             {
