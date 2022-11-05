@@ -116,7 +116,7 @@ namespace SyncStreamAPI.Hubs
                     var folder = _postgres.Folders?.Include(x => x.Files).FirstOrDefault(x => x.Id == folderId && x.UserId == dbUser.ID);
                     if (folder != null)
                     {
-                        if (folder.Files?.Count > 0 || folder.Children?.Count > 0)
+                        if (folder.Files?.Count > 0 || _postgres.Folders?.Where(x => x.ParentId == folderId).Count() > 0)
                         {
                             await Clients.Caller.dialog(new Dialog(AlertTypes.Warning) { Header = "Folder deletion", Question = "Prevented folder deletion because it still contains files", Answer1 = "Ok" });
                             return;
