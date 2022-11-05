@@ -39,7 +39,10 @@ namespace SyncStreamAPI.ServerData
             if (path == null)
                 FFmpeg.SetExecutablesPath(Directory.GetCurrentDirectory());
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                LinuxBash.Bash($"chmod 777 {path}");
+            {
+                LinuxBash.Bash($"chmod 777 /app/ffmpeg");
+                LinuxBash.Bash($"chmod 777 /app/ffprobe");
+            }
             _serviceProvider = provider;
             using (var scope = _serviceProvider.CreateScope())
             {
