@@ -2,6 +2,7 @@
 using PuppeteerSharp;
 using SyncStreamAPI.Models;
 using System;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Helper
@@ -22,7 +23,15 @@ namespace SyncStreamAPI.Helper
             try
             {
                 options = new NavigationOptions() { WaitUntil = new[] { WaitUntilNavigation.Networkidle2 } };
-                var b = await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultChromiumRevision);
+                BrowserFetcher browserFetcher = new BrowserFetcher();
+                var folder = browserFetcher.DownloadsFolder;
+                await browserFetcher.DownloadAsync(BrowserFetcher.DefaultChromiumRevision);
+
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                {
+                    var path = await new Launcher().GetExecutablePathAsync();
+                    LinuxBash.Bash($"chmod 777 {path}");
+                }
                 browser = await Puppeteer.LaunchAsync(new LaunchOptions
                 {
                     Devtools = true,

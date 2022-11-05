@@ -15,6 +15,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Xabe.FFmpeg;
@@ -37,6 +38,8 @@ namespace SyncStreamAPI.ServerData
             var path = FFmpeg.ExecutablesPath;
             if (path == null)
                 FFmpeg.SetExecutablesPath(Directory.GetCurrentDirectory());
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                LinuxBash.Bash($"chmod 777 {path}");
             _serviceProvider = provider;
             using (var scope = _serviceProvider.CreateScope())
             {
