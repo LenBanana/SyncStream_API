@@ -25,10 +25,10 @@ namespace SyncStreamAPI.Helper
                 options = new NavigationOptions() { WaitUntil = new[] { WaitUntilNavigation.Networkidle2 } };
                 BrowserFetcher browserFetcher = new BrowserFetcher();
                 var dl = await browserFetcher.DownloadAsync(BrowserFetcher.DefaultChromiumRevision);
-                var path = dl.ExecutablePath;
+                var path = dl.FolderPath;                
                 Console.WriteLine($"Download to {path} was {dl.Downloaded}");
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                    LinuxBash.Bash($"chmod 777 {path}");
+                    LinuxBash.Bash($"chmod -R 777 {path}");
                 browser = await Puppeteer.LaunchAsync(new LaunchOptions
                 {
                     Headless = true,
