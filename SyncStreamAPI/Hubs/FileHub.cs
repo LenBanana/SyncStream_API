@@ -91,7 +91,7 @@ namespace SyncStreamAPI.Hubs
                     var parent = _postgres.Folders?.FirstOrDefault(x => x.Id == folderId);
                     if (parent == null)
                         return;
-                    var newFolder = new DbFileFolder("New Folder", parent.Id);
+                    var newFolder = new DbFileFolder("New Folder", parent.Id, dbUser.ID);
                     _postgres.Folders.Add(newFolder);
                     await _postgres.SaveChangesAsync();
                     await GetFolders(token, folderId);

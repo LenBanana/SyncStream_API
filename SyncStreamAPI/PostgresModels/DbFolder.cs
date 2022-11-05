@@ -29,11 +29,12 @@ namespace SyncStreamAPI.PostgresModels
             Name = name;
         }
 
-        public DbFileFolder(string name, int parent)
+        public DbFileFolder(string name, int parent, int userId)
         {
             Id = 0;
             Name = name;
             ParentId = parent;
+            UserId = userId;
         }
     }
 }
