@@ -113,10 +113,10 @@ namespace SyncStreamAPI.Hubs
                     return;
                 if (dbUser.userprivileges >= 3)
                 {
-                    var folder = _postgres.Folders?.Include(x => x.Files).FirstOrDefault(x => x.Id == folderId);
+                    var folder = _postgres.Folders?.Include(x => x.Files).FirstOrDefault(x => x.Id == folderId && x.UserId == dbUser.ID);
                     if (folder != null)
                     {
-                        if (folder.Files.Count > 0 || folder.Children.Count > 0)
+                        if (folder.Files?.Count > 0 || folder.Children?.Count > 0)
                         {
                             await Clients.Caller.dialog(new Dialog(AlertTypes.Warning) { Header = "Folder deletion", Question = "Prevented folder deletion because it still contains files", Answer1 = "Ok" });
                             return;
@@ -129,7 +129,7 @@ namespace SyncStreamAPI.Hubs
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error in 'ChangeFolder'");
+                Console.WriteLine("Error in 'DeleteFolder'");
                 Console.WriteLine(ex.Message);
             }
         }
@@ -175,7 +175,7 @@ namespace SyncStreamAPI.Hubs
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error in 'ChangeFolder'");
+                Console.WriteLine("Error in 'ChangeFolderName'");
                 Console.WriteLine(ex.Message);
             }
         }
