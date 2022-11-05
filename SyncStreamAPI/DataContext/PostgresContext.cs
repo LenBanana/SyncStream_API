@@ -22,6 +22,9 @@ namespace SyncStreamAPI.DataContext
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
+
+            builder.Entity<DbFileFolder>().HasMany(x => x.Children).WithOne(x => x.Parent);
+            builder.Entity<DbFileFolder>().HasMany(x => x.Files);
         }
     }
 }

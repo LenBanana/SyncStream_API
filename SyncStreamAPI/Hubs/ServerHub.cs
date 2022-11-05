@@ -214,13 +214,172 @@ namespace SyncStreamAPI.Hubs
 
         public async Task GetDownloads(string token)
         {
-            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
-            if (dbUser == null)
-                return;
-            if (dbUser.userprivileges >= 3)
+            try
             {
-                var result = _postgres.Users.Include(x => x.Files).FirstOrDefault(x => x.ID == dbUser.ID)?.Files.Select(x => new FileDto(x)).OrderBy(x => x.Name).ToList();
-                await Clients.Caller.getDownloads(result);
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+                if (dbUser == null)
+                    return;
+                if (dbUser.userprivileges >= 3)
+                {
+                    var userFiles = _postgres.Files?.Where(x => x.UserID == dbUser.ID).ToList();
+                    var result = userFiles.Select(x => new FileDto(x)).OrderBy(x => x.Name).ToList();
+                    await Clients.Caller.getDownloads(result);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error in 'GetDownloads'");
+                Console.WriteLine(ex.Message);
+            }
+        }
+
+        public async Task GetFolders(string token, int folderId = 1)
+        {
+            try
+            {
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+                if (dbUser == null)
+                    return;
+                if (dbUser.userprivileges >= 3)
+                {
+                    var folder = _postgres.Folders?.OrderBy(x => x.Name).ToList();
+                    var defaultFolder = folder.FirstOrDefault(x => x.Id == folderId);
+                    if (defaultFolder != null)
+                    {
+                        var folderResult = new FolderDto(defaultFolder);
+                        await Clients.Caller.getFolders(folderResult);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error in 'GetFolders'");
+                Console.WriteLine(ex.Message);
+            }
+        }
+
+        public async Task AddFolder(string token, int folderId)
+        {
+            try
+            {
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+                if (dbUser == null)
+                    return;
+                if (dbUser.userprivileges >= 3)
+                {
+                    var parent = _postgres.Folders?.FirstOrDefault(x => x.Id == folderId);
+                    if (parent == null)
+                        return;
+                    var newFolder = new DbFileFolder("New Folder", parent.Id);
+                    _postgres.Folders.Add(newFolder);
+                    await _postgres.SaveChangesAsync();
+                    await GetFolders(token, folderId);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error in 'AddFolder'");
+                Console.WriteLine(ex.Message);
+            }
+        }
+
+        public async Task DeleteFolder(string token, int folderId)
+        {
+            try
+            {
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+                if (dbUser == null)
+                    return;
+                if (dbUser.userprivileges >= 3)
+                {
+                    var folder = _postgres.Folders?.Include(x => x.Files).FirstOrDefault(x => x.Id == folderId);
+                    if (folder != null)
+                    {
+                        if (folder.Files.Count > 0)
+                        {
+                            await Clients.Caller.dialog(new Dialog(AlertTypes.Warning) { Header = "Folder deletion", Question = "Prevented folder deletion because it still contains files", Answer1 = "Ok" });
+                            return;
+                        }
+                        _postgres.Folders.Remove(folder);
+                        await _postgres.SaveChangesAsync();
+                        await GetFolders(token, (int)folder.ParentId);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error in 'ChangeFolder'");
+                Console.WriteLine(ex.Message);
+            }
+        }
+
+        public async Task GetFolderFiles(string token, int folderId)
+        {
+            try
+            {
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+                if (dbUser == null)
+                    return;
+                if (dbUser.userprivileges >= 3)
+                {
+                    var files = _postgres.Files?.Where(x => x.DbFileFolderId == folderId);
+                    if (files != null)
+                        await Clients.Caller.getFolderFiles(files.Select(x => new FileDto(x)).ToList());
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error in 'GetFolderFiles'");
+                Console.WriteLine(ex.Message);
+            }
+        }
+
+        public async Task ChangeFolderName(string token, int folderId, string folderName)
+        {
+            try
+            {
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+                if (dbUser == null)
+                    return;
+                if (dbUser.userprivileges >= 3)
+                {
+                    var folder = _postgres.Folders?.FirstOrDefault(x => x.Id == folderId);
+                    if (folder != null)
+                    {
+                        folder.Name = folderName;
+                        await _postgres.SaveChangesAsync();
+                        await GetFolders(token, (int)folder.ParentId);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error in 'ChangeFolder'");
+                Console.WriteLine(ex.Message);
+            }
+        }
+
+        public async Task ChangeFolder(string token, int fileId, int folderId)
+        {
+            try
+            {
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+                if (dbUser == null)
+                    return;
+                if (dbUser.userprivileges >= 3)
+                {
+                    var file = _postgres.Files?.FirstOrDefault(x => x.ID == fileId);
+                    if (file != null && file.DbFileFolderId != folderId)
+                    {
+                        file.DbFileFolderId = folderId;
+                        await _postgres.SaveChangesAsync();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error in 'ChangeFolder'");
+                Console.WriteLine(ex.Message);
             }
         }
 
@@ -255,7 +414,7 @@ namespace SyncStreamAPI.Hubs
                         {
                             if (File.Exists(file))
                                 text += "\n" + $"{file} - {new FileInfo(file).Name}";
-                                //File.Delete(file);
+                            //File.Delete(file);
                         }
                         //await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Clean up", Question = $"Removed {result?.Count()} files", Answer1 = "Ok" });
                         await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Clean up", Question = text, Answer1 = "Ok" });

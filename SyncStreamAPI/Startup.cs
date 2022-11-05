@@ -74,12 +74,8 @@ namespace SyncStreamAPI
             });
         }
 
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, DataManager manager, PostgresContext postgres)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, DataManager manager)
         {
-            try
-            {
-                postgres.Database.EnsureCreated();
-            } catch { }
             var forwardingOptions = new ForwardedHeadersOptions() { ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.All };
             app.UseForwardedHeaders(forwardingOptions);
             if (env.IsDevelopment())

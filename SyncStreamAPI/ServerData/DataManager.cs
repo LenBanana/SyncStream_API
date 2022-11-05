@@ -49,6 +49,26 @@ namespace SyncStreamAPI.ServerData
             AddDefaultRooms();
         }
 
+        public async void AddDefaultRooms()
+        {
+            Rooms.Add(new Room("Dreckroom", "dreck", false, true));
+            Rooms.Add(new Room("Randomkeller", "random", false, true));
+            Rooms.Add(new Room("BigWeinerClub", "weiner", false, true));
+            for (int i = 1; i < 5; i++)
+                Rooms.Add(new Room($"Guest Room - {i}", $"guest{i}", true, false));
+
+            using (var scope = _serviceProvider.CreateScope())
+            {
+                var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
+                await _postgres.Database.EnsureCreatedAsync();
+                if (await _postgres.Folders.CountAsync() == 0)
+                {
+                    _postgres.Folders.Add(new DbFileFolder("Default"));
+                    await _postgres.SaveChangesAsync();
+                }
+            }
+        }
+
         public void ReadConnectionSettings()
         {
             var section = Configuration.GetSection("MaxParallelConversions");
@@ -309,15 +329,6 @@ namespace SyncStreamAPI.ServerData
             {
 
             }
-        }
-
-        public void AddDefaultRooms()
-        {
-            Rooms.Add(new Room("Dreckroom", "dreck", false, true));
-            Rooms.Add(new Room("Randomkeller", "random", false, true));
-            Rooms.Add(new Room("BigWeinerClub", "weiner", false, true));
-            for (int i = 1; i < 5; i++)
-                Rooms.Add(new Room($"Guest Room - {i}", $"guest{i}", true, false));
         }
 
         public static Room GetRoom(string UniqueId)

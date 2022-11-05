@@ -11,15 +11,8 @@ namespace SyncStreamAPI.DTOModel
         public string FileEnding { get; set; }
         public string FileKey { get; set; }
         public DateTime Created { get; set; }
+        public int FileFolderId { get; set; }
         public long Length => new System.IO.FileInfo($"{General.FilePath}/{FileKey}{FileEnding}").Length;
-        public FileDto(int id, string name, string fileEnding, string fileKey, DateTime created)
-        {
-            ID = id;
-            Name = name;
-            FileEnding = fileEnding;
-            FileKey = fileKey;
-            Created = created;
-        }
 
         public FileDto(DbFile file)
         {
@@ -28,6 +21,7 @@ namespace SyncStreamAPI.DTOModel
             FileEnding = file.FileEnding;
             FileKey = file.FileKey;
             Created = file.Created;
+            FileFolderId = file.DbFileFolderId;
         }
     }
 }
