@@ -15,5 +15,6 @@ namespace SyncStreamAPI.Interfaces
         Task downloadRemoved(string id);
         Task downloadProgress(DownloadInfo info);
         Task downloadFinished(string id);
+        Task browserResults(List<string> urls);
     }
 }

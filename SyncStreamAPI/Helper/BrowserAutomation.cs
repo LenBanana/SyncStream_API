@@ -67,9 +67,15 @@ namespace SyncStreamAPI.Helper
             var doc = new HtmlDocument();
             doc.LoadHtml(html);
             var videoNodes = doc.DocumentNode.SelectNodes("//video");
+            if (videoNodes == null)
+                videoNodes = doc.DocumentNode.SelectNodes("//a");
+            if (videoNodes == null)
+                return new BrowserM3U8Response();
             foreach (var node in videoNodes)
             {
                 var src = node.GetAttributeValue("src", "").Trim();
+                if (src.Length == 0)
+                    src = node.GetAttributeValue("href", "").Trim();
                 if (src.Length > 0 && !result.OutputUrls.Contains(src))
                     result.OutputUrls.Add(src);
             }

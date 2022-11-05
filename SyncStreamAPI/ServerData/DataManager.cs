@@ -126,11 +126,7 @@ namespace SyncStreamAPI.ServerData
                             }
                             var response = await _browser.GetM3U8FromUrl(downloadClient.Url);
                             if (response != null)
-                            {
-                                var txt = "";
-                                response.OutputUrls.ForEach(x => txt += $"{x}\n\n");
-                                await _hub.Clients.Client(downloadClient.ConnectionId).dialog(new Dialog(AlertTypes.Success) { Header = "File search", Question = $"Found files:\n\n\n{txt}", Answer1 = "Ok" });
-                            }
+                                await _hub.Clients.Client(downloadClient.ConnectionId).browserResults(response.OutputUrls);
                             return;
                         }
                         await _hub.Clients.Client(downloadClient.ConnectionId).downloadListen(downloadClient.ConnectionId);
