@@ -63,7 +63,7 @@ namespace SyncStreamAPI.Hubs
                     return;
                 if (dbUser.userprivileges >= 3)
                 {
-                    var folder = _postgres.Folders?.OrderBy(x => x.Name).ToList();
+                    var folder = _postgres.Folders?.Include(x => x.Files).Where(x => x.UserId == null || x.UserId == dbUser.ID).OrderBy(x => x.Name).ToList();
                     var defaultFolder = folder.FirstOrDefault(x => x.Id == folderId);
                     if (defaultFolder != null)
                     {

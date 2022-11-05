@@ -5,6 +5,7 @@ namespace SyncStreamAPI.PostgresModels
     public class DbFileFolder
     {
         public int Id { get; set; }
+        public int? UserId { get; set; }
         public string Name { get; set; }
         public List<DbFile> Files { get; set; }
 #nullable enable
