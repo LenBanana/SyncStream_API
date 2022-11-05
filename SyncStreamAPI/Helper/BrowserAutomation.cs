@@ -26,17 +26,16 @@ namespace SyncStreamAPI.Helper
                 BrowserFetcher browserFetcher = new BrowserFetcher();
                 var folder = browserFetcher.DownloadsFolder;
                 await browserFetcher.DownloadAsync(BrowserFetcher.DefaultChromiumRevision);
-
+                var path = await new Launcher().GetExecutablePathAsync();
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
-                    var path = await new Launcher().GetExecutablePathAsync();
                     LinuxBash.Bash($"chmod 777 {path}");
                 }
                 browser = await Puppeteer.LaunchAsync(new LaunchOptions
                 {
                     Devtools = true,
                     Headless = true,
-                    ExecutablePath = b.ExecutablePath,
+                    ExecutablePath = path,
                     Args = new string[] {
                         @"--user-agent=""Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36""",
                         "--window-size=800,800",
