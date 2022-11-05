@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 
 namespace SyncStreamAPI.Helper
 {
@@ -6,6 +7,7 @@ namespace SyncStreamAPI.Helper
     {
         public static void Bash(string cmd)
         {
+            Console.WriteLine($"Bash command {cmd}");
             var escapedArgs = cmd.Replace("\"", "\\\"");
 
             var process = new Process()

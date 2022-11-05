@@ -24,24 +24,20 @@ namespace SyncStreamAPI.Helper
             {
                 options = new NavigationOptions() { WaitUntil = new[] { WaitUntilNavigation.Networkidle2 } };
                 BrowserFetcher browserFetcher = new BrowserFetcher();
-                var folder = browserFetcher.DownloadsFolder;
                 var dl = await browserFetcher.DownloadAsync(BrowserFetcher.DefaultChromiumRevision);
                 var path = dl.ExecutablePath;
+                Console.WriteLine($"Download to {path} was {dl.Downloaded}");
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                {
                     LinuxBash.Bash($"chmod 777 {path}");
-                }
                 browser = await Puppeteer.LaunchAsync(new LaunchOptions
                 {
-                    Devtools = true,
                     Headless = true,
-                    ExecutablePath = path,
                     Args = new string[] {
-                        @"--user-agent=""Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36""",
-                        "--window-size=800,800",
-                        "--user-data-dir=\"C:/Chrome dev session\"",
-                        "--disable-web-security",
-                        "--disable-features=IsolateOrigins,site-per-process"
+                        "--user-agent=\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36\"",
+                        "--disable-gpu",
+                        "--disable-dev-shm-usage",
+                        "--disable-setuid-sandbox",
+                        "--no-sandbox"
                     }
                 });
                 Console.WriteLine("Successfully initiated browser");
