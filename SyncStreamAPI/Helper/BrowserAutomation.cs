@@ -25,8 +25,8 @@ namespace SyncStreamAPI.Helper
                 options = new NavigationOptions() { WaitUntil = new[] { WaitUntilNavigation.Networkidle2 } };
                 BrowserFetcher browserFetcher = new BrowserFetcher();
                 var folder = browserFetcher.DownloadsFolder;
-                await browserFetcher.DownloadAsync(BrowserFetcher.DefaultChromiumRevision);
-                var path = await new Launcher().GetExecutablePathAsync();
+                var dl = await browserFetcher.DownloadAsync(BrowserFetcher.DefaultChromiumRevision);
+                var path = dl.ExecutablePath;
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
                     LinuxBash.Bash($"chmod 777 {path}");
