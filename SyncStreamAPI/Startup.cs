@@ -10,6 +10,7 @@ using Microsoft.OpenApi.Models;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Games.Blackjack;
 using SyncStreamAPI.Games.Gallows;
+using SyncStreamAPI.Helper;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.ServerData;
@@ -45,15 +46,24 @@ namespace SyncStreamAPI
                        .AllowAnyMethod()
                        .AllowAnyHeader()
                        .AllowCredentials();
-            //
+                //
             }));
-            services.AddSignalR(options => {
+            services.AddSignalR(options =>
+            {
                 options.EnableDetailedErrors = false;
             }).AddNewtonsoftJsonProtocol();
             services.AddSingleton(provider =>
             {
                 DataManager manager = new DataManager(provider);
                 return manager;
+            });
+            services.AddSingleton(provider =>
+            {
+                BrowserAutomation browser = new BrowserAutomation(provider);
+                if (browser.Init().Result)
+                    return browser;
+                else
+                    return null;
             });
             services.AddSingleton(provider =>
             {
@@ -74,7 +84,7 @@ namespace SyncStreamAPI
             });
         }
 
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, DataManager manager)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, DataManager manager, IHostApplicationLifetime applicationLifetime, BrowserAutomation? browser)
         {
             var forwardingOptions = new ForwardedHeadersOptions() { ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.All };
             app.UseForwardedHeaders(forwardingOptions);
@@ -92,6 +102,10 @@ namespace SyncStreamAPI
             app.UseCors("CORSPolicy");
             app.UseAuthentication();
             app.UseAuthorization();
+            applicationLifetime.ApplicationStopping.Register(() => 
+            { 
+                browser?.Dispose(); 
+            });
 
             app.UseEndpoints(endpoints =>
             {

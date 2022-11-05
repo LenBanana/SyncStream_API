@@ -28,11 +28,9 @@ namespace SyncStreamAPI.ServerData
         public static bool checking { get; set; } = false;
         public Dictionary<WebClient, DownloadClientValue> userWebDownloads { get; set; } = new Dictionary<WebClient, DownloadClientValue>();
         public List<DownloadClientValue> userM3U8Conversions { get; set; } = new List<DownloadClientValue>();
-
         IServiceProvider _serviceProvider { get; set; }
         IConfiguration Configuration { get; }
-        //Dictionary<int, string> UserToMemberList { get; set; } = new Dictionary<int, string>();
-        int MaxParallelConversions = 4;
+        int MaxParallelConversions { get; set; } = 4;
         public DataManager(IServiceProvider provider)
         {
             FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official).Wait();
@@ -45,7 +43,7 @@ namespace SyncStreamAPI.ServerData
                 var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
                 Configuration = config;
             }
-            ReadConnectionSettings();
+            ReadSettings();
             AddDefaultRooms();
         }
 
@@ -69,7 +67,7 @@ namespace SyncStreamAPI.ServerData
             }
         }
 
-        public void ReadConnectionSettings()
+        public async void ReadSettings()
         {
             var section = Configuration.GetSection("MaxParallelConversions");
             MaxParallelConversions = Convert.ToInt32(section.Value);
@@ -92,6 +90,7 @@ namespace SyncStreamAPI.ServerData
             using (var scope = _serviceProvider.CreateScope())
             {
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+                var _browser = scope.ServiceProvider.GetRequiredService<BrowserAutomation>();
                 if (downloadClient.Url.Contains("m3u8"))
                 {
                     userM3U8Conversions.Add(downloadClient);
@@ -114,7 +113,18 @@ namespace SyncStreamAPI.ServerData
                         var mb = ((double)totalDownload / 1024d / 1024d);
                         if (totalDownload <= 0)
                         {
-                            await _hub.Clients.Client(downloadClient.ConnectionId).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = $"Not allowed to download anything above 500mb file was {mb}mb", Answer1 = "Ok" });
+                            if (_browser == null)
+                            {
+                                await _hub.Clients.Client(downloadClient.ConnectionId).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = $"Not allowed to download anything above 500mb file was {mb}mb", Answer1 = "Ok" });
+                                return;
+                            }
+                            var response = await _browser.GetM3U8FromUrl(downloadClient.Url);
+                            if (response != null)
+                            {
+                                var txt = "";
+                                response.OutputUrls.ForEach(x => txt += $"{x}\n\n");
+                                await _hub.Clients.Client(downloadClient.ConnectionId).dialog(new Dialog(AlertTypes.Success) { Header = "File search", Question = $"Found files:\n\n\n{txt}", Answer1 = "Ok" });
+                            }
                             return;
                         }
                         await _hub.Clients.Client(downloadClient.ConnectionId).downloadListen(downloadClient.ConnectionId);
@@ -188,7 +198,7 @@ namespace SyncStreamAPI.ServerData
                 catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
-                    await _hub.Clients.Client(downloadClient.ConnectionId).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
+                    await _hub.Clients.Client(downloadClient.ConnectionId).dialog(new Dialog(AlertTypes.Danger) { Header = ex.InnerException.GetType().Name, Question = $"{ex.InnerException.GetType().Name} \n{ex.Message}", Answer1 = "Ok" });
                 }
                 try
                 {

@@ -253,7 +253,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             if (dbUser.userprivileges >= 4)
             {
-                _manager.ReadConnectionSettings();
+                _manager.ReadSettings();
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Reload configuration", Question = "Reload successful", Answer1 = "Ok" });
             }
         }
