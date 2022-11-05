@@ -143,7 +143,7 @@ namespace SyncStreamAPI.Hubs
                     return;
                 if (dbUser.userprivileges >= 3)
                 {
-                    var files = _postgres.Files?.Where(x => x.DbFileFolderId == folderId);
+                    var files = _postgres.Files?.Where(x => x.DbFileFolderId == folderId && x.UserID == dbUser.ID);
                     if (files != null)
                         await Clients.Caller.getFolderFiles(files.Select(x => new FileDto(x)).ToList());
                 }
