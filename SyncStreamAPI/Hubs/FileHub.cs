@@ -18,7 +18,6 @@ namespace SyncStreamAPI.Hubs
             if (name == null || name.Length <= 2)
             {
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Filename has to be at least 3 characters long", Answer1 = "Ok" });
-                await GetDownloads(token);
                 return;
             }
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
@@ -29,7 +28,8 @@ namespace SyncStreamAPI.Hubs
                 var result = _postgres.Users.Include(x => x.Files).FirstOrDefault(x => x.ID == dbUser.ID)?.Files.FirstOrDefault(x => x.ID == fileId);
                 result.Name = name;
                 await _postgres.SaveChangesAsync();
-                await GetDownloads(token);
+                if (result.DbFileFolderId > 0)
+                    await GetFolderFiles(token, result.DbFileFolderId);
             }
         }
 
@@ -300,6 +300,9 @@ namespace SyncStreamAPI.Hubs
                     _postgres.Files.Remove(file);
                     await _postgres.SaveChangesAsync();
                     await Clients.Caller.downloadRemoved(id.ToString());
+                    if (file.DbFileFolderId > 0)
+                        await GetFolderFiles(token, file.DbFileFolderId);
+
                 }
             }
         }
