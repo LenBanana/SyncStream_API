@@ -36,11 +36,19 @@ namespace SyncStreamAPI.Controllers
         }
 
         [HttpGet("[action]")]
-        public async Task<IActionResult> videoByToken(int uniqueId, string token)
+        public async Task<IActionResult> videoByToken(int uniqueId, string videoKey, string token)
         {
             try
             {
-                var dbFile = _postgres.Files?.Where(x => x.FileKey != null && x.FileKey == token && x.ID == uniqueId).FirstOrDefault();
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+                RememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
+                if (Token == null || dbUser == null || dbUser?.userprivileges < 1)
+                {
+                    if (dbUser != null)
+                        await _hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertTypes.Danger) { Question = "You do not have permissions to view this content", Answer1 = "Ok" });
+                    return StatusCode(StatusCodes.Status403Forbidden);
+                }
+                var dbFile = _postgres.Files?.Where(x => x.FileKey != null && x.FileKey == videoKey && x.ID == uniqueId).FirstOrDefault();
                 if (dbFile == null)
                     return StatusCode(StatusCodes.Status403Forbidden);
                 var path = General.FilePath + $"/{dbFile.FileKey}{dbFile.FileEnding}";
@@ -66,29 +74,23 @@ namespace SyncStreamAPI.Controllers
                     return StatusCode(StatusCodes.Status403Forbidden);
                 var file = Request.Form.Files[0];
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
-                if (dbUser == null)
-                    return StatusCode(StatusCodes.Status403Forbidden);
                 RememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
-                if (Token == null)
+                if (Token == null || dbUser == null || dbUser?.userprivileges < 3)
                     return StatusCode(StatusCodes.Status403Forbidden);
-                if (dbUser.userprivileges >= 3)
+                if (file.Length <= 0)
+                    return StatusCode(StatusCodes.Status405MethodNotAllowed);
+                var fileInfo = new FileInfo(file.FileName);
+                var dbfile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension, dbUser);
+                var path = General.FilePath + $"/{dbfile.FileKey}{dbfile.FileEnding}";
+                if (!Directory.Exists(General.FilePath))
+                    Directory.CreateDirectory(General.FilePath);
+                using (var ms = System.IO.File.OpenWrite(path))
                 {
-                    if (file.Length <= 0)
-                        return StatusCode(StatusCodes.Status405MethodNotAllowed);
-                    var fileInfo = new FileInfo(file.FileName);
-                    var dbfile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension, dbUser);
-                    var path = General.FilePath + $"/{dbfile.FileKey}{dbfile.FileEnding}";
-                    if (!Directory.Exists(General.FilePath))
-                        Directory.CreateDirectory(General.FilePath);
-                    using (var ms = System.IO.File.OpenWrite(path))
-                    {
-                        await file.CopyToAsync(ms);
-                    }
-                    _postgres.Files?.Add(dbfile);
-                    await _postgres.SaveChangesAsync();
-                    return Ok();
+                    await file.CopyToAsync(ms);
                 }
-                return StatusCode(StatusCodes.Status403Forbidden);
+                _postgres.Files?.Add(dbfile);
+                await _postgres.SaveChangesAsync();
+                return Ok();
             }
             catch (Exception ex)
             {
