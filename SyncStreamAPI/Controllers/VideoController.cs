@@ -75,7 +75,8 @@ namespace SyncStreamAPI.Controllers
                 {
                     if (file.Length <= 0)
                         return StatusCode(StatusCodes.Status405MethodNotAllowed);
-                    var dbfile = new DbFile(file.FileName, "." + file.FileName.Split('.').Last(), dbUser);
+                    var fileInfo = new FileInfo(file.FileName);
+                    var dbfile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension, dbUser);
                     var path = General.FilePath + $"/{dbfile.FileKey}{dbfile.FileEnding}";
                     if (!Directory.Exists(General.FilePath))
                         Directory.CreateDirectory(General.FilePath);
