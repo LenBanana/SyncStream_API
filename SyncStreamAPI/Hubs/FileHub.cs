@@ -216,7 +216,7 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
-        public async Task CleanUpFiles(string token)
+        public async Task CleanUpFiles(string token, bool delete = false)
         {
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
@@ -229,16 +229,20 @@ namespace SyncStreamAPI.Hubs
                     var dbFiles = _postgres.Files.ToList();
                     if (dbFiles != null)
                     {
-                        var result = files.Where(f => dbFiles.FindIndex(df => (df.FileKey + df.FileEnding) != new FileInfo(f).Name) != -1);
+                        var result = files.Where(f => dbFiles.FindIndex(df => (df.FileKey + df.FileEnding).ToLower() == new FileInfo(f).Name.ToLower()) == -1);
                         var text = $"{result?.Count()} Files\n";
                         foreach (var file in result)
                         {
                             if (File.Exists(file))
-                                text += "\n" + $"{file} - {new FileInfo(file).Name}";
-                            //File.Delete(file);
+                                if (delete)
+                                    File.Delete(file);
+                                else
+                                    text += "\n" + $"{file} - {new FileInfo(file).Name}";
                         }
-                        //await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Clean up", Question = $"Removed {result?.Count()} files", Answer1 = "Ok" });
-                        await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Clean up", Question = text, Answer1 = "Ok" });
+                        if (delete)
+                            await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Clean up", Question = $"Removed {result?.Count()} files", Answer1 = "Ok" });
+                        else
+                            await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Clean up", Question = text, Answer1 = "Ok" });
                     }
                 }
             }
