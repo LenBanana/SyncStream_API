@@ -123,7 +123,7 @@ namespace SyncStreamAPI.Hubs
                         }
                         _postgres.Folders.Remove(folder);
                         await _postgres.SaveChangesAsync();
-                        await GetFolders(token, (int)folder.ParentId);
+                        await GetFolderFiles(token, folderId);
                     }
                 }
             }
