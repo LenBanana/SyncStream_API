@@ -11,7 +11,7 @@ namespace SyncStreamAPI.PostgresModels
         public string username { get; set; }
         public string password { get; set; }
         public int approved { get; set; }
-        public int userprivileges { get; set; }
+        public UserPrivileges userprivileges { get; set; }
         public string usersalt { get; set; }
         public List<RememberToken> RememberTokens { get; set; }
         public List<DbFile> Files { get; set; }
@@ -29,5 +29,14 @@ namespace SyncStreamAPI.PostgresModels
             RememberTokens = new List<RememberToken>();
             Files = new List<DbFile>();
         }
+    }
+
+    public enum UserPrivileges
+    {
+        NotApproved = 0,
+        Approved,
+        Moderator,
+        Administrator,
+        Elevated
     }
 }

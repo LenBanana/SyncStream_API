@@ -11,6 +11,7 @@ using SyncStreamAPI.Helper;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.GameModels.Chess;
+using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
 using System;
 using System.Collections.Generic;
@@ -110,7 +111,7 @@ namespace SyncStreamAPI.Hubs
                     if (member.ishost)
                         return true;
                     var user = _postgres.Users.FirstOrDefault(x => x.username == member.username);
-                    if (user == null || user.userprivileges < minPriv)
+                    if (user == null || user.userprivileges < (UserPrivileges)minPriv)
                         return false;
                 }
                 else

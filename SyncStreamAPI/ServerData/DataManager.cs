@@ -294,7 +294,7 @@ namespace SyncStreamAPI.ServerData
                     RememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == client.Token);
                     if (Token == null)
                         return;
-                    if (dbUser.userprivileges >= 3)
+                    if (dbUser.userprivileges >= UserPrivileges.Administrator)
                     {
                         if (!Directory.Exists(General.FilePath))
                             Directory.CreateDirectory(General.FilePath);

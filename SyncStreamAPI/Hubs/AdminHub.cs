@@ -83,7 +83,7 @@ namespace SyncStreamAPI.Hubs
             {
                 if (dbUser != null)
 
-                    if (dbUser.userprivileges >= 3)
+                    if (dbUser.userprivileges >= UserPrivileges.Administrator)
                     {
                         List<User> users = _postgres.Users.ToList();
                         await Clients.Caller.getusers(users?.Select(x => x.ToDTO()).ToList());
@@ -143,7 +143,7 @@ namespace SyncStreamAPI.Hubs
             {
                 if (dbUser == null)
                     return;
-                if (dbUser.userprivileges >= 3)
+                if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var removeUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == removeID);
                     if (removeUser != null)
@@ -170,7 +170,7 @@ namespace SyncStreamAPI.Hubs
             {
                 if (dbUser == null)
                     return;
-                if (dbUser.userprivileges >= 3)
+                if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var approveUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == approveID);
                     if (approveUser != null)
@@ -197,12 +197,12 @@ namespace SyncStreamAPI.Hubs
             {
                 if (dbUser == null)
                     return;
-                if (dbUser.userprivileges >= 3)
+                if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var changeUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == changeID);
                     if (changeUser != null)
                     {
-                        changeUser.userprivileges = privileges;
+                        changeUser.userprivileges = (UserPrivileges)privileges;
                         await _postgres.SaveChangesAsync();
                     }
                     List<User> users = _postgres.Users.ToList();

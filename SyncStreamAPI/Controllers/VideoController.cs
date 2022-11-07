@@ -42,7 +42,7 @@ namespace SyncStreamAPI.Controllers
             {
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 RememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
-                if (Token == null || dbUser == null || dbUser?.userprivileges < 1)
+                if (Token == null || dbUser == null || dbUser?.userprivileges < UserPrivileges.Approved)
                 {
                     if (dbUser != null)
                         await _hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertTypes.Danger) { Question = "You do not have permissions to view this content", Answer1 = "Ok" });
@@ -75,7 +75,7 @@ namespace SyncStreamAPI.Controllers
                 var file = Request.Form.Files[0];
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 RememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
-                if (Token == null || dbUser == null || dbUser?.userprivileges < 3)
+                if (Token == null || dbUser == null || dbUser?.userprivileges < UserPrivileges.Administrator)
                     return StatusCode(StatusCodes.Status403Forbidden);
                 if (file.Length <= 0)
                     return StatusCode(StatusCodes.Status405MethodNotAllowed);

@@ -23,7 +23,7 @@ namespace SyncStreamAPI.Hubs
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
                 return;
-            if (dbUser.userprivileges >= 3)
+            if (dbUser.userprivileges >= UserPrivileges.Administrator)
             {
                 var result = _postgres.Users.Include(x => x.Files).FirstOrDefault(x => x.ID == dbUser.ID)?.Files.FirstOrDefault(x => x.ID == fileId);
                 result.Name = name;
@@ -40,7 +40,7 @@ namespace SyncStreamAPI.Hubs
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 if (dbUser == null)
                     return;
-                if (dbUser.userprivileges >= 3)
+                if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var userFiles = _postgres.Files?.Where(x => x.UserID == dbUser.ID).ToList();
                     var result = userFiles.Select(x => new FileDto(x)).OrderBy(x => x.Name).ToList();
@@ -61,7 +61,7 @@ namespace SyncStreamAPI.Hubs
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 if (dbUser == null)
                     return;
-                if (dbUser.userprivileges >= 3)
+                if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var folder = _postgres.Folders?.Include(x => x.Files).Where(x => x.UserId == null || x.UserId == dbUser.ID).OrderBy(x => x.Name).ToList();
                     var defaultFolder = folder.FirstOrDefault(x => x.Id == folderId);
@@ -86,7 +86,7 @@ namespace SyncStreamAPI.Hubs
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 if (dbUser == null)
                     return;
-                if (dbUser.userprivileges >= 3)
+                if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var parent = _postgres.Folders?.FirstOrDefault(x => x.Id == folderId);
                     if (parent == null)
@@ -111,7 +111,7 @@ namespace SyncStreamAPI.Hubs
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 if (dbUser == null)
                     return;
-                if (dbUser.userprivileges >= 3)
+                if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var folder = _postgres.Folders?.Include(x => x.Files).FirstOrDefault(x => x.Id == folderId && x.UserId == dbUser.ID);
                     if (folder != null)
@@ -141,7 +141,7 @@ namespace SyncStreamAPI.Hubs
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 if (dbUser == null)
                     return;
-                if (dbUser.userprivileges >= 3)
+                if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var files = _postgres.Files?.Where(x => x.DbFileFolderId == folderId && x.UserID == dbUser.ID);
                     if (files != null)
@@ -162,7 +162,7 @@ namespace SyncStreamAPI.Hubs
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 if (dbUser == null)
                     return;
-                if (dbUser.userprivileges >= 3)
+                if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var folder = _postgres.Folders?.FirstOrDefault(x => x.Id == folderId);
                     if (folder != null)
@@ -187,7 +187,7 @@ namespace SyncStreamAPI.Hubs
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 if (dbUser == null)
                     return;
-                if (dbUser.userprivileges >= 3)
+                if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var file = _postgres.Files?.FirstOrDefault(x => x.ID == fileId);
                     if (file != null && file.DbFileFolderId != folderId)
@@ -209,7 +209,7 @@ namespace SyncStreamAPI.Hubs
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
                 return;
-            if (dbUser.userprivileges >= 4)
+            if (dbUser.userprivileges >= UserPrivileges.Elevated)
             {
                 var result = _postgres.Files?.Select(x => new FileDto(x)).OrderBy(x => x.Name).ToList();
                 await Clients.Caller.getDownloads(result);
@@ -221,7 +221,7 @@ namespace SyncStreamAPI.Hubs
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
                 return;
-            if (dbUser.userprivileges >= 4)
+            if (dbUser.userprivileges >= UserPrivileges.Elevated)
             {
                 var files = Directory.GetFiles(General.FilePath);
                 if (files.Count() > 0)
@@ -255,7 +255,7 @@ namespace SyncStreamAPI.Hubs
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
                 return;
-            if (dbUser.userprivileges >= 4)
+            if (dbUser.userprivileges >= UserPrivileges.Elevated)
             {
                 _manager.ReadSettings();
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Reload configuration", Question = "Reload successful", Answer1 = "Ok" });
@@ -267,7 +267,7 @@ namespace SyncStreamAPI.Hubs
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
                 return;
-            if (dbUser.userprivileges >= 3)
+            if (dbUser.userprivileges >= UserPrivileges.Administrator)
             {
                 _manager.AddDownload(new(dbUser.ID, fileName, Context.ConnectionId, token, url));
             }
@@ -278,7 +278,7 @@ namespace SyncStreamAPI.Hubs
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
                 return;
-            if (dbUser.userprivileges >= 3)
+            if (dbUser.userprivileges >= UserPrivileges.Administrator)
             {
                 _manager.CancelM3U8Conversion(downloadId);
             }
@@ -289,7 +289,7 @@ namespace SyncStreamAPI.Hubs
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
                 return;
-            if (dbUser.userprivileges >= 3)
+            if (dbUser.userprivileges >= UserPrivileges.Administrator)
             {
                 var file = _postgres.Files.ToList().FirstOrDefault(x => x.ID == id);
                 if (file != null)
