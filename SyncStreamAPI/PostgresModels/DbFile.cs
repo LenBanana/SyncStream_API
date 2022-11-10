@@ -7,7 +7,7 @@ namespace SyncStreamAPI.PostgresModels
     public class DbFile
     {
         public int ID { get; set; }
-        public int DbUserId { get; set; }
+        public int DbUserID { get; set; }
         public string Name { get; set; }
         public string FileEnding { get; set; }
         [NotNull]
@@ -18,7 +18,7 @@ namespace SyncStreamAPI.PostgresModels
         {
             ID = 0;
             DbFileFolderId = 1;
-            DbUserId = user == null ? -1 : user.ID;
+            DbUserID = user == null ? -1 : user.ID;
             Name = name;            
             FileEnding = fileEnding;
             FileKey = user?.GenerateToken(Guid.NewGuid().ToString() + name).Token;

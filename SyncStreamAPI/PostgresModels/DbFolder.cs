@@ -5,7 +5,7 @@ namespace SyncStreamAPI.PostgresModels
     public class DbFileFolder
     {
         public int Id { get; set; }
-        public int? DbUserId { get; set; }
+        public int? DbUserID { get; set; }
         public string Name { get; set; }
         public List<DbFile> Files { get; set; }
 #nullable enable
@@ -34,7 +34,7 @@ namespace SyncStreamAPI.PostgresModels
             Id = 0;
             Name = name;
             ParentId = parent;
-            DbUserId = userId;
+            DbUserID = userId;
         }
     }
 }
