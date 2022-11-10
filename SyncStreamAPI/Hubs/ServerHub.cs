@@ -149,9 +149,10 @@ namespace SyncStreamAPI.Hubs
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to add a video to this room", Answer1 = "Ok" });
                 return;
             }
+            var vidEnded = (room.server.currentVideo.url.Length == 0 || room.server.currentVideo.ended == true);
             if (room.server.playlist?.Select(x => x.url).Contains(key.url) == false)
             {
-                var playerType = await SendPlayerType(UniqueId, key);
+                var playerType = await SendPlayerType(UniqueId, key, vidEnded);
                 if (playerType == PlayerType.External)
                 {
                     if (key.title.Length == 0)
@@ -201,7 +202,7 @@ namespace SyncStreamAPI.Hubs
                 }
                 room.server.playlist.Add(key);
             }
-            if (room.server.currentVideo.url.Length == 0 || room.server.currentVideo.ended == true)
+            if (vidEnded)
             {
                 room.server.currentVideo = key;
                 await Clients.Group(UniqueId).videoupdate(key);
@@ -210,24 +211,27 @@ namespace SyncStreamAPI.Hubs
             await Clients.All.getrooms(DataManager.GetRooms());
         }
 
-        public async Task<PlayerType> SendPlayerType(string UniqueId, DreckVideo key, PlayerType type = PlayerType.Nothing)
+        public async Task<PlayerType> SendPlayerType(string UniqueId, DreckVideo key, bool sendToUsers = true, PlayerType type = PlayerType.Nothing)
         {
             var result = PlayerType.Nothing;
             if (type != PlayerType.Nothing)
             {
-                await Clients.Group(UniqueId).playertype(type);
+                if (sendToUsers)
+                    await Clients.Group(UniqueId).playertype(type);
                 return type;
             }
             if (key.url == null || key.url.Length == 0 || key.ended)
             {
-                await Clients.Group(UniqueId).playertype(PlayerType.Nothing);
+                if (sendToUsers)
+                    await Clients.Group(UniqueId).playertype(PlayerType.Nothing);
                 return result;
             }
             Uri uriResult;
             bool validUri = Uri.TryCreate(key.url, UriKind.Absolute, out uriResult) && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
             if (!validUri)
             {
-                await Clients.Group(UniqueId).playertype(PlayerType.Nothing);
+                if (sendToUsers)
+                    await Clients.Group(UniqueId).playertype(PlayerType.Nothing);
                 return result;
             }
             var ytRegEx = @"^(https?\:\/\/)?((www\.)?youtube\.com|youtu\.be)\/.+$";
@@ -241,14 +245,15 @@ namespace SyncStreamAPI.Hubs
             else if (twitchRegex.IsMatch(key.url))
             {
                 if (key.url.Contains("/clip/"))
-                    return PlayerType.Nothing;                
+                    return PlayerType.Nothing;
                 result = PlayerType.Twitch;
             }
             else if (vimeoRegex.IsMatch(key.url))
                 result = PlayerType.Vimeo;
             else
                 result = PlayerType.External;
-            await Clients.Group(UniqueId).playertype(result);
+            if (sendToUsers)
+                await Clients.Group(UniqueId).playertype(result);
             return result;
         }
 
