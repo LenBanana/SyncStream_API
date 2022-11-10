@@ -42,7 +42,7 @@ namespace SyncStreamAPI.Hubs
                     return;
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
-                    var userFiles = _postgres.Files?.Where(x => x.DbUserID == dbUser.ID).ToList();
+                    var userFiles = _postgres.Files?.Where(x => x.DbUserId == dbUser.ID).ToList();
                     var result = userFiles.Select(x => new FileDto(x)).OrderBy(x => x.Name).ToList();
                     await Clients.Caller.getDownloads(result);
                 }
@@ -145,7 +145,7 @@ namespace SyncStreamAPI.Hubs
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var shareFolders = _postgres.FolderShare?.Where(x => x.DbUserId == dbUser.ID);
-                    var files = _postgres.Files?.Where(x => x.DbFileFolderId == folderId && (x.DbUserID == dbUser.ID || shareFolders.FirstOrDefault(y => y.DbFolderId == folderId) != null));
+                    var files = _postgres.Files?.Where(x => x.DbFileFolderId == folderId && (x.DbUserId == dbUser.ID || shareFolders.FirstOrDefault(y => y.DbFolderId == folderId) != null));
                     if (files != null)
                         await Clients.Caller.getFolderFiles(files.Select(x => new FileDto(x)).ToList());
                 }
