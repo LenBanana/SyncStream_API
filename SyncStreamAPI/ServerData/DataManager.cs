@@ -57,7 +57,7 @@ namespace SyncStreamAPI.ServerData
         {
             Rooms.Add(new Room("Dreckroom", "dreck", false, true));
             Rooms.Add(new Room("Randomkeller", "random", false, true));
-            Rooms.Add(new Room("BigWeinerClub", "weiner", false, true));
+            Rooms.Add(new Room("Guffelstübchen", "guffel", false, true));
             for (int i = 1; i < 5; i++)
                 Rooms.Add(new Room($"Guest Room - {i}", $"guest{i}", true, false));
 
@@ -160,9 +160,7 @@ namespace SyncStreamAPI.ServerData
                 {
                     if (dbUser == null)
                         throw new Exception($"Unable to find user");
-                    var conversion = (await FFmpeg.Conversions.FromSnippet.SaveM3U8Stream(new Uri(downloadClient.Url), filePath))
-                    //.UseMultiThread(2)
-                    .SetOverwriteOutput(true);
+                    var conversion = (await FFmpeg.Conversions.FromSnippet.SaveM3U8Stream(new Uri(downloadClient.Url), filePath)).SetOverwriteOutput(true);
                     conversion.OnProgress += async (sender, args) =>
                     {
                         try
@@ -291,7 +289,7 @@ namespace SyncStreamAPI.ServerData
                     var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == client.Token)).FirstOrDefault();
                     if (dbUser == null)
                         return;
-                    RememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == client.Token);
+                    DbRememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == client.Token);
                     if (Token == null)
                         return;
                     if (dbUser.userprivileges >= UserPrivileges.Administrator)

@@ -5,12 +5,12 @@ using System.Threading.Tasks;
 
 namespace SyncStreamAPI.PostgresModels
 {
-    public class RememberToken
+    public class DbRememberToken
     {
         public int ID { get; set; }
         public string Token { get; set; }
         public DateTime Created { get; set; }
-        public RememberToken()
+        public DbRememberToken()
         {
             Created = DateTime.Now;
         }

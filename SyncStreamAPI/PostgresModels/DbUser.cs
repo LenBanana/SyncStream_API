@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace SyncStreamAPI.PostgresModels
 {
-    public class User
+    public class DbUser
     {
         public int ID { get; set; }
         public string username { get; set; }
@@ -13,20 +13,20 @@ namespace SyncStreamAPI.PostgresModels
         public int approved { get; set; }
         public UserPrivileges userprivileges { get; set; }
         public string usersalt { get; set; }
-        public List<RememberToken> RememberTokens { get; set; }
+        public List<DbRememberToken> RememberTokens { get; set; }
         public List<DbFile> Files { get; set; }
-        public User()
+        public DbUser()
         {
             username = null;
-            RememberTokens = new List<RememberToken>();
+            RememberTokens = new List<DbRememberToken>();
             Files = new List<DbFile>();
             usersalt = Guid.NewGuid().ToString();
         }
-        public User(string user)
+        public DbUser(string user)
         {
             username = user;
             approved = -1;
-            RememberTokens = new List<RememberToken>();
+            RememberTokens = new List<DbRememberToken>();
             Files = new List<DbFile>();
         }
     }

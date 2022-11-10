@@ -1,4 +1,5 @@
-﻿using SyncStreamAPI.Models;
+﻿using SyncStreamAPI.Enums;
+using SyncStreamAPI.Models;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -18,6 +19,8 @@ namespace SyncStreamAPI.Interfaces
         Task getrooms(List<Room> rooms);
 
         Task isplayingupdate(bool isplaying);
+
+        Task playertype(PlayerType type);
 
         Task twitchTimeUpdate(double time);
 

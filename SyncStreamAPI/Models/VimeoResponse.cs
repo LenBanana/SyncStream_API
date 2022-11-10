@@ -33,7 +33,7 @@ namespace SyncStreamAPI.Models
 
     public static class Vimeo
     {
-        public static VimeoResponse FromUrl(string url)
+        public static VimeoResponse? FromUrl(string url)
         {
             try
             {

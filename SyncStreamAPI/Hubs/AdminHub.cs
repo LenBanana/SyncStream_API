@@ -12,10 +12,10 @@ namespace SyncStreamAPI.Hubs
 {
     public partial class ServerHub
     {
-        public async Task LoginRequest(User requestUser, string userInfo)
+        public async Task LoginRequest(DbUser requestUser, string userInfo)
         {
-            var result = new User();
-            User user = _postgres.Users.Include(x => x.RememberTokens).FirstOrDefault(x => x.username == requestUser.username && x.password == requestUser.password);
+            var result = new DbUser();
+            DbUser user = _postgres.Users.Include(x => x.RememberTokens).FirstOrDefault(x => x.username == requestUser.username && x.password == requestUser.password);
             if (user != null)
             {
                 _manager.AddMember(user.ID, Context.ConnectionId);
@@ -39,9 +39,9 @@ namespace SyncStreamAPI.Hubs
             await Clients.Caller.userlogin(result.ToDTO());
         }
 
-        public async Task RegisterRequest(User requestUser)
+        public async Task RegisterRequest(DbUser requestUser)
         {
-            var result = new User();
+            var result = new DbUser();
             if (_postgres.Users?.Any(x => x.username == requestUser.username) == false)
             {
                 if (requestUser.username.Length < 2 || requestUser.username.Length > 20)
@@ -57,7 +57,7 @@ namespace SyncStreamAPI.Hubs
             await Clients.Caller.userRegister(result.ToDTO());
         }
 
-        public async Task GenerateRememberToken(User requestUser, string userInfo)
+        public async Task GenerateRememberToken(DbUser requestUser, string userInfo)
         {
             try
             {
@@ -78,22 +78,22 @@ namespace SyncStreamAPI.Hubs
         public async Task GetUsers(string token, int userID)
         {
             var dbUser = _postgres.Users?.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
-            RememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
+            DbRememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
             if (Token != null)
             {
                 if (dbUser != null)
 
                     if (dbUser.userprivileges >= UserPrivileges.Administrator)
                     {
-                        List<User> users = _postgres.Users.ToList();
+                        List<DbUser> users = _postgres.Users.ToList();
                         await Clients.Caller.getusers(users?.Select(x => x.ToDTO()).ToList());
                     }
             }
         }
 
-        public async Task ChangeUser(User user, string password)
+        public async Task ChangeUser(DbUser user, string password)
         {
-            User changeUser = _postgres.Users.FirstOrDefault(x => x.ID == user.ID && password == x.password);
+            DbUser changeUser = _postgres.Users.FirstOrDefault(x => x.ID == user.ID && password == x.password);
             if (changeUser != null)
             {
                 string endMsg = "";
@@ -121,7 +121,7 @@ namespace SyncStreamAPI.Hubs
                     endMsg = "Nothing changed.";
                 await _postgres.SaveChangesAsync();
                 await Clients.Caller.dialog(new Dialog() { Header = "Success", Question = endMsg, Answer1 = "Ok" });
-                List<User> users = _postgres.Users.ToList();
+                List<DbUser> users = _postgres.Users.ToList();
                 await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
             }
             else
@@ -138,7 +138,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             }
             var dbUser = _postgres.Users?.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
-            RememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
+            DbRememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
             if (Token != null)
             {
                 if (dbUser == null)
@@ -151,7 +151,7 @@ namespace SyncStreamAPI.Hubs
                         _postgres.Users.Remove(removeUser);
                         await _postgres.SaveChangesAsync();
                     }
-                    List<User> users = _postgres.Users.ToList();
+                    List<DbUser> users = _postgres.Users.ToList();
                     await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
                 }
             }
@@ -165,7 +165,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             }
             var dbUser = _postgres.Users?.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
-            RememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
+            DbRememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
             if (Token != null)
             {
                 if (dbUser == null)
@@ -178,7 +178,7 @@ namespace SyncStreamAPI.Hubs
                         approveUser.approved = prove ? 1 : 0;
                         await _postgres.SaveChangesAsync();
                     }
-                    List<User> users = _postgres.Users.ToList();
+                    List<DbUser> users = _postgres.Users.ToList();
                     await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
                 }
             }
@@ -192,7 +192,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             }
             var dbUser = _postgres.Users?.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
-            RememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
+            DbRememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
             if (Token != null)
             {
                 if (dbUser == null)
@@ -205,7 +205,7 @@ namespace SyncStreamAPI.Hubs
                         changeUser.userprivileges = (UserPrivileges)privileges;
                         await _postgres.SaveChangesAsync();
                     }
-                    List<User> users = _postgres.Users.ToList();
+                    List<DbUser> users = _postgres.Users.ToList();
                     await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
                 }
             }
@@ -218,7 +218,7 @@ namespace SyncStreamAPI.Hubs
                 var dbUser = _postgres.Users?.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
                 if (dbUser == null || (dbUser?.RememberTokens?.Any(x => x.Token == token) == false))
                 {
-                    await Clients.Caller.userlogin(new User("").ToDTO());
+                    await Clients.Caller.userlogin(new DbUser("").ToDTO());
                     return;
                 }
                 dbUser.RememberTokens = dbUser.RememberTokens.GroupBy(x => x.Token)?.Select(x => x.First()).ToList();
@@ -230,7 +230,7 @@ namespace SyncStreamAPI.Hubs
                         _postgres.RememberTokens.Remove(t);
                     }
                 }
-                RememberToken Token = dbUser.RememberTokens.FirstOrDefault(x => x.Token == token);
+                DbRememberToken Token = dbUser.RememberTokens.FirstOrDefault(x => x.Token == token);
                 if (Token != null)
                 {
                     _manager.AddMember(dbUser.ID, Context.ConnectionId);
@@ -240,13 +240,13 @@ namespace SyncStreamAPI.Hubs
                 }
                 else
                 {
-                    await Clients.Caller.userlogin(new User("").ToDTO());
+                    await Clients.Caller.userlogin(new DbUser("").ToDTO());
                 }
                 await _postgres.SaveChangesAsync();
             }
             catch (Exception ex)
             {
-                await Clients.Caller.userlogin(new User("").ToDTO());
+                await Clients.Caller.userlogin(new DbUser("").ToDTO());
                 Console.WriteLine(ex.Message);
             }
         }

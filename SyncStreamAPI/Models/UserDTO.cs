@@ -2,14 +2,14 @@
 
 namespace SyncStreamAPI.Models
 {
-    public class UserDTO : User
+    public class UserDTO : DbUser
     {
         public UserDTO()
         {
 
         }
 
-        public UserDTO(User user)
+        public UserDTO(DbUser user)
         {
             this.username = user.username;
             this.userprivileges = user.userprivileges;

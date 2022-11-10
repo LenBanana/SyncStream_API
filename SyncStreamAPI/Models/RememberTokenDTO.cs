@@ -2,11 +2,11 @@
 
 namespace SyncStreamAPI.Models
 {
-    public class RememberTokenDTO : RememberToken
+    public class RememberTokenDTO : DbRememberToken
     {
         public int userID { get; set; }
 
-        public RememberTokenDTO(RememberToken rememberToken, int userId)
+        public RememberTokenDTO(DbRememberToken rememberToken, int userId)
         {
             userID = userId;
             ID = rememberToken.ID;

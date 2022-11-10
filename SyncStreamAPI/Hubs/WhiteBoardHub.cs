@@ -29,6 +29,7 @@ namespace SyncStreamAPI.Hubs
         {
             try
             {
+                await Clients.Group(UniqueId).playertype(PlayerType.WhiteBoard);
                 Room room = GetRoom(UniqueId);
                 if (room == null)
                     return;

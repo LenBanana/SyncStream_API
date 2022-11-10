@@ -5,16 +5,16 @@ namespace SyncStreamAPI.Helper
 {
     public static class ModelExtensions
     {
-        public static RememberToken GenerateToken(this User user, string userInfo)
+        public static DbRememberToken GenerateToken(this DbUser user, string userInfo)
         {
             string tokenString = user.ID + user.username + userInfo + user.usersalt;
             string shaToken = Encryption.Sha256(tokenString);
-            RememberToken token = new RememberToken();
+            DbRememberToken token = new DbRememberToken();
             token.Token = shaToken;
             return token;
         }
 
-        public static UserDTO ToDTO(this User user)
+        public static UserDTO ToDTO(this DbUser user)
         {
             return new UserDTO(user);
         }

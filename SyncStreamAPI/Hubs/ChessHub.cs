@@ -14,6 +14,7 @@ namespace SyncStreamAPI.Hubs
     {
         public async Task PlayChess(string UniqueId, string user1 = "", string user2 = "", bool lightPlayerAi = false, bool darkPlayerAi = false)
         {
+            await Clients.Group(UniqueId).playertype(PlayerType.Chess);
             Room room = GetRoom(UniqueId);
             if (room == null)
                 return;

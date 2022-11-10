@@ -1,4 +1,5 @@
-﻿using SyncStreamAPI.Helper;
+﻿using SyncStreamAPI.Enums;
+using SyncStreamAPI.Helper;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.GameModels.Members;
 using System;
@@ -12,6 +13,7 @@ namespace SyncStreamAPI.Hubs
     {
         public async Task PlayBlackjack(string UniqueId)
         {
+            await Clients.Group(UniqueId).playertype(PlayerType.Blackjack);
             var playing = await _blackjackManager.PlayNewRound(UniqueId);
             var room = GetRoom(UniqueId);
             if (playing && room.GallowGame != null)

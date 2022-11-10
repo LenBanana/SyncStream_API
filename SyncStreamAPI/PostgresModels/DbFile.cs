@@ -14,7 +14,7 @@ namespace SyncStreamAPI.PostgresModels
         public string FileKey { get; set; }
         public DateTime Created { get; set; }
         public int DbFileFolderId { get; set; }
-        public DbFile(string name, string fileEnding, User user)
+        public DbFile(string name, string fileEnding, DbUser user)
         {
             ID = 0;
             DbFileFolderId = 1;

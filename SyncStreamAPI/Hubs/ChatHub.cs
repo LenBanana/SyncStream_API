@@ -1,4 +1,5 @@
-﻿using SyncStreamAPI.Enums.Games;
+﻿using SyncStreamAPI.Enums;
+using SyncStreamAPI.Enums.Games;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Models;
 using System;
@@ -55,10 +56,10 @@ namespace SyncStreamAPI.Hubs
                 else if (lowerMessage.StartsWith("/playgallows") || lowerMessage.StartsWith("/playgallow") || lowerMessage.StartsWith("/gallows") || lowerMessage.StartsWith("/gallow") || lowerMessage.StartsWith("/galgenraten") || lowerMessage.StartsWith("/galgen") || lowerMessage.StartsWith("/g"))
                 {
                     var split = lowerMessage.Split(" ");
-                    var lang = Enums.Language.German;
+                    var lang = Language.German;
                     var length = 90;
                     if (split.Length > 1)
-                        lang = split[1].StartsWith("e") ? Enums.Language.English : Enums.Language.German;
+                        lang = split[1].StartsWith("e") ? Language.English : Language.German;
                     if (split.Length > 2)
                         int.TryParse(split[2], out length);
                     await PlayGallowsSettings(UniqueId, lang, length);

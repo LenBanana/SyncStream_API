@@ -73,8 +73,11 @@ namespace SyncStreamAPI.Hubs
                     await _blackjackManager.SendAllUsers(game);
                 }
             }
-            await Clients.Caller.isplayingupdate(MainServer.isplaying);
             await Clients.Caller.hostupdate(newMember.ishost);
+            var type = await SendPlayerType(UniqueId, MainServer.currentVideo);
+            if (type != PlayerType.Nothing)
+                await Clients.Caller.videoupdate(MainServer.currentVideo);
+            await Clients.Caller.isplayingupdate(MainServer.isplaying);
             await Clients.All.getrooms(DataManager.GetRooms());
             await Clients.Caller.adduserupdate((int)UserUpdate.Success);
             if (MainServer.playlist.Count > 0)

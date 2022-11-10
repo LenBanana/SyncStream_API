@@ -68,7 +68,6 @@ namespace SyncStreamAPI.Helper
                     Console.WriteLine(ex.Message);
                 }
             }
-
             if (title.Length == 0)
             {
                 try

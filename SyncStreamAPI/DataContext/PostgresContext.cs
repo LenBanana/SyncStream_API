@@ -14,10 +14,11 @@ namespace SyncStreamAPI.DataContext
 
         }
 
-        public DbSet<User> Users { get; set; }
+        public DbSet<DbUser> Users { get; set; }
         public DbSet<DbFile> Files { get; set; }
         public DbSet<DbFileFolder> Folders { get; set; }
-        public DbSet<RememberToken> RememberTokens { get; set; }
+        public DbSet<DbFolderUserShare> FolderShare { get; set; }
+        public DbSet<DbRememberToken> RememberTokens { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
