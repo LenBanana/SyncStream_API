@@ -42,7 +42,7 @@ namespace SyncStreamAPI.Hubs
                     return;
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
-                    var userFiles = _postgres.Files?.Where(x => x.UserID == dbUser.ID).ToList();
+                    var userFiles = _postgres.Files?.Where(x => x.DbUserID == dbUser.ID).ToList();
                     var result = userFiles.Select(x => new FileDto(x)).OrderBy(x => x.Name).ToList();
                     await Clients.Caller.getDownloads(result);
                 }
@@ -63,8 +63,8 @@ namespace SyncStreamAPI.Hubs
                     return;
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
-                    var shareFolders = _postgres.FolderShare?.Where(x => x.UserId == dbUser.ID);
-                    var folder = _postgres.Folders?.Include(x => x.Files).Where(x => x.UserId == null || x.UserId == dbUser.ID || shareFolders.FirstOrDefault(y => y.FolderId == x.Id) != null).OrderBy(x => x.Name).ToList();
+                    var shareFolders = _postgres.FolderShare?.Where(x => x.DbUserId == dbUser.ID);
+                    var folder = _postgres.Folders?.Include(x => x.Files).Where(x => x.DbUserId == null || x.DbUserId == dbUser.ID || shareFolders.FirstOrDefault(y => y.DbFolderId == x.Id) != null).OrderBy(x => x.Name).ToList();
                     var defaultFolder = folder.FirstOrDefault(x => x.Id == folderId);
                     if (defaultFolder != null)
                     {
@@ -114,7 +114,7 @@ namespace SyncStreamAPI.Hubs
                     return;
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
-                    var folder = _postgres.Folders?.Include(x => x.Files).FirstOrDefault(x => x.Id == folderId && x.UserId == dbUser.ID);
+                    var folder = _postgres.Folders?.Include(x => x.Files).FirstOrDefault(x => x.Id == folderId && x.DbUserId == dbUser.ID);
                     if (folder != null)
                     {
                         if (folder.Files?.Count > 0 || _postgres.Folders?.Where(x => x.ParentId == folderId).Count() > 0)
@@ -144,8 +144,8 @@ namespace SyncStreamAPI.Hubs
                     return;
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
-                    var shareFolders = _postgres.FolderShare?.Where(x => x.UserId == dbUser.ID);
-                    var files = _postgres.Files?.Where(x => x.DbFileFolderId == folderId && (x.UserID == dbUser.ID || shareFolders.FirstOrDefault(y => y.FolderId == folderId) != null));
+                    var shareFolders = _postgres.FolderShare?.Where(x => x.DbUserId == dbUser.ID);
+                    var files = _postgres.Files?.Where(x => x.DbFileFolderId == folderId && (x.DbUserID == dbUser.ID || shareFolders.FirstOrDefault(y => y.DbFolderId == folderId) != null));
                     if (files != null)
                         await Clients.Caller.getFolderFiles(files.Select(x => new FileDto(x)).ToList());
                 }
