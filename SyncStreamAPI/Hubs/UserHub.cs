@@ -78,6 +78,7 @@ namespace SyncStreamAPI.Hubs
             if (type != PlayerType.Nothing)
                 await Clients.Caller.videoupdate(MainServer.currentVideo);
             await Clients.Caller.isplayingupdate(MainServer.isplaying);
+            await Clients.Caller.timeupdate(MainServer.currenttime);
             await Clients.All.getrooms(DataManager.GetRooms());
             await Clients.Caller.adduserupdate((int)UserUpdate.Success);
             if (MainServer.playlist.Count > 0)

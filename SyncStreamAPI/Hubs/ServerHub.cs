@@ -125,10 +125,10 @@ namespace SyncStreamAPI.Hubs
             await Clients.Group(UniqueId).sendserver(server);
         }
 
-        private Room GetRoom(string UniqueId)
+        private Room? GetRoom(string UniqueId)
         {
             List<Room> Rooms = DataManager.GetRooms();
-            Room room = Rooms.FirstOrDefault(x => x.uniqueId == UniqueId);
+            Room? room = Rooms.FirstOrDefault(x => x.uniqueId == UniqueId);
             if (room == null)
                 return null;
             return room;
@@ -141,7 +141,7 @@ namespace SyncStreamAPI.Hubs
 
         public async Task AddVideo(DreckVideo key, string UniqueId)
         {
-            Room room = GetRoom(UniqueId);
+            Room? room = GetRoom(UniqueId);
             if (room == null)
                 return;
             if (!CheckPrivileges(room))
