@@ -198,7 +198,9 @@ namespace SyncStreamAPI.ServerData
                 catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
-                    await _hub.Clients.Client(downloadClient?.ConnectionId).dialog(new Dialog(AlertTypes.Danger) { Header = ex?.InnerException?.GetType()?.Name, Question = $"{ex?.InnerException.GetType().Name} \n{ex?.Message}", Answer1 = "Ok" });
+                    var header = ex?.InnerException?.GetType()?.Name;
+                    var msg = ex?.Message;
+                    await _hub.Clients.Client(downloadClient?.ConnectionId).dialog(new Dialog(AlertTypes.Danger) { Header = header, Question = $"{header} \n{msg}", Answer1 = "Ok" });
                 }
                 try
                 {
