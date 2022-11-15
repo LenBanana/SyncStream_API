@@ -8,6 +8,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Xabe.FFmpeg;
 
 namespace SyncStreamAPI.Hubs
 {
@@ -159,14 +160,14 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
-        public async Task DownloadFile(string token, string url, string fileName)
+        public async Task DownloadFile(string token, string url, string fileName, ConversionPreset preset = ConversionPreset.SuperFast)
         {
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
                 return;
             if (dbUser.userprivileges >= UserPrivileges.Administrator)
             {
-                _manager.AddDownload(new(dbUser.ID, fileName, Context.ConnectionId, token, url));
+                _manager.AddDownload(new(dbUser.ID, fileName, Context.ConnectionId, token, url, preset));
             }
         }
 

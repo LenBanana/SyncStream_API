@@ -3,14 +3,16 @@ using System.Diagnostics;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Xabe.FFmpeg;
 
 namespace SyncStreamAPI.Models
 {
     public class DownloadClientValue
     {
-        public DownloadClientValue(int userId, string fileName, string connectionId, string token, string url)
+        public DownloadClientValue(int userId, string fileName, string connectionId, string token, string url, ConversionPreset preset)
         {
             UserId = userId;
+            Preset = preset;
             ConnectionId = connectionId;
             Token = token;
             FileName = fileName;
@@ -21,6 +23,7 @@ namespace SyncStreamAPI.Models
             KeepUrlAlive();
         }
         public int UserId { get; set; }
+        public ConversionPreset Preset { get; set; }
         public string FileName { get; set; }
         public string Url { get; set; }
         public string ConnectionId { get; set; }
