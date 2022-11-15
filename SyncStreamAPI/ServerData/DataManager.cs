@@ -159,7 +159,7 @@ namespace SyncStreamAPI.ServerData
                 try
                 {
                     if (dbUser == null)
-                        throw new Exception($"Unable to find user");                    
+                        throw new Exception($"Unable to find user");
                     var conversion = (await FFmpeg.Conversions.FromSnippet.SaveM3U8Stream(new Uri(downloadClient.Url), filePath)).SetOverwriteOutput(true);
                     conversion.OnProgress += async (sender, args) =>
                     {
@@ -198,18 +198,7 @@ namespace SyncStreamAPI.ServerData
                 catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
-                    try
-                    {
-                        await _hub.Clients.Client(downloadClient?.ConnectionId).dialog(new Dialog(AlertTypes.Danger) { Header = ex.InnerException.GetType().Name, Question = $"{ex.InnerException.GetType().Name} \n{ex.Message}", Answer1 = "Ok" });
-                    }
-                    catch (Exception ex2)
-                    {
-                        Console.WriteLine("--------------------------------------------------");
-                        Console.WriteLine($"{ex.InnerException.GetType().Name} \n{ex.Message}");
-                        Console.WriteLine("--------------------------------------------------");
-                        Console.WriteLine($"{ex2.InnerException.GetType().Name} \n{ex2.Message}");
-                        Console.WriteLine("--------------------------------------------------");
-                    }
+                    await _hub.Clients.Client(downloadClient?.ConnectionId).dialog(new Dialog(AlertTypes.Danger) { Header = ex?.InnerException?.GetType()?.Name, Question = $"{ex?.InnerException.GetType().Name} \n{ex?.Message}", Answer1 = "Ok" });
                 }
                 try
                 {
