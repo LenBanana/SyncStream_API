@@ -28,7 +28,7 @@ namespace SyncStreamAPI.Helper
                 var path = dl.FolderPath + "/chrome-linux";                
                 Console.WriteLine($"Download to {path} was {dl.Downloaded}");
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                    LinuxBash.Bash($"chmod -R 777 {path}");
+                    LinuxBash.Bash($"chmod -R +x {path}");
                 browser = await Puppeteer.LaunchAsync(new LaunchOptions
                 {
                     Headless = true,

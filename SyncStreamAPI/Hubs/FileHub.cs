@@ -54,6 +54,30 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
+        public async Task GetAllDownloads(string token)
+        {
+            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+            if (dbUser == null)
+                return;
+            if (dbUser.userprivileges >= UserPrivileges.Elevated)
+            {
+                var result = _postgres.Files?.Select(x => new FileDto(x)).OrderBy(x => x.Name).ToList();
+                await Clients.Caller.getDownloads(result);
+            }
+        }
+
+        public async Task ReloadDownloadConfig(string token)
+        {
+            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+            if (dbUser == null)
+                return;
+            if (dbUser.userprivileges >= UserPrivileges.Elevated)
+            {
+                _manager.ReadSettings();
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Reload configuration", Question = "Reload successful", Answer1 = "Ok" });
+            }
+        }
+
         public async Task GetFolders(string token, int folderId = 1)
         {
             try
@@ -135,6 +159,53 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
+        public async Task DownloadFile(string token, string url, string fileName)
+        {
+            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+            if (dbUser == null)
+                return;
+            if (dbUser.userprivileges >= UserPrivileges.Administrator)
+            {
+                _manager.AddDownload(new(dbUser.ID, fileName, Context.ConnectionId, token, url));
+            }
+        }
+
+        public async Task GetFileInfo(string token, int id)
+        {
+            try
+            {
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+                if (dbUser == null)
+                    return;
+                if (dbUser.userprivileges < UserPrivileges.Administrator)
+                    throw new Exception("Permission denied");
+                var file = _postgres.Files.ToList().FirstOrDefault(x => x.ID == id);
+                if (file == null)
+                    throw new Exception("File not found in database");
+                var path = $"{General.FilePath}/{file.FileKey}{file.FileEnding}";
+                if (!File.Exists(path))
+                    throw new Exception($"File {path} not found");
+                var mediaInfo = await Xabe.FFmpeg.FFmpeg.GetMediaInfo(path);
+                if (mediaInfo == null)
+                    throw new Exception("Media info was null");
+                var fileInfo = new FileInfo(path);
+                var downloadFileInfo = new DownloadFileInfo(
+                    file.Name,
+                    file.FileEnding,
+                    fileInfo.Length,
+                    Encryption.SHA256CheckSum(path),
+                    mediaInfo.VideoStreams.FirstOrDefault(),
+                    mediaInfo.AudioStreams.FirstOrDefault(),
+                    fileInfo.CreationTimeUtc
+                    );
+                await Clients.Caller.getFileInfo(downloadFileInfo);
+            }
+            catch (Exception ex)
+            {
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Warning) { Header = "Error", Question = ex?.Message, Answer1 = "Ok" });
+            }
+        }
+
         public async Task GetFolderFiles(string token, int folderId)
         {
             try
@@ -206,18 +277,6 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
-        public async Task GetAllDownloads(string token)
-        {
-            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
-            if (dbUser == null)
-                return;
-            if (dbUser.userprivileges >= UserPrivileges.Elevated)
-            {
-                var result = _postgres.Files?.Select(x => new FileDto(x)).OrderBy(x => x.Name).ToList();
-                await Clients.Caller.getDownloads(result);
-            }
-        }
-
         public async Task CleanUpFiles(string token, bool delete = false)
         {
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
@@ -250,29 +309,6 @@ namespace SyncStreamAPI.Hubs
             }
             else
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to clean up the video files", Answer1 = "Ok" });
-        }
-
-        public async Task ReloadDownloadConfig(string token)
-        {
-            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
-            if (dbUser == null)
-                return;
-            if (dbUser.userprivileges >= UserPrivileges.Elevated)
-            {
-                _manager.ReadSettings();
-                await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Reload configuration", Question = "Reload successful", Answer1 = "Ok" });
-            }
-        }
-
-        public async Task DownloadFile(string token, string url, string fileName)
-        {
-            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
-            if (dbUser == null)
-                return;
-            if (dbUser.userprivileges >= UserPrivileges.Administrator)
-            {
-                _manager.AddDownload(new(dbUser.ID, fileName, Context.ConnectionId, token, url));
-            }
         }
 
         public async Task CancelConversion(string token, string downloadId)
