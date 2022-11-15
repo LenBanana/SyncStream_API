@@ -181,7 +181,7 @@ namespace SyncStreamAPI.ServerData
                         catch (Exception ex) { Console.WriteLine(ex.Message); }
                     };
                     if (downloadClient?.CancellationToken?.Token != null)
-                        await conversion.UseMultiThread(true).SetPreset(ConversionPreset.UltraFast).Start(downloadClient.CancellationToken.Token);
+                        await conversion.UseMultiThread(true).SetPreset(ConversionPreset.VeryFast).Start(downloadClient.CancellationToken.Token);
                     else
                         throw new OperationCanceledException();
                     if (!File.Exists(filePath))
