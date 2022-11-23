@@ -1,5 +1,6 @@
 ﻿using SyncStreamAPI.Models;
 using SyncStreamAPI.PostgresModels;
+using System;
 
 namespace SyncStreamAPI.Helper
 {
@@ -11,6 +12,15 @@ namespace SyncStreamAPI.Helper
             string shaToken = Encryption.Sha256(tokenString);
             DbRememberToken token = new DbRememberToken();
             token.Token = shaToken;
+            return token;
+        }
+
+        public static DbRememberToken GenerateStreamToken(this DbUser user)
+        {
+            string uid = Guid.NewGuid().ToString();
+            var md5Uid = Encryption.CreateMD5(uid);
+            DbRememberToken token = new DbRememberToken();
+            token.Token = md5Uid;
             return token;
         }
 

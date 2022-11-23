@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SyncStreamAPI.Helper;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -14,6 +15,7 @@ namespace SyncStreamAPI.PostgresModels
         public UserPrivileges userprivileges { get; set; }
         public string usersalt { get; set; }
         public List<DbRememberToken> RememberTokens { get; set; }
+        public DbRememberToken StreamToken { get; set; }
         public List<DbFile> Files { get; set; }
         public DbUser()
         {
@@ -21,6 +23,7 @@ namespace SyncStreamAPI.PostgresModels
             RememberTokens = new List<DbRememberToken>();
             Files = new List<DbFile>();
             usersalt = Guid.NewGuid().ToString();
+            StreamToken = this.GenerateStreamToken();
         }
         public DbUser(string user)
         {

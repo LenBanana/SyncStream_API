@@ -273,10 +273,7 @@ namespace SyncStreamAPI.Hubs
                     var playlist = playlistInfo.Contents.TwoColumnBrowseResultsRenderer.Tabs[0].TabRenderer.Content.SectionListRenderer.Contents[0].ItemSectionRenderer.Contents[0].PlaylistVideoListRenderer.Contents;
                     foreach (var video in playlist)
                     {
-                        DreckVideo vid = new DreckVideo();
-                        vid.ended = false;
-                        vid.title = video.PlaylistVideoRenderer?.Title.Runs[0].Text;
-                        vid.url = "https://www.youtube.com/watch?v=" + video.PlaylistVideoRenderer?.VideoId;
+                        DreckVideo vid = new DreckVideo(video.PlaylistVideoRenderer?.Title.Runs[0].Text, "https://www.youtube.com/watch?v=" + video.PlaylistVideoRenderer?.VideoId, false, TimeSpan.FromSeconds((double)(video.PlaylistVideoRenderer?.LengthSeconds ?? 0d)), "Playlist");
                         await AddVideo(vid, UniqueId).ConfigureAwait(false);
                     }
                 }

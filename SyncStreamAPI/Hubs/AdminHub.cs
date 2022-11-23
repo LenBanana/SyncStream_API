@@ -230,6 +230,8 @@ namespace SyncStreamAPI.Hubs
                         _postgres.RememberTokens.Remove(t);
                     }
                 }
+                if (dbUser.StreamToken == null)
+                    dbUser.StreamToken = dbUser.GenerateStreamToken();
                 DbRememberToken Token = dbUser.RememberTokens.FirstOrDefault(x => x.Token == token);
                 if (Token != null)
                 {

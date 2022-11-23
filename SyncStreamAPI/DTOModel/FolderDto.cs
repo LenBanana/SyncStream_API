@@ -7,6 +7,7 @@ namespace SyncStreamAPI.DTOModel
     public class FolderDto
     {
         public int Id { get; set; }
+        public int? UserId { get; set; }
         public string Name { get; set; }
         public FolderDto? Parent { get; set; }
         public List<FolderDto> Children { get; set; }
@@ -14,6 +15,7 @@ namespace SyncStreamAPI.DTOModel
         public FolderDto(DbFileFolder folder)
         {
             Id = folder.Id;
+            UserId = folder.DbUserID;
             Name = folder.Name;
             if (folder.Parent != null)
                 Parent = new FolderDto(folder.Parent.Id, folder.Parent.Name);

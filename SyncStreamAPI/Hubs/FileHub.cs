@@ -207,6 +207,33 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
+        public async Task ShareFolder(string token, int folderId, int userId)
+        {
+            try
+            {
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+                if (dbUser == null)
+                    throw new Exception("Requesting user not found");
+                if (dbUser.ID == folderId)
+                    throw new Exception("Can't share folders with yourself");
+                if (dbUser.userprivileges < UserPrivileges.Administrator)
+                    throw new Exception("Permission denied");
+                var shareUser = _postgres.Users?.FirstOrDefault(x => x.ID == userId);
+                if (shareUser == null)
+                    throw new Exception("Share user does not exist");
+                var shareFolder = _postgres.Folders?.FirstOrDefault(x => x.Id == folderId);
+                if (shareFolder == null)
+                    throw new Exception("Share folder does not exist");
+                _postgres.FolderShare?.Add(new DbFolderUserShare(shareUser.ID, shareFolder.Id));
+                await _postgres.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error in 'ShareFolder'");
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Warning) { Header = "Error", Question = ex?.Message, Answer1 = "Ok" });
+            }
+        }
+
         public async Task GetFolderFiles(string token, int folderId)
         {
             try
