@@ -37,7 +37,7 @@ namespace SyncStreamAPI.Controllers
         }
 
         [HttpPost("[action]")]
-        public IActionResult onpublish([FromBody] RtmpData rtmpData, string token)
+        public IActionResult onpublish([FromForm] RtmpData rtmpData, string token)
         {
             try
             {
@@ -57,7 +57,7 @@ namespace SyncStreamAPI.Controllers
         }
 
         [HttpPost("[action]")]
-        public IActionResult onplay([FromBody] RtmpData rtmpData, string token)
+        public IActionResult onplay([FromForm] RtmpData rtmpData, string token)
         {
             try
             {
