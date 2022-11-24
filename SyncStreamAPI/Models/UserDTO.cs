@@ -18,6 +18,7 @@ namespace SyncStreamAPI.Models
             this.password = null;
             this.usersalt = null;
             this.RememberTokens = null;
+            this.StreamToken = user.StreamToken;
         }
     }
 }
