@@ -49,6 +49,7 @@ namespace SyncStreamAPI.Hubs
                     await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Username must be between 2 and 20 characters", Answer1 = "Ok" });
                     return;
                 }
+                requestUser.StreamToken = requestUser.GenerateStreamToken().Token;
                 await _postgres.Users.AddAsync(requestUser);
                 await _postgres.SaveChangesAsync();
                 result = requestUser;
