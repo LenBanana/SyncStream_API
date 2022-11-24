@@ -186,33 +186,42 @@ namespace SyncStreamAPI.Hubs
 
         public async Task SetUserPrivileges(string token, int userID, int changeID, int privileges)
         {
-            if (userID == changeID)
+            try
             {
-                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Unable to change privileges of own user", Answer1 = "Ok" });
-                return;
-            }
-            var dbUser = _postgres.Users?.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
-            DbRememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
-            if (Token != null)
-            {
-                if (dbUser == null)
-                    return;
-                if (dbUser.userprivileges >= UserPrivileges.Administrator)
+                if (userID == changeID)
+                    throw new Exception("Unable to change own user");
+                var dbUser = _postgres.Users?.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
+                DbRememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
+                if (Token != null)
                 {
-                    var changeUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == changeID);
-                    if (changeUser != null && dbUser.userprivileges > changeUser.userprivileges)
+                    if (dbUser == null)
+                        return;
+                    if (dbUser.userprivileges >= UserPrivileges.Administrator && dbUser.userprivileges > (UserPrivileges)privileges)
                     {
-                        changeUser.userprivileges = (UserPrivileges)privileges;
-                        await _postgres.SaveChangesAsync();
+                        var changeUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == changeID);
+                        if (changeUser != null && dbUser.userprivileges > changeUser.userprivileges)
+                        {
+                            changeUser.userprivileges = (UserPrivileges)privileges;
+                            await _postgres.SaveChangesAsync();
+                        }
+                        else
+                            throw new UnauthorizedAccessException("Insufficient permissions");
+                        List<DbUser> users = _postgres.Users.ToList();
+                        await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
                     }
                     else
-                    {
-                        await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Insufficient permissions", Answer1 = "Ok" });
-                        return;
-                    }
-                    List<DbUser> users = _postgres.Users.ToList();
-                    await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
+                        throw new UnauthorizedAccessException("Insufficient permissions");
                 }
+                else
+                    throw new Exception("User not found");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
+            }
+            catch (Exception ex)
+            {
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
             }
         }
 
