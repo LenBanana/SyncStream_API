@@ -37,14 +37,13 @@ namespace SyncStreamAPI.Controllers
         }
 
         [HttpPost("[action]")]
-        public IActionResult onpublish([FromForm] RtmpData rtmpData, string token)
+        public IActionResult onpublish([FromForm] RtmpData rtmpData)
         {
             try
             {
-                Console.WriteLine($"User {rtmpData.name} is streaming with token: {token} or {rtmpData.token}");
-                var dbUser = _postgres.Users?.FirstOrDefault(x => x.StreamToken != null && x.StreamToken.Token == rtmpData.token && x.username.ToLower() == rtmpData.name.ToLower());
-                DbRememberToken Token = dbUser?.StreamToken;
-                if (Token == null || dbUser.userprivileges < UserPrivileges.Approved)
+                var dbUser = _postgres.Users?.FirstOrDefault(x => x.StreamToken != null && x.StreamToken == rtmpData.token && x.username.ToLower() == rtmpData.name.ToLower());
+                string Token = dbUser?.StreamToken;
+                if (Token == null || Token.Length == 0 || dbUser.userprivileges < UserPrivileges.Approved)
                     return StatusCode(StatusCodes.Status403Forbidden);
                 return Ok();
             }
@@ -55,7 +54,7 @@ namespace SyncStreamAPI.Controllers
         }
 
         [HttpPost("[action]")]
-        public IActionResult onplay([FromForm] RtmpData rtmpData, string token)
+        public IActionResult onplay([FromForm] RtmpData rtmpData)
         {
             try
             {
@@ -65,7 +64,6 @@ namespace SyncStreamAPI.Controllers
                 DbRememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == rtmpData.token);
                 if (Token == null || dbUser.userprivileges < UserPrivileges.Approved)
                     return StatusCode(StatusCodes.Status403Forbidden);
-                Console.WriteLine($"User {dbUser.username} is now watching {rtmpData.name} token: {token} or {rtmpData.token}");
                 return Ok();
             }
             catch (Exception ex)

@@ -228,7 +228,7 @@ namespace SyncStreamAPI.Hubs
             }
             Uri uriResult;
             bool validUri = Uri.TryCreate(key.url, UriKind.Absolute, out uriResult) && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
-            if (!validUri)
+            if (!validUri && !key.url.ToLower().StartsWith("https://dash.drecktu.be/dash") && !key.url.StartsWith("rtmp"))
             {
                 if (sendToUsers)
                     await Clients.Group(UniqueId).playertype(PlayerType.Nothing);

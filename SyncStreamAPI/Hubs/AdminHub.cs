@@ -231,7 +231,7 @@ namespace SyncStreamAPI.Hubs
                     }
                 }
                 if (dbUser.StreamToken == null)
-                    dbUser.StreamToken = dbUser.GenerateStreamToken();
+                    dbUser.StreamToken = dbUser.GenerateStreamToken().Token;
                 DbRememberToken Token = dbUser.RememberTokens.FirstOrDefault(x => x.Token == token);
                 if (Token != null)
                 {
