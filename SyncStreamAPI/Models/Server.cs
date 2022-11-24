@@ -22,6 +22,10 @@ namespace SyncStreamAPI.Models
 
         public Server()
         {
+            bannedMembers = new List<Member>();
+            playlist = new List<DreckVideo>();
+            members = new List<Member>();
+            chatmessages = new List<ChatMessage>();
             currentVideo = new DreckVideo() { title = "Nothing playing", url = "", ended = true };
             isplaying = false;
             currenttime = 0;

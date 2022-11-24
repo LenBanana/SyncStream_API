@@ -11,6 +11,7 @@ using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.RTMP;
 using SyncStreamAPI.PostgresModels;
+using SyncStreamAPI.ServerData;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -61,8 +62,7 @@ namespace SyncStreamAPI.Controllers
                 if (_postgres.Users?.FirstOrDefault(x => x.username.ToLower() == rtmpData.name.ToLower()) == null)
                     return StatusCode(StatusCodes.Status404NotFound);
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == rtmpData.token)).FirstOrDefault();
-                DbRememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == rtmpData.token);
-                if (Token == null || dbUser.userprivileges < UserPrivileges.Approved)
+                if (dbUser == null || dbUser.userprivileges < UserPrivileges.Approved)
                     return StatusCode(StatusCodes.Status403Forbidden);
                 return Ok();
             }

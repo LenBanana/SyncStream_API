@@ -63,7 +63,7 @@ namespace SyncStreamAPI.Hubs
             {
                 var dbUser = _postgres.Users.First(x => x.ID == requestUser.ID);
                 var token = dbUser.GenerateToken(userInfo);
-                if (requestUser.RememberTokens?.Any(x => x.Token == token.Token) == true)
+                if (requestUser?.RememberTokens.Any(x => x.Token == token.Token) == true)
                 {
                     await Clients.Caller.rememberToken(new RememberTokenDTO(token, requestUser.ID));
                     return;
@@ -200,7 +200,7 @@ namespace SyncStreamAPI.Hubs
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var changeUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == changeID);
-                    if (changeUser != null)
+                    if (changeUser != null && dbUser.userprivileges > changeUser.userprivileges)
                     {
                         changeUser.userprivileges = (UserPrivileges)privileges;
                         await _postgres.SaveChangesAsync();
@@ -216,7 +216,7 @@ namespace SyncStreamAPI.Hubs
             try
             {
                 var dbUser = _postgres.Users?.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
-                if (dbUser == null || (dbUser?.RememberTokens?.Any(x => x.Token == token) == false))
+                if (dbUser == null || (dbUser?.RememberTokens.Any(x => x.Token == token) == false))
                 {
                     await Clients.Caller.userlogin(new DbUser("").ToDTO());
                     return;

@@ -34,7 +34,7 @@ namespace SyncStreamAPI.Hubs
                 MainServer.members = new List<Member>();
             }
             Member newMember = new Member(_manager) { username = username, ishost = MainServer.members.Count == 0 ? true : false, ConnectionId = ip, RoomId = UniqueId };
-            if (MainServer.bannedMembers?.Any(x => x.ConnectionId == newMember.ConnectionId) == true)
+            if (MainServer?.bannedMembers.Any(x => x.ConnectionId == newMember.ConnectionId) == true)
             {
                 await Clients.Caller.adduserupdate((int)UserUpdate.Banned);
                 return;
@@ -96,7 +96,7 @@ namespace SyncStreamAPI.Hubs
             {
                 var ip = Context.ConnectionId;
                 MainServer.members[idx].ConnectionId = ip;
-                if (MainServer.bannedMembers?.Any(x => x.ConnectionId == MainServer.members[idx].ConnectionId) == true)
+                if (MainServer?.bannedMembers.Any(x => x.ConnectionId == MainServer.members[idx].ConnectionId) == true)
                 {
                     MainServer.members.RemoveAt(idx);
                     await Clients.Caller.adduserupdate((int)UserUpdate.Banned);
