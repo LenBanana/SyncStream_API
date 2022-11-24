@@ -205,6 +205,11 @@ namespace SyncStreamAPI.Hubs
                         changeUser.userprivileges = (UserPrivileges)privileges;
                         await _postgres.SaveChangesAsync();
                     }
+                    else
+                    {
+                        await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Insufficient permissions", Answer1 = "Ok" });
+                        return;
+                    }
                     List<DbUser> users = _postgres.Users.ToList();
                     await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
                 }
