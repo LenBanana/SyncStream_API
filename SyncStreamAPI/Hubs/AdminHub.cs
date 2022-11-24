@@ -53,7 +53,8 @@ namespace SyncStreamAPI.Hubs
                 await _postgres.Users.AddAsync(requestUser);
                 await _postgres.SaveChangesAsync();
                 result = requestUser;
-
+                List<DbUser> users = _postgres.Users.ToList();
+                await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
             }
             await Clients.Caller.userRegister(result.ToDTO());
         }
