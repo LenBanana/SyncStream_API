@@ -229,6 +229,7 @@ namespace SyncStreamAPI.Hubs
                     throw new Exception("Folder already shared with user");
                 _postgres.FolderShare?.Add(newShare);
                 await _postgres.SaveChangesAsync();
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Success) { Header = "Share", Question = $"Now sharing {shareFolder.Name} with {shareUser.username}!", Answer1 = "Ok" });
             }
             catch (Exception ex)
             {
