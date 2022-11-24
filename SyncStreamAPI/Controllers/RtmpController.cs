@@ -37,10 +37,13 @@ namespace SyncStreamAPI.Controllers
         }
 
         [HttpPost("[action]")]
-        public IActionResult onpublish([FromBody] RtmpData rtmpData)
+        public IActionResult onpublish([FromBody] RtmpData rtmpData, string token)
         {
             try
             {
+                Console.WriteLine(rtmpData.token);
+                Console.WriteLine("-----------TESTEDY------------");
+                Console.WriteLine(token);
                 var dbUser = _postgres.Users?.FirstOrDefault(x => x.StreamToken != null && x.StreamToken.Token == rtmpData.token && x.username.ToLower() == rtmpData.name.ToLower());
                 DbRememberToken Token = dbUser?.StreamToken;
                 if (Token == null || dbUser.userprivileges < UserPrivileges.Approved)
@@ -54,10 +57,13 @@ namespace SyncStreamAPI.Controllers
         }
 
         [HttpPost("[action]")]
-        public IActionResult onplay([FromBody] RtmpData rtmpData)
+        public IActionResult onplay([FromBody] RtmpData rtmpData, string token)
         {
             try
             {
+                Console.WriteLine(rtmpData.token);
+                Console.WriteLine("-----------TESTEDY------------");
+                Console.WriteLine(token);
                 if (_postgres.Users?.FirstOrDefault(x => x.username.ToLower() == rtmpData.name.ToLower()) == null)
                     return StatusCode(StatusCodes.Status404NotFound);
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == rtmpData.token)).FirstOrDefault();
