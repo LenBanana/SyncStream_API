@@ -37,13 +37,11 @@ namespace SyncStreamAPI.Controllers
         }
 
         [HttpPost("[action]")]
-        public IActionResult onpublish([FromForm] RtmpData rtmpData, string token)
+        public IActionResult onpublish([FromForm] RtmpData rtmpData)
         {
             try
             {
-                Console.WriteLine(rtmpData.token);
-                Console.WriteLine("-----------TESTEDY------------");
-                Console.WriteLine(token);
+                Console.WriteLine($"User {rtmpData.name} is streaming");
                 var dbUser = _postgres.Users?.FirstOrDefault(x => x.StreamToken != null && x.StreamToken.Token == rtmpData.token && x.username.ToLower() == rtmpData.name.ToLower());
                 DbRememberToken Token = dbUser?.StreamToken;
                 if (Token == null || dbUser.userprivileges < UserPrivileges.Approved)
@@ -57,19 +55,17 @@ namespace SyncStreamAPI.Controllers
         }
 
         [HttpPost("[action]")]
-        public IActionResult onplay([FromForm] RtmpData rtmpData, string token)
+        public IActionResult onplay([FromForm] RtmpData rtmpData)
         {
             try
             {
-                Console.WriteLine(rtmpData.token);
-                Console.WriteLine("-----------TESTEDY------------");
-                Console.WriteLine(token);
                 if (_postgres.Users?.FirstOrDefault(x => x.username.ToLower() == rtmpData.name.ToLower()) == null)
                     return StatusCode(StatusCodes.Status404NotFound);
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == rtmpData.token)).FirstOrDefault();
                 DbRememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == rtmpData.token);
                 if (Token == null || dbUser.userprivileges < UserPrivileges.Approved)
                     return StatusCode(StatusCodes.Status403Forbidden);
+                Console.WriteLine($"User {dbUser.username} is now watching {rtmpData.name}");
                 return Ok();
             }
             catch (Exception ex)
