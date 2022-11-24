@@ -197,7 +197,7 @@ namespace SyncStreamAPI.Hubs
                 {
                     if (dbUser == null)
                         return;
-                    if (dbUser.userprivileges >= UserPrivileges.Administrator && dbUser.userprivileges > (UserPrivileges)privileges)
+                    if (dbUser.userprivileges >= UserPrivileges.Administrator && (dbUser.userprivileges > (UserPrivileges)privileges || dbUser.userprivileges == UserPrivileges.Elevated))
                     {
                         var changeUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == changeID);
                         if (changeUser != null && dbUser.userprivileges > changeUser.userprivileges)
@@ -207,8 +207,6 @@ namespace SyncStreamAPI.Hubs
                         }
                         else
                             throw new UnauthorizedAccessException("Insufficient permissions");
-                        List<DbUser> users = _postgres.Users.ToList();
-                        await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
                     }
                     else
                         throw new UnauthorizedAccessException("Insufficient permissions");
@@ -224,6 +222,8 @@ namespace SyncStreamAPI.Hubs
             {
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
             }
+            List<DbUser> users = _postgres.Users.ToList();
+            await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
         }
 
         public async Task ValidateToken(string token, int userID)
