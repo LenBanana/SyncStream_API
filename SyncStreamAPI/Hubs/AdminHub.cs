@@ -175,7 +175,7 @@ namespace SyncStreamAPI.Hubs
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var approveUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == approveID);
-                    if (approveUser != null)
+                    if (approveUser != null && (dbUser.userprivileges > approveUser.userprivileges || dbUser.userprivileges == UserPrivileges.Elevated))
                     {
                         approveUser.approved = approve ? 1 : 0;
                         if (approveUser.userprivileges == UserPrivileges.NotApproved && approve)
@@ -184,9 +184,13 @@ namespace SyncStreamAPI.Hubs
                             approveUser.userprivileges = UserPrivileges.NotApproved;
                         await _postgres.SaveChangesAsync();
                     }
+                    else
+                        await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Insufficient permissions", Answer1 = "Ok" });
                     List<DbUser> users = _postgres.Users.ToList();
                     await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
                 }
+                else
+                    await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Insufficient permissions", Answer1 = "Ok" });
             }
         }
 
@@ -210,6 +214,8 @@ namespace SyncStreamAPI.Hubs
                             changeUser.userprivileges = (UserPrivileges)privileges;
                             if (changeUser.userprivileges == UserPrivileges.NotApproved)
                                 changeUser.approved = 0;
+                            if (changeUser.approved == 0 && changeUser.userprivileges > UserPrivileges.NotApproved)
+                                changeUser.approved = 1;
                             await _postgres.SaveChangesAsync();
                         }
                         else
