@@ -159,7 +159,7 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
-        public async Task ApproveUser(string token, int userID, int approveID, bool prove)
+        public async Task ApproveUser(string token, int userID, int approveID, bool approve)
         {
             if (userID == approveID)
             {
@@ -177,7 +177,11 @@ namespace SyncStreamAPI.Hubs
                     var approveUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == approveID);
                     if (approveUser != null)
                     {
-                        approveUser.approved = prove ? 1 : 0;
+                        approveUser.approved = approve ? 1 : 0;
+                        if (approveUser.userprivileges == UserPrivileges.NotApproved && approve)
+                            approveUser.userprivileges = UserPrivileges.Approved;
+                        if (approveUser.userprivileges != UserPrivileges.NotApproved && !approve)
+                            approveUser.userprivileges = UserPrivileges.NotApproved;
                         await _postgres.SaveChangesAsync();
                     }
                     List<DbUser> users = _postgres.Users.ToList();
@@ -204,6 +208,8 @@ namespace SyncStreamAPI.Hubs
                         if (changeUser != null && dbUser.userprivileges > changeUser.userprivileges)
                         {
                             changeUser.userprivileges = (UserPrivileges)privileges;
+                            if (changeUser.userprivileges == UserPrivileges.NotApproved)
+                                changeUser.approved = 0;
                             await _postgres.SaveChangesAsync();
                         }
                         else
