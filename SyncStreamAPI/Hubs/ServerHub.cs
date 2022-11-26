@@ -245,7 +245,7 @@ namespace SyncStreamAPI.Hubs
             Regex ytRegex = new Regex(ytRegEx);
             Regex twitchRegex = new Regex(twitchRegEx);
             Regex vimeoRegex = new Regex(vimeoRegEx);
-            if (key.url.ToLower().StartsWith("https://dash.drecktu.be/") || key.url.StartsWith("rtmp") || key.url.StartsWith("http://drecktu.be:8088/live"))
+            if (key.url.ToLower().Contains("//live.drecktu.be/") || key.url.StartsWith("rtmp") || key.url.Contains("//drecktu.be:8088/live"))
                 result = PlayerType.Live;            
             else if (ytRegex.IsMatch(key.url))
                 result = PlayerType.YouTube;
