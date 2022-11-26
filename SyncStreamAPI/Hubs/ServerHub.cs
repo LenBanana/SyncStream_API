@@ -231,7 +231,7 @@ namespace SyncStreamAPI.Hubs
                     await Clients.Group(UniqueId).playertype(PlayerType.Nothing);
                 return result;
             }
-            if (key.url.ToLower().StartsWith("https://dash.drecktu.be/dash") || key.url.StartsWith("rtmp") || key.url.StartsWith("http://drecktu.be:8808/live"))
+            if (key.url.ToLower().StartsWith("https://dash.drecktu.be/dash") || key.url.StartsWith("rtmp") || key.url.StartsWith("http://drecktu.be:8088/live"))
             {
                 result = PlayerType.Live;
                 await Clients.Group(UniqueId).playertype(result);
