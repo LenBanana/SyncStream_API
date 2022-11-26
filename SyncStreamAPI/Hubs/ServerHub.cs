@@ -153,7 +153,12 @@ namespace SyncStreamAPI.Hubs
             if (room.server.playlist?.Select(x => x.url).Contains(key.url) == false)
             {
                 var playerType = await SendPlayerType(UniqueId, key, vidEnded);
-                if (playerType == PlayerType.External)
+                if (playerType == PlayerType.Live)
+                {
+                    if (key.title.Length == 0)
+                        key.title = key.url.Split('=').Last().FirstCharToUpper();
+                }
+                else if (playerType == PlayerType.External)
                 {
                     if (key.title.Length == 0)
                         key.title = "External Source";
@@ -226,9 +231,15 @@ namespace SyncStreamAPI.Hubs
                     await Clients.Group(UniqueId).playertype(PlayerType.Nothing);
                 return result;
             }
+            if (key.url.ToLower().StartsWith("https://dash.drecktu.be/dash") || key.url.StartsWith("rtmp") || key.url.StartsWith("http://drecktu.be:8808/live"))
+            {
+                result = PlayerType.Live;
+                await Clients.Group(UniqueId).playertype(result);
+                return result;
+            }
             Uri uriResult;
             bool validUri = Uri.TryCreate(key.url, UriKind.Absolute, out uriResult) && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
-            if (!validUri && !key.url.ToLower().StartsWith("https://dash.drecktu.be/dash") && !key.url.StartsWith("rtmp"))
+            if (!validUri)
             {
                 if (sendToUsers)
                     await Clients.Group(UniqueId).playertype(PlayerType.Nothing);

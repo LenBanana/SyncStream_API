@@ -7,6 +7,7 @@
         Twitch,
         Vimeo,
         External,
+        Live,
         WhiteBoard,
         Blackjack,
         Chess
