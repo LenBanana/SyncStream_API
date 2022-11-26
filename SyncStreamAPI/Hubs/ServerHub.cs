@@ -231,12 +231,6 @@ namespace SyncStreamAPI.Hubs
                     await Clients.Group(UniqueId).playertype(PlayerType.Nothing);
                 return result;
             }
-            if (key.url.ToLower().StartsWith("https://dash.drecktu.be/dash") || key.url.StartsWith("rtmp") || key.url.StartsWith("http://drecktu.be:8088/live"))
-            {
-                result = PlayerType.Live;
-                await Clients.Group(UniqueId).playertype(result);
-                return result;
-            }
             Uri uriResult;
             bool validUri = Uri.TryCreate(key.url, UriKind.Absolute, out uriResult) && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
             if (!validUri)
@@ -251,7 +245,9 @@ namespace SyncStreamAPI.Hubs
             Regex ytRegex = new Regex(ytRegEx);
             Regex twitchRegex = new Regex(twitchRegEx);
             Regex vimeoRegex = new Regex(vimeoRegEx);
-            if (ytRegex.IsMatch(key.url))
+            if (key.url.ToLower().StartsWith("https://dash.drecktu.be/dash") || key.url.StartsWith("rtmp") || key.url.StartsWith("http://drecktu.be:8088/live"))
+                result = PlayerType.Live;            
+            else if (ytRegex.IsMatch(key.url))
                 result = PlayerType.YouTube;
             else if (twitchRegex.IsMatch(key.url))
             {
