@@ -8,6 +8,7 @@ using SyncStreamAPI.Helper;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
+using SyncStreamAPI.Models.RTMP;
 using SyncStreamAPI.PostgresModels;
 using System;
 using System.Collections.Generic;
@@ -26,6 +27,7 @@ namespace SyncStreamAPI.ServerData
     public class DataManager
     {
         public static List<Room> Rooms { get; set; } = new List<Room>();
+        public List<LiveUser> LiveUsers { get; set; } = new List<LiveUser>();
         public static bool checking { get; set; } = false;
         public Dictionary<WebClient, DownloadClientValue> userWebDownloads { get; set; } = new Dictionary<WebClient, DownloadClientValue>();
         public List<DownloadClientValue> userM3U8Conversions { get; set; } = new List<DownloadClientValue>();

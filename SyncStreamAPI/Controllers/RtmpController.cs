@@ -29,12 +29,14 @@ namespace SyncStreamAPI.Controllers
         PostgresContext _postgres;
         IConfiguration Configuration { get; }
         CancellationTokenSource source = new CancellationTokenSource();
+        DataManager _manager;
 
-        public RtmpController(IConfiguration configuration, IHubContext<ServerHub, IServerHub> hub, PostgresContext postgres)
+        public RtmpController(IConfiguration configuration, IHubContext<ServerHub, IServerHub> hub, PostgresContext postgres, DataManager manager)
         {
             Configuration = configuration;
             _hub = hub;
             _postgres = postgres;
+            _manager = manager;
         }
 
         [HttpPost("[action]")]
@@ -46,6 +48,29 @@ namespace SyncStreamAPI.Controllers
                 string Token = dbUser?.StreamToken;
                 if (Token == null || Token.Length == 0 || dbUser.userprivileges < UserPrivileges.Approved)
                     return StatusCode(StatusCodes.Status403Forbidden);
+                var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.id == rtmpData.token);
+                if (liveUser == null)
+                    _manager.LiveUsers.Add(new LiveUser() { userName = rtmpData.name, id = rtmpData.token });
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        [HttpPost("[action]")]
+        public IActionResult onpublishdone([FromForm] RtmpData rtmpData)
+        {
+            try
+            {
+                var dbUser = _postgres.Users?.FirstOrDefault(x => x.StreamToken != null && x.StreamToken == rtmpData.token && x.username.ToLower() == rtmpData.name.ToLower());
+                string Token = dbUser?.StreamToken;
+                if (Token == null || Token.Length == 0 || dbUser.userprivileges < UserPrivileges.Approved)
+                    return StatusCode(StatusCodes.Status403Forbidden);
+                var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.id == rtmpData.token);
+                if (liveUser != null)
+                    _manager.LiveUsers.Remove(liveUser);
                 return Ok();
             }
             catch (Exception ex)
@@ -59,11 +84,35 @@ namespace SyncStreamAPI.Controllers
         {
             try
             {
-                if (_postgres.Users?.FirstOrDefault(x => x.username.ToLower() == rtmpData.name.ToLower()) == null)
+                var liveUser = _manager.LiveUsers?.FirstOrDefault(x => x.userName.ToLower() == rtmpData.name.ToLower());
+                if (liveUser == null)
                     return StatusCode(StatusCodes.Status404NotFound);
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == rtmpData.token)).FirstOrDefault();
                 if (dbUser == null || dbUser.userprivileges < UserPrivileges.Approved)
                     return StatusCode(StatusCodes.Status403Forbidden);
+                liveUser.watchMember.Add(dbUser.ToDTO());
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        [HttpPost("[action]")]
+        public IActionResult onplaydone([FromForm] RtmpData rtmpData)
+        {
+            try
+            {
+                var liveUser = _manager.LiveUsers?.FirstOrDefault(x => x.userName.ToLower() == rtmpData.name.ToLower());
+                if (liveUser == null)
+                    return StatusCode(StatusCodes.Status404NotFound);
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == rtmpData.token)).FirstOrDefault();
+                if (dbUser == null || dbUser.userprivileges < UserPrivileges.Approved)
+                    return StatusCode(StatusCodes.Status403Forbidden);
+                var watchMemberIdx = liveUser.watchMember.FindIndex(x => x.ID == dbUser.ID);
+                if (watchMemberIdx != -1)
+                    liveUser.watchMember.RemoveAt(watchMemberIdx);
                 return Ok();
             }
             catch (Exception ex)
