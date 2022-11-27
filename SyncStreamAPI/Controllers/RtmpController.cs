@@ -40,7 +40,7 @@ namespace SyncStreamAPI.Controllers
         }
 
         [HttpPost("[action]")]
-        public IActionResult onpublish([FromForm] RtmpData rtmpData)
+        public async Task<IActionResult> onpublish([FromForm] RtmpData rtmpData)
         {
             try
             {
@@ -50,17 +50,23 @@ namespace SyncStreamAPI.Controllers
                     return StatusCode(StatusCodes.Status403Forbidden);
                 var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.id == rtmpData.token);
                 if (liveUser == null)
+                {
                     _manager.LiveUsers.Add(new LiveUser() { userName = rtmpData.name, id = rtmpData.token });
+                    var liveUsers = _manager.LiveUsers;
+                    if (liveUsers.Count > 0)
+                        await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers);
+                }
                 return Ok();
             }
             catch (Exception ex)
             {
+                Console.WriteLine(ex.StackTrace);
                 return StatusCode(StatusCodes.Status500InternalServerError);
             }
         }
 
         [HttpPost("[action]")]
-        public IActionResult onpublishdone([FromForm] RtmpData rtmpData)
+        public async Task<IActionResult> onpublishdone([FromForm] RtmpData rtmpData)
         {
             try
             {
@@ -70,17 +76,23 @@ namespace SyncStreamAPI.Controllers
                     return StatusCode(StatusCodes.Status403Forbidden);
                 var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.id == rtmpData.token);
                 if (liveUser != null)
+                {
                     _manager.LiveUsers.Remove(liveUser);
+                    var liveUsers = _manager.LiveUsers;
+                    if (liveUsers.Count > 0)
+                        await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers);
+                }
                 return Ok();
             }
             catch (Exception ex)
             {
+                Console.WriteLine(ex.StackTrace);
                 return StatusCode(StatusCodes.Status500InternalServerError);
             }
         }
 
         [HttpPost("[action]")]
-        public IActionResult onplay([FromForm] RtmpData rtmpData)
+        public async Task<IActionResult> onplay([FromForm] RtmpData rtmpData)
         {
             try
             {
@@ -91,16 +103,20 @@ namespace SyncStreamAPI.Controllers
                 if (dbUser == null || dbUser.userprivileges < UserPrivileges.Approved)
                     return StatusCode(StatusCodes.Status403Forbidden);
                 liveUser.watchMember.Add(dbUser.ToDTO());
+                var liveUsers = _manager.LiveUsers;
+                if (liveUsers.Count > 0)
+                    await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers);
                 return Ok();
             }
             catch (Exception ex)
             {
+                Console.WriteLine(ex.StackTrace);
                 return StatusCode(StatusCodes.Status500InternalServerError);
             }
         }
 
         [HttpPost("[action]")]
-        public IActionResult onplaydone([FromForm] RtmpData rtmpData)
+        public async Task<IActionResult> onplaydone([FromForm] RtmpData rtmpData)
         {
             try
             {
@@ -113,10 +129,14 @@ namespace SyncStreamAPI.Controllers
                 var watchMemberIdx = liveUser.watchMember.FindIndex(x => x.ID == dbUser.ID);
                 if (watchMemberIdx != -1)
                     liveUser.watchMember.RemoveAt(watchMemberIdx);
+                var liveUsers = _manager.LiveUsers;
+                if (liveUsers.Count > 0)
+                    await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers);
                 return Ok();
             }
             catch (Exception ex)
             {
+                Console.WriteLine(ex.StackTrace);
                 return StatusCode(StatusCodes.Status500InternalServerError);
             }
         }

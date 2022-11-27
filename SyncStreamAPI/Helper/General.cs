@@ -26,6 +26,7 @@ namespace SyncStreamAPI.Helper
         public static int GallowWordLengthMultiplierHost = 12;
 
         public static int BlackjackShoeSize = 6;
+        public static string LoggedInGroupName = "approved";
 
         public static string GetGallowWord(Language language)
         {

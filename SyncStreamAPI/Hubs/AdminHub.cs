@@ -33,7 +33,7 @@ namespace SyncStreamAPI.Hubs
                     await Groups.AddToGroupAsync(Context.ConnectionId, dbToken.Token);
                     await Clients.Caller.rememberToken(new RememberTokenDTO(dbToken, user.ID));
                 }
-
+                await Groups.AddToGroupAsync(Context.ConnectionId, General.LoggedInGroupName);
                 result = user;
             }
             await Clients.Caller.userlogin(result.ToDTO());
@@ -265,6 +265,7 @@ namespace SyncStreamAPI.Hubs
                 {
                     _manager.AddMember(dbUser.ID, Context.ConnectionId);
                     await Groups.AddToGroupAsync(Context.ConnectionId, Token.Token);
+                    await Groups.AddToGroupAsync(Context.ConnectionId, General.LoggedInGroupName);
                     await Clients.Caller.userlogin(dbUser.ToDTO());
                     Token.Created = DateTime.Now;
                 }
