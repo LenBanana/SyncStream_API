@@ -51,7 +51,7 @@ namespace SyncStreamAPI.Controllers
                 var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.id == rtmpData.token);
                 if (liveUser == null)
                 {
-                    _manager.LiveUsers.Add(new LiveUser() { userName = rtmpData.name, id = rtmpData.token });
+                    _manager.LiveUsers.Add(new LiveUser() { userName = dbUser.username, id = rtmpData.token });
                     var liveUsers = _manager.LiveUsers;
                     await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers);
                 }
