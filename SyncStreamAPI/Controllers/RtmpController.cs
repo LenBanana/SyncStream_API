@@ -53,8 +53,7 @@ namespace SyncStreamAPI.Controllers
                 {
                     _manager.LiveUsers.Add(new LiveUser() { userName = rtmpData.name, id = rtmpData.token });
                     var liveUsers = _manager.LiveUsers;
-                    if (liveUsers.Count > 0)
-                        await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers);
+                    await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers);
                 }
                 return Ok();
             }
@@ -79,8 +78,7 @@ namespace SyncStreamAPI.Controllers
                 {
                     _manager.LiveUsers.Remove(liveUser);
                     var liveUsers = _manager.LiveUsers;
-                    if (liveUsers.Count > 0)
-                        await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers);
+                    await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers);
                 }
                 return Ok();
             }
@@ -104,8 +102,7 @@ namespace SyncStreamAPI.Controllers
                     return StatusCode(StatusCodes.Status403Forbidden);
                 liveUser.watchMember.Add(dbUser.ToDTO());
                 var liveUsers = _manager.LiveUsers;
-                if (liveUsers.Count > 0)
-                    await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers);
+                await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers);
                 return Ok();
             }
             catch (Exception ex)
@@ -130,8 +127,7 @@ namespace SyncStreamAPI.Controllers
                 if (watchMemberIdx != -1)
                     liveUser.watchMember.RemoveAt(watchMemberIdx);
                 var liveUsers = _manager.LiveUsers;
-                if (liveUsers.Count > 0)
-                    await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers);
+                await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers);
                 return Ok();
             }
             catch (Exception ex)
