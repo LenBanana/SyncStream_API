@@ -7,7 +7,7 @@ namespace SyncStreamAPI.Interfaces
 {
     public partial interface IServerHub
     {
-        Task getliveusers(List<LiveUser> user);
+        Task getliveusers(List<LiveUserDTO> user);
         Task getwatchingusers(List<UserDTO> user);
     }
 }

@@ -53,8 +53,8 @@ namespace SyncStreamAPI.Controllers
                 {
                     _manager.LiveUsers.Add(new LiveUser() { userName = dbUser.username, id = rtmpData.token });
                     var liveUsers = _manager.LiveUsers;
-                    await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers);
-                    await _hub.Clients.Groups(General.BottedInGroupName).getliveusers(liveUsers);
+                    await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
+                    await _hub.Clients.Groups(General.BottedInGroupName).getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
                 }
                 return Ok();
             }
@@ -79,8 +79,8 @@ namespace SyncStreamAPI.Controllers
                 {
                     _manager.LiveUsers.Remove(liveUser);
                     var liveUsers = _manager.LiveUsers;
-                    await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers);
-                    await _hub.Clients.Groups(General.BottedInGroupName).getliveusers(liveUsers);
+                    await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
+                    await _hub.Clients.Groups(General.BottedInGroupName).getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
                 }
                 return Ok();
             }
@@ -104,7 +104,7 @@ namespace SyncStreamAPI.Controllers
                     return StatusCode(StatusCodes.Status403Forbidden);
                 liveUser.watchMember.Add(dbUser.ToDTO());
                 var liveUsers = _manager.LiveUsers;
-                await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers);
+                await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
                 return Ok();
             }
             catch (Exception ex)
@@ -129,7 +129,7 @@ namespace SyncStreamAPI.Controllers
                 if (watchMemberIdx != -1)
                     liveUser.watchMember.RemoveAt(watchMemberIdx);
                 var liveUsers = _manager.LiveUsers;
-                await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers);
+                await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
                 return Ok();
             }
             catch (Exception ex)
