@@ -159,6 +159,20 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
+        public async Task GenerateApiKey(string token)
+        {
+            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens.FirstOrDefault(y => y.Token == token) != null);
+            if (dbUser != null)
+            {
+                if (dbUser.userprivileges >= UserPrivileges.Administrator && (dbUser.ApiKey == null || dbUser.ApiKey.Length == 0))
+                {
+                    dbUser.ApiKey = dbUser.GenerateStreamToken().Token;
+                    await _postgres.SaveChangesAsync();
+                    await Clients.Caller.userlogin(dbUser.ToDTO());
+                }
+            }
+        }
+
         public async Task ApproveUser(string token, int userID, int approveID, bool approve)
         {
             if (userID == approveID)

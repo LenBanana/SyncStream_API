@@ -16,6 +16,7 @@ namespace SyncStreamAPI.PostgresModels
         public string usersalt { get; set; }
         public List<DbRememberToken> RememberTokens { get; set; }
         public string StreamToken { get; set; }
+        public string ApiKey { get; set; }
         public List<DbFile> Files { get; set; }
         public DbUser()
         {

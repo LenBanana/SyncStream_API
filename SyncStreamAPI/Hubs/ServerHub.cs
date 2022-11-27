@@ -10,6 +10,7 @@ using SyncStreamAPI.Games.Gallows;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
+using SyncStreamAPI.Models.Bots;
 using SyncStreamAPI.Models.GameModels.Chess;
 using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
@@ -246,7 +247,11 @@ namespace SyncStreamAPI.Hubs
             Regex twitchRegex = new Regex(twitchRegEx);
             Regex vimeoRegex = new Regex(vimeoRegEx);
             if (key.url.ToLower().Contains("//live.drecktu.be/") || key.url.StartsWith("rtmp") || key.url.Contains("//drecktu.be:8088/live"))
-                result = PlayerType.Live;            
+            {
+                if (sendToUsers)
+                    await Clients.Group(General.BottedInGroupName).sendBotChannelUpdate(new BotLiveChannelInfo() { ChannelId = key.url.Split('=').Last(), RoomName = UniqueId });
+                result = PlayerType.Live;
+            }
             else if (ytRegex.IsMatch(key.url))
                 result = PlayerType.YouTube;
             else if (twitchRegex.IsMatch(key.url))

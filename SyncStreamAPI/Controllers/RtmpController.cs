@@ -54,6 +54,7 @@ namespace SyncStreamAPI.Controllers
                     _manager.LiveUsers.Add(new LiveUser() { userName = dbUser.username, id = rtmpData.token });
                     var liveUsers = _manager.LiveUsers;
                     await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers);
+                    await _hub.Clients.Groups(General.BottedInGroupName).getliveusers(liveUsers);
                 }
                 return Ok();
             }
@@ -79,6 +80,7 @@ namespace SyncStreamAPI.Controllers
                     _manager.LiveUsers.Remove(liveUser);
                     var liveUsers = _manager.LiveUsers;
                     await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers);
+                    await _hub.Clients.Groups(General.BottedInGroupName).getliveusers(liveUsers);
                 }
                 return Ok();
             }

@@ -27,6 +27,7 @@ namespace SyncStreamAPI.Helper
 
         public static int BlackjackShoeSize = 6;
         public static string LoggedInGroupName = "approved";
+        public static string BottedInGroupName = "dreckbots";
 
         public static string GetGallowWord(Language language)
         {
