@@ -19,6 +19,7 @@ namespace SyncStreamAPI.Models
             this.usersalt = null;
             this.RememberTokens = null;
             this.StreamToken = user.StreamToken;
+            this.ApiKey = user.ApiKey;
         }
     }
 }
