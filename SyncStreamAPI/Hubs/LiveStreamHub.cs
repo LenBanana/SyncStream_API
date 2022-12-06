@@ -19,7 +19,7 @@ namespace SyncStreamAPI.Hubs
                 {
                     var liveUser = _manager.LiveUsers;
                     if (liveUser.Count > 0)
-                        await Clients.Caller.getliveusers(liveUser);
+                        await Clients.Caller.getliveusers(liveUser.Select(x => x.ToDTO()).ToList());
                 }
             }
             catch (Exception ex)

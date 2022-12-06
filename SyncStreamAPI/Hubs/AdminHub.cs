@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using SyncStreamAPI.Enums;
+using System.Text.RegularExpressions;
 
 namespace SyncStreamAPI.Hubs
 {
@@ -18,6 +19,11 @@ namespace SyncStreamAPI.Hubs
             DbUser user = _postgres.Users.Include(x => x.RememberTokens).FirstOrDefault(x => x.username == requestUser.username && x.password == requestUser.password);
             if (user != null)
             {
+                if (user.approved <= 0)
+                {
+                    await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Thanks for registering", Question = @$"Please wait until the admin team approves your account", Answer1 = "Ok" });
+                    return;
+                }
                 _manager.AddMember(user.ID, Context.ConnectionId);
                 var token = user.GenerateToken(userInfo);
                 var dbToken = user.RememberTokens.FirstOrDefault(x => x.Token == token.Token);
@@ -44,9 +50,11 @@ namespace SyncStreamAPI.Hubs
             var result = new DbUser();
             if (_postgres.Users?.Any(x => x.username == requestUser.username) == false)
             {
-                if (requestUser.username.Length < 2 || requestUser.username.Length > 20)
+                var userNameRegexString = @"^\w(?:\w|[.-](?=\w)){2,31}$";
+                var userNameRegex = new Regex(userNameRegexString);
+                if (!userNameRegex.IsMatch(requestUser.username))
                 {
-                    await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Username must be between 2 and 20 characters", Answer1 = "Ok" });
+                    await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = @$"Username {requestUser.username} not allowed", Answer1 = "Ok" });
                     return;
                 }
                 requestUser.StreamToken = requestUser.GenerateStreamToken().Token;
@@ -261,6 +269,11 @@ namespace SyncStreamAPI.Hubs
                 if (dbUser == null || (dbUser?.RememberTokens.Any(x => x.Token == token) == false))
                 {
                     await Clients.Caller.userlogin(new DbUser("").ToDTO());
+                    return;
+                }
+                if (dbUser.approved <= 0)
+                {
+                    await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Thanks for registering", Question = @$"Please wait until the admin team approves your account", Answer1 = "Ok" });
                     return;
                 }
                 dbUser.RememberTokens = dbUser.RememberTokens.GroupBy(x => x.Token)?.Select(x => x.First()).ToList();
