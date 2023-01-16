@@ -89,7 +89,7 @@ namespace SyncStreamAPI.Hubs
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var shareFolders = _postgres.FolderShare?.Where(x => x.DbUserID == dbUser.ID);
-                    var folder = _postgres.Folders?.Include(x => x.Files).Where(x => x.DbUserID == null || x.DbUserID == dbUser.ID || shareFolders.FirstOrDefault(y => y.DbFolderID == x.Id) != null).OrderBy(x => x.Name).ToList();
+                    var folder = _postgres.Folders?.Include(x => x.Files).Where(x => x.DbUserID == null || x.DbUserID == dbUser.ID || shareFolders.FirstOrDefault(y => y.DbFolderID == x.Id) != null || shareFolders.FirstOrDefault(y => y.DbFolderID == x.ParentId) != null).OrderBy(x => x.Name).ToList();
                     var defaultFolder = folder.FirstOrDefault(x => x.Id == folderId);
                     if (defaultFolder != null)
                     {
@@ -247,10 +247,8 @@ namespace SyncStreamAPI.Hubs
                     return;
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
-                    var shareFolders = _postgres.FolderShare?.Where(x => x.DbUserID == dbUser.ID).Select(x => x.DbFolderID).ToList();
-                    var children = shareFolders.SelectMany(x => _postgres.Folders.Where(y => y.ParentId == x)).Select(x => x.Id).ToList();
-                    shareFolders.AddRange(children);
-                    var files = _postgres.Files?.Where(x => x.DbFileFolderId == folderId && (x.DbUserID == dbUser.ID || shareFolders.FirstOrDefault(y => y == folderId) != -1));
+                    var shareFolders = _postgres.FolderShare?.Where(x => x.DbUserID == dbUser.ID);
+                    var files = _postgres.Files?.Where(x => x.DbFileFolderId == folderId && (x.DbUserID == dbUser.ID || shareFolders.FirstOrDefault(y => y.DbFolderID == folderId) != null));
                     if (files != null)
                         await Clients.Caller.getFolderFiles(files.Select(x => new FileDto(x)).ToList());
                 }
