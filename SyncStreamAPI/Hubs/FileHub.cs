@@ -94,7 +94,7 @@ namespace SyncStreamAPI.Hubs
                     if (defaultFolder != null)
                     {
                         var folderResult = new FolderDto(defaultFolder);
-                        await Clients.Caller.getFolders(folderResult);
+                        await Clients.Group(token).getFolders(folderResult);
                     }
                 }
             }
@@ -242,6 +242,7 @@ namespace SyncStreamAPI.Hubs
                 _postgres.FolderShare?.Add(newShare);
                 await _postgres.SaveChangesAsync();
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Success) { Header = "Share", Question = $"Now sharing {shareFolder.Name} with {shareUser.username}!", Answer1 = "Ok" });
+                await GetFolders(shareUser.RememberTokens.OrderByDescending(x => x.Created).FirstOrDefault()?.Token, shareFolder.Id);
             }
             catch (Exception ex)
             {
