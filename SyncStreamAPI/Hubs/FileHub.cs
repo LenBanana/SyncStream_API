@@ -224,6 +224,8 @@ namespace SyncStreamAPI.Hubs
                 var shareFolder = _postgres.Folders?.FirstOrDefault(x => x.Id == folderId);
                 if (shareFolder == null)
                     throw new Exception("Share folder does not exist");
+                if (shareFolder.DbUserID != dbUser.ID)
+                    throw new Exception($"Can't share folder {shareFolder.Name} because you don't have ownership");
                 var oldFolderShare = _postgres.FolderShare?.FirstOrDefault(x => x.DbFolderID == shareFolder.Id && x.DbUserID == shareUser.ID);
                 if (oldFolderShare != null)
                 {
