@@ -224,14 +224,15 @@ namespace SyncStreamAPI.Hubs
                 var shareFolder = _postgres.Folders?.FirstOrDefault(x => x.Id == folderId);
                 if (shareFolder == null)
                     throw new Exception("Share folder does not exist");
-                var newShare = new DbFolderUserShare(shareUser.ID, shareFolder.Id);
-                if (_postgres.FolderShare?.Contains(newShare) == true)
+                var oldFolderShare = _postgres.FolderShare?.FirstOrDefault(x => x.DbFolderID == shareFolder.Id && x.DbUserID == shareUser.ID);
+                if (oldFolderShare != null)
                 {
                     await Clients.Caller.dialog(new Dialog(AlertTypes.Warning) { Header = "Share", Question = $"Not sharing {shareFolder.Name} with {shareUser.username} anymore!", Answer1 = "Ok" });
-                    _postgres.FolderShare?.Remove(newShare);
+                    _postgres.FolderShare?.Remove(oldFolderShare);
                     await _postgres.SaveChangesAsync();
                     return;
                 }
+                var newShare = new DbFolderUserShare(shareUser.ID, shareFolder.Id);
                 _postgres.FolderShare?.Add(newShare);
                 await _postgres.SaveChangesAsync();
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Success) { Header = "Share", Question = $"Now sharing {shareFolder.Name} with {shareUser.username}!", Answer1 = "Ok" });
