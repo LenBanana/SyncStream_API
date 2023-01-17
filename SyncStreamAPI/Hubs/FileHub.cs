@@ -116,7 +116,9 @@ namespace SyncStreamAPI.Hubs
                 {
                     var parent = _postgres.Folders?.FirstOrDefault(x => x.Id == folderId);
                     if (parent == null)
-                        return;
+                        throw new Exception("Could not find folder");
+                    if (parent.DbUserID != null && parent.DbUserID != dbUser.ID)
+                        throw new Exception("You do not own this folder");
                     var newFolder = new DbFileFolder("New Folder", parent.Id, dbUser.ID);
                     _postgres.Folders.Add(newFolder);
                     await _postgres.SaveChangesAsync();
@@ -126,6 +128,7 @@ namespace SyncStreamAPI.Hubs
             catch (Exception ex)
             {
                 Console.WriteLine("Error in 'AddFolder'");
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Warning) { Header = "Error", Question = ex?.Message, Answer1 = "Ok" });
                 Console.WriteLine(ex.Message);
             }
         }
@@ -139,7 +142,7 @@ namespace SyncStreamAPI.Hubs
                     return;
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
-                    var folder = _postgres.Folders?.Include(x => x.Files).FirstOrDefault(x => x.Id == folderId && x.DbUserID == dbUser.ID);
+                    var folder = _postgres.Folders?.Include(x => x.Files).FirstOrDefault(x => x.Id == folderId && (x.DbUserID == dbUser.ID || dbUser.userprivileges > UserPrivileges.Administrator));
                     if (folder != null)
                     {
                         if (folder.Files?.Count > 0 || _postgres.Folders?.Where(x => x.ParentId == folderId).Count() > 0)
@@ -156,6 +159,7 @@ namespace SyncStreamAPI.Hubs
             catch (Exception ex)
             {
                 Console.WriteLine("Error in 'DeleteFolder'");
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Warning) { Header = "Error", Question = ex?.Message, Answer1 = "Ok" });
                 Console.WriteLine(ex.Message);
             }
         }
