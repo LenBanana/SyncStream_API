@@ -251,10 +251,13 @@ namespace SyncStreamAPI.Hubs
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 if (dbUser == null)
                     return;
+                var dbFolder = _postgres.Folders?.Where(x => x.Id == folderId).FirstOrDefault();
+                if (dbFolder == null)
+                    return;
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var shareFolders = _postgres.FolderShare?.Where(x => x.DbUserID == dbUser.ID);
-                    var files = _postgres.Files?.Where(x => x.DbFileFolderId == folderId && (x.DbUserID == dbUser.ID || shareFolders.FirstOrDefault(y => y.DbFolderID == folderId) != null));
+                    var files = _postgres.Files?.Where(x => x.DbFileFolderId == folderId && (x.DbUserID == dbUser.ID || shareFolders.FirstOrDefault(y => y.DbFolderID == folderId) != null || shareFolders.FirstOrDefault(y => y.DbFolderID == dbFolder.ParentId) != null || dbFolder.DbUserID == dbUser.ID));
                     if (files != null)
                         await Clients.Caller.getFolderFiles(files.Select(x => new FileDto(x)).ToList());
                 }
