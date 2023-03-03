@@ -135,16 +135,19 @@ namespace SyncStreamAPI.Hubs
             Server MainServer = room.server;
             int idxHost = MainServer.members.FindIndex(x => x.ishost == true);
             int idxMember = MainServer.members.FindIndex(x => !x.ishost && (x.username == usernameMember || x.ConnectionId == usernameMember));
-            if (idxHost != -1 && idxMember != -1)
+            if (idxMember != -1)
             {
                 var game = room.GallowGame;
                 if (game != null && game.PlayingGallows)
                     game.UpdateGallowWord(true);
-                MainServer.members[idxHost].uptime = DateTime.Now.ToString("MM.dd.yyyy HH:mm:ss");
+                if (idxHost != -1)
+                {
+                    MainServer.members[idxHost].uptime = DateTime.Now.ToString("MM.dd.yyyy HH:mm:ss");
+                    MainServer.members[idxHost].ishost = false;
+                    await Clients.Client(MainServer.members[idxHost].ConnectionId).hostupdate(false);
+                }
                 MainServer.members[idxMember].uptime = DateTime.Now.ToString("MM.dd.yyyy HH:mm:ss");
-                MainServer.members[idxHost].ishost = false;
                 MainServer.members[idxMember].ishost = true;
-                await Clients.Client(MainServer.members[idxHost].ConnectionId).hostupdate(false);
                 await Clients.Client(MainServer.members[idxMember].ConnectionId).hostupdate(true);
                 await Clients.Group(UniqueId).userupdate(MainServer.members?.Select(x => x.ToDTO()).ToList());
             }

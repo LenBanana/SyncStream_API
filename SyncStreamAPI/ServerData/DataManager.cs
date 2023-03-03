@@ -44,6 +44,9 @@ namespace SyncStreamAPI.ServerData
             {
                 LinuxBash.Bash($"chmod +x /app/ffmpeg");
                 LinuxBash.Bash($"chmod +x /app/ffprobe");
+                var getYtDl = LinuxBash.Bash($"wget https://yt-dl.org/downloads/latest/youtube-dl -O /usr/local/bin/youtube-dl");
+                if (getYtDl)
+                    LinuxBash.Bash($"chmod a+rx /usr/local/bin/youtube-dl");
             }
             _serviceProvider = provider;
             using (var scope = _serviceProvider.CreateScope())
@@ -91,6 +94,25 @@ namespace SyncStreamAPI.ServerData
             var clientQueueIdx = userM3U8Conversions.FindIndex(x => x.UserId == id);
             if (clientQueueIdx >= 0)
                 userM3U8Conversions[clientQueueIdx].ConnectionId = connectionId;
+        }
+
+        public async void YtDownload(DownloadClientValue downloadClient)
+        {
+            using (var scope = _serviceProvider.CreateScope())
+            {
+                var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
+                var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+                await _hub.Clients.Client(downloadClient.ConnectionId).downloadListen(downloadClient.UniqueId);
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == downloadClient.Token)).FirstOrDefault();
+                var dbFile = new DbFile(downloadClient.FileName, ".mp4", dbUser);
+                var filePath = $"{General.FilePath}/{dbFile.FileKey}.mp4".Replace('\\', '/');
+                var dlVid = LinuxBash.Bash($"youtube-dl -o {filePath} --format mp4 {downloadClient.Url}");
+                if (dlVid)
+                {
+                    dbUser.Files.Add(dbFile);
+                    await _postgres.SaveChangesAsync();
+                }
+            }
         }
 
         public async void AddDownload(DownloadClientValue downloadClient)
@@ -162,7 +184,8 @@ namespace SyncStreamAPI.ServerData
                 {
                     if (dbUser == null)
                         throw new Exception($"Unable to find user");
-                    var conversion = (await FFmpeg.Conversions.FromSnippet.SaveM3U8Stream(new Uri(downloadClient.Url), filePath)).SetOverwriteOutput(true);
+                    var conv = await FFmpeg.Conversions.New().AddParameter($"ffmpeg -i \"{downloadClient.Url}\" -c copy \"{downloadClient.FileName}\".mp4").UseMultiThread(true).Start(downloadClient.CancellationToken.Token);
+                    var conversion = (await FFmpeg.Conversions.FromSnippet.SaveM3U8Stream(new Uri(downloadClient.Url), filePath)).UseMultiThread(true).SetOverwriteOutput(true);
                     conversion.OnProgress += async (sender, args) =>
                     {
                         try
