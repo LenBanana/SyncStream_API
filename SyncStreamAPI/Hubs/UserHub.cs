@@ -226,6 +226,12 @@ namespace SyncStreamAPI.Hubs
             {
                 MainServer.members.Remove(member);
                 MainServer.bannedMembers.Add(member);
+                if (member.ishost && MainServer.members.Count > 0)
+                {
+                    MainServer.members[0].ishost = true;
+                    await Clients.Client(MainServer.members[0].ConnectionId).hostupdate(true);
+                    await Clients.Group(UniqueId).userupdate(MainServer.members?.Select(x => x.ToDTO()).ToList());
+                }
             }
             await Clients.User(member.ConnectionId).adduserupdate((int)UserUpdate.Banned);
             await Clients.Group(UniqueId).userupdate(MainServer.members?.Select(x => x.ToDTO()).ToList());
