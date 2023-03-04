@@ -175,6 +175,18 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
+        public async Task DownloadYtVideo(string token, string url, ConversionPreset preset = ConversionPreset.SuperFast)
+        {
+            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+            if (dbUser == null)
+                return;
+            if (dbUser.userprivileges >= UserPrivileges.Administrator)
+            {
+                var fileName = await General.ResolveURL(url, Configuration);
+                _manager.YtDownload(new(dbUser.ID, fileName, Context.ConnectionId, token, url, preset));
+            }
+        }
+
         public async Task GetFileInfo(string token, int id)
         {
             try

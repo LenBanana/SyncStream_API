@@ -16,6 +16,7 @@ namespace SyncStreamAPI.Helper
     {
         public static Random random = new Random();        
         public static string FilePath = System.IO.Directory.GetCurrentDirectory() + "/VideoFiles";
+        public const string BASE_GITHUB_URL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp";
 
         public static int GallowGameLength = 90;
         public static int GallowGameLengthMin = 60;

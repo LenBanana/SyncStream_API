@@ -18,5 +18,6 @@
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="6.4.0" />
     <PackageReference Include="Xabe.FFmpeg" Version="5.2.0" />
     <PackageReference Include="Xabe.FFmpeg.Downloader" Version="5.2.0" />
+    <PackageReference Include="YoutubeDLSharp" Version="0.4.3" />
   </ItemGroup>
 </Project>

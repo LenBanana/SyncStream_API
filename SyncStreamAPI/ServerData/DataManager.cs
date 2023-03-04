@@ -21,6 +21,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xabe.FFmpeg;
 using Xabe.FFmpeg.Downloader;
+using YoutubeDLSharp;
 
 namespace SyncStreamAPI.ServerData
 {
@@ -42,11 +43,11 @@ namespace SyncStreamAPI.ServerData
                 FFmpeg.SetExecutablesPath(Directory.GetCurrentDirectory());
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                LinuxBash.Bash($"chmod +x /app/ffmpeg");
-                LinuxBash.Bash($"chmod +x /app/ffprobe");
-                var getYtDl = LinuxBash.Bash($"wget https://yt-dl.org/downloads/latest/youtube-dl -O /usr/local/bin/youtube-dl");
-                if (getYtDl)
-                    LinuxBash.Bash($"chmod a+rx /usr/local/bin/youtube-dl");
+                LinuxBash.Bash($"chmod +x /app/ffmpeg && chmod +x /app/ffprobe");
+                LinuxBash.DownloadYtDlp().Wait();
+                LinuxBash.Bash($"chmod +x /app/yt-dlp");
+                //if (getYtDl)
+                //    LinuxBash.Bash($"chmod a+rx /usr/local/bin/youtube-dl");
             }
             _serviceProvider = provider;
             using (var scope = _serviceProvider.CreateScope())
@@ -106,8 +107,12 @@ namespace SyncStreamAPI.ServerData
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == downloadClient.Token)).FirstOrDefault();
                 var dbFile = new DbFile(downloadClient.FileName, ".mp4", dbUser);
                 var filePath = $"{General.FilePath}/{dbFile.FileKey}.mp4".Replace('\\', '/');
-                var dlVid = LinuxBash.Bash($"youtube-dl -o {filePath} --format mp4 {downloadClient.Url}");
-                if (dlVid)
+                var ytdl = new YoutubeDL();
+                ytdl.YoutubeDLPath = "/app/yt-dlp";
+                ytdl.FFmpegPath = "/app/ffmpeg";
+                ytdl.OutputFolder = filePath;
+                var res = await ytdl.RunVideoDownload(downloadClient.Url);
+                if (res.Success)
                 {
                     dbUser.Files.Add(dbFile);
                     await _postgres.SaveChangesAsync();

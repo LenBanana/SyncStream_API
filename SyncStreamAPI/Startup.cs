@@ -28,6 +28,11 @@ namespace SyncStreamAPI
 
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddSingleton(provider =>
+            {
+                DataManager manager = new DataManager(provider);
+                return manager;
+            });
             services.AddDbContext<PostgresContext>(options =>
             {
                 options.UseNpgsql(Configuration.GetConnectionString("SyncStreamDB"));
@@ -52,11 +57,6 @@ namespace SyncStreamAPI
             {
                 options.EnableDetailedErrors = false;
             }).AddNewtonsoftJsonProtocol();
-            services.AddSingleton(provider =>
-            {
-                DataManager manager = new DataManager(provider);
-                return manager;
-            });
             services.AddSingleton(provider =>
             {
                 BrowserAutomation browser = new BrowserAutomation(provider);
