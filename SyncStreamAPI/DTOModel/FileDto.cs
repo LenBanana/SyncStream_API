@@ -12,7 +12,7 @@ namespace SyncStreamAPI.DTOModel
         public string FileKey { get; set; }
         public DateTime Created { get; set; }
         public int FileFolderId { get; set; }
-        public long Length => new System.IO.FileInfo($"{General.FilePath}/{FileKey}{FileEnding}").Length;
+        public long Length => !System.IO.File.Exists($"{General.FilePath}/{FileKey}{FileEnding}") ? 0 : new System.IO.FileInfo($"{General.FilePath}/{FileKey}{FileEnding}").Length;
 
         public FileDto(DbFile file)
         {

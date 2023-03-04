@@ -143,6 +143,7 @@ namespace SyncStreamAPI.ServerData
                         catch (Exception ex) { Console.WriteLine(ex.Message); }
                     });
                     var res = await ytdl.RunVideoDownload(downloadClient.Url, progress: progress, ct: downloadClient.CancellationToken.Token);
+                    await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
                     if (res.Success)
                     {
                         dbUser.Files.Add(dbFile);
@@ -191,7 +192,7 @@ namespace SyncStreamAPI.ServerData
                         {
                             if (_browser == null)
                             {
-                                await _hub.Clients.Client(downloadClient.ConnectionId).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = $"Not allowed to download anything above 500mb file was {mb}mb", Answer1 = "Ok" });
+                                await _hub.Clients.Group(downloadClient.UserId.ToString()).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = $"Not allowed to download anything above 500mb file was {mb}mb", Answer1 = "Ok" });
                                 return;
                             }
                             var response = await _browser.GetM3U8FromUrl(downloadClient.Url);
@@ -199,7 +200,7 @@ namespace SyncStreamAPI.ServerData
                                 await _hub.Clients.Client(downloadClient.ConnectionId).browserResults(response.OutputUrls);
                             return;
                         }
-                        await _hub.Clients.Client(downloadClient.ConnectionId).downloadListen(downloadClient.ConnectionId);
+                        await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadListen(downloadClient.ConnectionId);
                         webClient.DownloadDataAsync(new Uri(downloadClient.Url));
                     }
                 }
@@ -207,7 +208,7 @@ namespace SyncStreamAPI.ServerData
                 {
                     userWebDownloads.Remove(webClient);
                     webClient.Dispose();
-                    await _hub.Clients.Client(downloadClient.ConnectionId).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
+                    await _hub.Clients.Group(downloadClient.UserId.ToString()).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
                     return;
                 }
             }
@@ -222,7 +223,7 @@ namespace SyncStreamAPI.ServerData
             {
                 var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                await _hub.Clients.Client(downloadClient.ConnectionId).downloadListen(downloadClient.UniqueId);
+                await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadListen(downloadClient.UniqueId);
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == downloadClient.Token)).FirstOrDefault();
                 var dbFile = new DbFile(downloadClient.FileName, ".mp4", dbUser);
                 var filePath = $"{General.FilePath}/{dbFile.FileKey}.mp4".Replace('\\', '/');
@@ -257,7 +258,7 @@ namespace SyncStreamAPI.ServerData
                         throw new OperationCanceledException();
                     if (!File.Exists(filePath))
                     {
-                        await _hub.Clients.Client(downloadClient.ConnectionId).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "There has been an error trying to save the file", Answer1 = "Ok" });
+                        await _hub.Clients.Group(downloadClient.UserId.ToString()).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "There has been an error trying to save the file", Answer1 = "Ok" });
                         return;
                     }
                     if (!downloadClient.CancellationToken.IsCancellationRequested)
@@ -271,7 +272,7 @@ namespace SyncStreamAPI.ServerData
                 {
                     var header = ex?.InnerException?.GetType()?.Name;
                     var msg = ex?.Message;
-                    await _hub.Clients.Client(downloadClient?.ConnectionId).dialog(new Dialog(AlertTypes.Danger) { Header = header, Question = $"{header} \n{msg}", Answer1 = "Ok" });
+                    await _hub.Clients.Group(downloadClient.UserId.ToString()).dialog(new Dialog(AlertTypes.Danger) { Header = header, Question = $"{header} \n{msg}", Answer1 = "Ok" });
                 }
                 try
                 {
@@ -279,7 +280,7 @@ namespace SyncStreamAPI.ServerData
                         File.Delete(filePath);
                 }
                 catch { }
-                await _hub.Clients.Client(downloadClient.ConnectionId).downloadFinished(downloadClient.UniqueId);
+                await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
                 if (userM3U8Conversions.Contains(downloadClient))
                     userM3U8Conversions.Remove(downloadClient);
                 StartNextDownload();
@@ -378,9 +379,9 @@ namespace SyncStreamAPI.ServerData
                 }
                 catch (Exception ex)
                 {
-                    await _hub.Clients.Client(client.ConnectionId).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
+                    await _hub.Clients.Group(client.UserId.ToString()).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
                 }
-                await _hub.Clients.Client(client.ConnectionId).downloadFinished(client.UniqueId);
+                await _hub.Clients.Group(client.UserId.ToString()).downloadFinished(client.UniqueId);
             }
         }
 
