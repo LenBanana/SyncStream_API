@@ -46,6 +46,7 @@ namespace SyncStreamAPI.ServerData
                 LinuxBash.Bash($"chmod +x /app/ffmpeg && chmod +x /app/ffprobe");
                 LinuxBash.DownloadYtDlp().Wait();
                 LinuxBash.Bash($"chmod +x /app/yt-dlp");
+                LinuxBash.Bash($"alias yt-dlp='python3 /app/yt-dlp'");
                 //if (getYtDl)
                 //    LinuxBash.Bash($"chmod a+rx /usr/local/bin/youtube-dl");
             }
@@ -67,15 +68,22 @@ namespace SyncStreamAPI.ServerData
             for (int i = 1; i < 5; i++)
                 Rooms.Add(new Room($"Guest Room - {i}", $"guest{i}", true, false));
 
-            using (var scope = _serviceProvider.CreateScope())
+            try
             {
-                var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
-                await _postgres.Database.EnsureCreatedAsync();
-                if (await _postgres.Folders.CountAsync() == 0)
+                using (var scope = _serviceProvider.CreateScope())
                 {
-                    _postgres.Folders.Add(new DbFileFolder("Default"));
-                    await _postgres.SaveChangesAsync();
+                    var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
+                    await _postgres.Database.EnsureCreatedAsync();
+                    if (await _postgres.Folders.CountAsync() == 0)
+                    {
+                        _postgres.Folders.Add(new DbFileFolder("Default"));
+                        await _postgres.SaveChangesAsync();
+                    }
                 }
+            }
+            catch
+            {
+
             }
         }
 
@@ -103,10 +111,11 @@ namespace SyncStreamAPI.ServerData
             {
                 using (var scope = _serviceProvider.CreateScope())
                 {
-                    var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
+                    //var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
                     var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
                     await _hub.Clients.Client(downloadClient.ConnectionId).downloadListen(downloadClient.UniqueId);
-                    var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == downloadClient.Token)).FirstOrDefault();
+                    //var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == downloadClient.Token)).FirstOrDefault();
+                    var dbUser = new DbUser("Len");
                     var dbFile = new DbFile(downloadClient.FileName, ".mp4", dbUser);
                     var filePath = $"{General.FilePath}/{dbFile.FileKey}.mp4".Replace('\\', '/');
                     var ytdl = new YoutubeDL();
@@ -114,12 +123,36 @@ namespace SyncStreamAPI.ServerData
                     ytdl.FFmpegPath = "/app/ffmpeg";
                     ytdl.OutputFolder = filePath;
                     Console.WriteLine($"Downloading {downloadClient.Url} to {filePath}");
-                    var res = await ytdl.RunVideoDownload(downloadClient.Url);
+                    var progress = new Progress<DownloadProgress>(async p =>
+                    {
+                        try
+                        {
+                            var perc = p.Progress * 100f;
+                            var text = $"{perc}%";
+                            if (downloadClient.Stopwatch != null)
+                            {
+                                var millis = downloadClient.Stopwatch.ElapsedMilliseconds;
+                                var timeLeft = (double)millis / perc * (100 - perc);
+                                timeLeft = timeLeft < 0 || timeLeft > TimeSpan.MaxValue.TotalMilliseconds ? 0 : timeLeft;
+                                var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"hh\:mm\:ss");
+                                text += $" - {timeString} remaining";
+                            }
+                            var result = new DownloadInfo(text, downloadClient.FileName, downloadClient.UniqueId);
+                            result.Progress = perc;
+                            await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadProgress(result);
+                        }
+                        catch (Exception ex) { Console.WriteLine(ex.Message); }
+                    });
+                    var res = await ytdl.RunVideoDownload(downloadClient.Url, progress: progress, ct: downloadClient.CancellationToken.Token);
                     if (res.Success)
                     {
                         dbUser.Files.Add(dbFile);
-                        await _postgres.SaveChangesAsync();
+                        // await _postgres.SaveChangesAsync();
                         Console.WriteLine($"Saved {filePath} to DB");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Error downloading {downloadClient.Url}: {res.ErrorOutput.FirstOrDefault()}");
                     }
                 }
             }
