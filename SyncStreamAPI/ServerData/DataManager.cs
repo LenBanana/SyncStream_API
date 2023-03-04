@@ -122,6 +122,7 @@ namespace SyncStreamAPI.ServerData
                     ytdl.YoutubeDLPath = "/app/yt-dlp";
                     ytdl.FFmpegPath = "/app/ffmpeg";
                     ytdl.OutputFolder = General.FilePath;
+                    ytdl.RestrictFilenames = true;
                     ytdl.OutputFileTemplate = $"{dbFile.FileKey}.mp4";
                     Console.WriteLine($"Downloading {downloadClient.Url} to {filePath}");
                     var progress = new Progress<DownloadProgress>(async p =>
@@ -138,13 +139,15 @@ namespace SyncStreamAPI.ServerData
                         }
                         catch (Exception ex) { Console.WriteLine(ex.Message); }
                     });
-                    var res = await ytdl.RunVideoDownload(downloadClient.Url, progress: progress, ct: downloadClient.CancellationToken.Token, recodeFormat: VideoRecodeFormat.Mp4);
+                    downloadClient.Stopwatch = Stopwatch.StartNew();
+                    var res = await ytdl.RunVideoDownload(downloadClient.Url, progress: progress, ct: downloadClient.CancellationToken.Token, recodeFormat: VideoRecodeFormat.Mp4, mergeFormat: DownloadMergeFormat.Mp4);
+                    Console.WriteLine($"Download of {downloadClient.FileName} finished");
                     await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
                     if (res.Success)
                     {
                         dbUser.Files.Add(dbFile);
                         await _postgres.SaveChangesAsync();
-                        Console.WriteLine($"Saved {filePath} to DB");
+                        Console.WriteLine($"Saved {downloadClient.FileName} to DB");
                     }
                     else
                     {
@@ -152,10 +155,7 @@ namespace SyncStreamAPI.ServerData
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-            }
+            catch (Exception ex) { Console.WriteLine(ex.Message); }
         }
 
         public async void AddDownload(DownloadClientValue downloadClient)
