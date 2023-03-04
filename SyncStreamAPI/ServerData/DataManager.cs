@@ -111,11 +111,10 @@ namespace SyncStreamAPI.ServerData
             {
                 using (var scope = _serviceProvider.CreateScope())
                 {
-                    //var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
+                    var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
                     var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
                     await _hub.Clients.Client(downloadClient.ConnectionId).downloadListen(downloadClient.UniqueId);
-                    //var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == downloadClient.Token)).FirstOrDefault();
-                    var dbUser = new DbUser("Len");
+                    var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == downloadClient.Token)).FirstOrDefault();
                     var dbFile = new DbFile(downloadClient.FileName, ".mp4", dbUser);
                     var filePath = $"{General.FilePath}/{dbFile.FileKey}.mp4".Replace('\\', '/');
                     var ytdl = new YoutubeDL();
@@ -147,7 +146,7 @@ namespace SyncStreamAPI.ServerData
                     if (res.Success)
                     {
                         dbUser.Files.Add(dbFile);
-                        // await _postgres.SaveChangesAsync();
+                        await _postgres.SaveChangesAsync();
                         Console.WriteLine($"Saved {filePath} to DB");
                     }
                     else
