@@ -122,7 +122,7 @@ namespace SyncStreamAPI.ServerData
                     ytdl.YoutubeDLPath = "/app/yt-dlp";
                     ytdl.FFmpegPath = "/app/ffmpeg";
                     ytdl.OutputFolder = General.FilePath;
-                    ytdl.OutputFileTemplate = $"{dbFile.FileKey}.%(ext)s";
+                    ytdl.OutputFileTemplate = $"{dbFile.FileKey}.mp4";
                     Console.WriteLine($"Downloading {downloadClient.Url} to {filePath}");
                     var progress = new Progress<DownloadProgress>(async p =>
                     {
@@ -130,14 +130,8 @@ namespace SyncStreamAPI.ServerData
                         {
                             var perc = p.Progress * 100f;
                             var text = $"{Math.Round(perc, 0)}%";
-                            if (downloadClient.Stopwatch != null)
-                            {
-                                var millis = downloadClient.Stopwatch.ElapsedMilliseconds;
-                                var timeLeft = (double)millis / perc * (100 - perc);
-                                timeLeft = timeLeft < 0 || timeLeft > TimeSpan.MaxValue.TotalMilliseconds ? 0 : timeLeft;
-                                var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"hh\:mm\:ss");
-                                text += $" - {timeString} remaining";
-                            }
+                            var timeString = StopwatchCalc.CalculateRemainingTime(downloadClient.Stopwatch, perc);
+                            text += $" - {timeString} remaining";
                             var result = new DownloadInfo(text, downloadClient.FileName, downloadClient.UniqueId);
                             result.Progress = perc;
                             await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadProgress(result);
@@ -146,7 +140,7 @@ namespace SyncStreamAPI.ServerData
                     });
                     var res = await ytdl.RunVideoDownload(downloadClient.Url, progress: progress, ct: downloadClient.CancellationToken.Token, recodeFormat: VideoRecodeFormat.Mp4);
                     await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
-                    if (res.Success && File.Exists(General.FilePath + "/" + downloadClient.FileName))
+                    if (res.Success)
                     {
                         dbUser.Files.Add(dbFile);
                         await _postgres.SaveChangesAsync();
@@ -240,14 +234,8 @@ namespace SyncStreamAPI.ServerData
                         try
                         {
                             var text = $"{args.Duration}/{args.TotalLength}";
-                            if (downloadClient.Stopwatch != null)
-                            {
-                                var millis = downloadClient.Stopwatch.ElapsedMilliseconds;
-                                var timeLeft = (double)millis / args.Percent * (100 - args.Percent);
-                                timeLeft = timeLeft < 0 || timeLeft > TimeSpan.MaxValue.TotalMilliseconds ? 0 : timeLeft;
-                                var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"hh\:mm\:ss");
-                                text += $" - {timeString} remaining";
-                            }
+                            var timeString = StopwatchCalc.CalculateRemainingTime(downloadClient.Stopwatch, args.Percent);
+                            text += $" - {timeString} remaining";
                             var result = new DownloadInfo(text, downloadClient.FileName, downloadClient.UniqueId);
                             result.Progress = args.Percent;
                             await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadProgress(result);
