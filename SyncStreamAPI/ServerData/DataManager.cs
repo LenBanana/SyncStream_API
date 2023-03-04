@@ -99,24 +99,33 @@ namespace SyncStreamAPI.ServerData
 
         public async void YtDownload(DownloadClientValue downloadClient)
         {
-            using (var scope = _serviceProvider.CreateScope())
+            try
             {
-                var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
-                var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                await _hub.Clients.Client(downloadClient.ConnectionId).downloadListen(downloadClient.UniqueId);
-                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == downloadClient.Token)).FirstOrDefault();
-                var dbFile = new DbFile(downloadClient.FileName, ".mp4", dbUser);
-                var filePath = $"{General.FilePath}/{dbFile.FileKey}.mp4".Replace('\\', '/');
-                var ytdl = new YoutubeDL();
-                ytdl.YoutubeDLPath = "/app/yt-dlp";
-                ytdl.FFmpegPath = "/app/ffmpeg";
-                ytdl.OutputFolder = filePath;
-                var res = await ytdl.RunVideoDownload(downloadClient.Url);
-                if (res.Success)
+                using (var scope = _serviceProvider.CreateScope())
                 {
-                    dbUser.Files.Add(dbFile);
-                    await _postgres.SaveChangesAsync();
+                    var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
+                    var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+                    await _hub.Clients.Client(downloadClient.ConnectionId).downloadListen(downloadClient.UniqueId);
+                    var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == downloadClient.Token)).FirstOrDefault();
+                    var dbFile = new DbFile(downloadClient.FileName, ".mp4", dbUser);
+                    var filePath = $"{General.FilePath}/{dbFile.FileKey}.mp4".Replace('\\', '/');
+                    var ytdl = new YoutubeDL();
+                    ytdl.YoutubeDLPath = "/app/yt-dlp";
+                    ytdl.FFmpegPath = "/app/ffmpeg";
+                    ytdl.OutputFolder = filePath;
+                    Console.WriteLine($"Downloading {downloadClient.Url} to {filePath}");
+                    var res = await ytdl.RunVideoDownload(downloadClient.Url);
+                    if (res.Success)
+                    {
+                        dbUser.Files.Add(dbFile);
+                        await _postgres.SaveChangesAsync();
+                        Console.WriteLine($"Saved {filePath} to DB");
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
             }
         }
 
