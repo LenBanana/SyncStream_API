@@ -22,6 +22,7 @@ using System.Threading.Tasks;
 using Xabe.FFmpeg;
 using Xabe.FFmpeg.Downloader;
 using YoutubeDLSharp;
+using YoutubeDLSharp.Options;
 
 namespace SyncStreamAPI.ServerData
 {
@@ -120,14 +121,15 @@ namespace SyncStreamAPI.ServerData
                     var ytdl = new YoutubeDL();
                     ytdl.YoutubeDLPath = "/app/yt-dlp";
                     ytdl.FFmpegPath = "/app/ffmpeg";
-                    ytdl.OutputFolder = filePath;
+                    ytdl.OutputFolder = General.FilePath;
+                    ytdl.OutputFileTemplate = $"{dbFile.FileKey}.%(ext)s";
                     Console.WriteLine($"Downloading {downloadClient.Url} to {filePath}");
                     var progress = new Progress<DownloadProgress>(async p =>
                     {
                         try
                         {
                             var perc = p.Progress * 100f;
-                            var text = $"{perc}%";
+                            var text = $"{Math.Round(perc, 0)}%";
                             if (downloadClient.Stopwatch != null)
                             {
                                 var millis = downloadClient.Stopwatch.ElapsedMilliseconds;
@@ -142,9 +144,9 @@ namespace SyncStreamAPI.ServerData
                         }
                         catch (Exception ex) { Console.WriteLine(ex.Message); }
                     });
-                    var res = await ytdl.RunVideoDownload(downloadClient.Url, progress: progress, ct: downloadClient.CancellationToken.Token);
+                    var res = await ytdl.RunVideoDownload(downloadClient.Url, progress: progress, ct: downloadClient.CancellationToken.Token, recodeFormat: VideoRecodeFormat.Mp4);
                     await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
-                    if (res.Success)
+                    if (res.Success && File.Exists(General.FilePath + "/" + downloadClient.FileName))
                     {
                         dbUser.Files.Add(dbFile);
                         await _postgres.SaveChangesAsync();
