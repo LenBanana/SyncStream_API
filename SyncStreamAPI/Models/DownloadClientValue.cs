@@ -22,8 +22,23 @@ namespace SyncStreamAPI.Models
             CancellationToken = new CancellationTokenSource();
             KeepUrlAlive();
         }
+        public DownloadClientValue(int userId, string fileName, string connectionId, string token, string url, string quality)
+        {
+            UserId = userId;
+            Preset = ConversionPreset.Faster;
+            Quality = quality;
+            ConnectionId = connectionId;
+            Token = token;
+            FileName = fileName;
+            Url = url;
+            Running = false;
+            UniqueId = Guid.NewGuid().ToString();
+            CancellationToken = new CancellationTokenSource();
+            KeepUrlAlive();
+        }
         public int UserId { get; set; }
         public ConversionPreset Preset { get; set; }
+        public string Quality { get; set; }
         public string FileName { get; set; }
         public string Url { get; set; }
         public string ConnectionId { get; set; }

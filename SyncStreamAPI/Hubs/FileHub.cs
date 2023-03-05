@@ -175,7 +175,7 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
-        public async Task DownloadYtVideo(string token, string url, ConversionPreset preset = ConversionPreset.SuperFast)
+        public async Task DownloadYtVideo(string token, string url, string quality = "1080")
         {
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
@@ -183,7 +183,7 @@ namespace SyncStreamAPI.Hubs
             if (dbUser.userprivileges >= UserPrivileges.Administrator)
             {
                 var fileName = await General.ResolveURL(url, Configuration);
-                _manager.YtDownload(new(dbUser.ID, fileName, Context.ConnectionId, token, url, preset));
+                _manager.YtDownload(new(dbUser.ID, fileName, Context.ConnectionId, token, url, quality));
             }
         }
 
