@@ -124,12 +124,11 @@ namespace SyncStreamAPI.ServerData
                     ytdl.OutputFolder = General.FilePath;
                     ytdl.RestrictFilenames = true;
                     ytdl.OutputFileTemplate = $"{dbFile.FileKey}.mp4";
-                    Console.WriteLine($"Downloading {downloadClient.Url} to {filePath}");
                     var progress = new Progress<DownloadProgress>(async p =>
                     {
                         try
                         {
-                            var perc = p.Progress * 100f;
+                            var perc = Math.Round(p.Progress * 100f, 2);
                             var text = $"{Math.Round(perc, 0)}%";
                             var timeString = StopwatchCalc.CalculateRemainingTime(downloadClient.Stopwatch, perc);
                             text += $" - {timeString} remaining";
@@ -141,13 +140,12 @@ namespace SyncStreamAPI.ServerData
                     });
                     downloadClient.Stopwatch = Stopwatch.StartNew();
                     var res = await ytdl.RunVideoDownload(downloadClient.Url, progress: progress, ct: downloadClient.CancellationToken.Token, recodeFormat: VideoRecodeFormat.Mp4, mergeFormat: DownloadMergeFormat.Mp4);
-                    Console.WriteLine($"Download of {downloadClient.FileName} finished");
                     await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
                     if (res.Success)
                     {
                         dbUser.Files.Add(dbFile);
                         await _postgres.SaveChangesAsync();
-                        Console.WriteLine($"Saved {downloadClient.FileName} to DB");
+                        Console.WriteLine($"User {downloadClient.UserId} saved {downloadClient.FileName} to DB");
                     }
                     else
                     {
