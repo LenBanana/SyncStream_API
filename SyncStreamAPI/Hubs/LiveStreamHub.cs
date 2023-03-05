@@ -25,7 +25,7 @@ namespace SyncStreamAPI.Hubs
             catch (Exception ex)
             {
                 Console.WriteLine("Error in 'GetLiveUsers'");
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
             }
         }
 
@@ -46,7 +46,7 @@ namespace SyncStreamAPI.Hubs
             catch (Exception ex)
             {
                 Console.WriteLine("Error in 'GetUsersWatching'");
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
             }
         }
     }

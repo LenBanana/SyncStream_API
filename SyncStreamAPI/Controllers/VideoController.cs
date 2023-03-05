@@ -14,8 +14,11 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using YoutubeDLSharp;
+using YoutubeDLSharp.Metadata;
 
 namespace SyncStreamAPI.Controllers
 {
@@ -59,6 +62,41 @@ namespace SyncStreamAPI.Controllers
             }
             catch (Exception ex)
             {
+                Console.WriteLine(ex.StackTrace);
+                return StatusCode(StatusCodes.Status500InternalServerError);
+            }
+        }
+
+        [HttpGet("[action]")]
+        public async Task<IActionResult> getYoutubeQuality(string url, string token)
+        {
+            try
+            {
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
+                DbRememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
+                if (Token == null || dbUser == null || dbUser?.userprivileges < UserPrivileges.Approved)
+                {
+                    if (dbUser != null)
+                        await _hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertTypes.Danger) { Question = "You do not have permissions to view this content", Answer1 = "Ok" });
+                    return StatusCode(StatusCodes.Status403Forbidden);
+                }
+                var ytdl = new YoutubeDL();
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                    ytdl.YoutubeDLPath = "/app/yt-dlp";
+                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                    ytdl.YoutubeDLPath = "yt-dlp.exe";
+                else return StatusCode(StatusCodes.Status403Forbidden);
+                RunResult<VideoData> data = await ytdl.RunVideoDataFetch(url);
+                if (data != null)
+                {
+                    return Ok(data.Data.Formats.Where(x => x.Height >= 360 && x.Height <= 2160).Select(x => x.Height).Distinct());
+                }
+                else
+                    return StatusCode(StatusCodes.Status404NotFound);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.StackTrace);
                 return StatusCode(StatusCodes.Status500InternalServerError);
             }
         }
@@ -94,6 +132,7 @@ namespace SyncStreamAPI.Controllers
             }
             catch (Exception ex)
             {
+                Console.WriteLine(ex.StackTrace);
                 return StatusCode(StatusCodes.Status500InternalServerError);
             }
         }

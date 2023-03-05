@@ -68,7 +68,7 @@ namespace SyncStreamAPI.Helper
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(ex.Message);
+                    Console.WriteLine(ex.StackTrace);
                 }
             }
             if (title.Length == 0)
@@ -101,7 +101,7 @@ namespace SyncStreamAPI.Helper
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(ex.Message);
+                    Console.WriteLine(ex.StackTrace);
                 }
             }
             if (title.Length == 0)
@@ -136,7 +136,7 @@ namespace SyncStreamAPI.Helper
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
             }
             return apiResult;
         }
@@ -166,7 +166,7 @@ namespace SyncStreamAPI.Helper
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
                 return "";
             }
         }
@@ -195,7 +195,7 @@ namespace SyncStreamAPI.Helper
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
                 return ("External source", "");
             }
         }

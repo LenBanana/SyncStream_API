@@ -42,10 +42,10 @@ namespace SyncStreamAPI.ServerData
             var path = FFmpeg.ExecutablesPath;
             if (path == null)
                 FFmpeg.SetExecutablesPath(Directory.GetCurrentDirectory());
+            LinuxBash.DownloadYtDlp().Wait();
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
                 LinuxBash.Bash($"chmod +x /app/ffmpeg && chmod +x /app/ffprobe");
-                LinuxBash.DownloadYtDlp().Wait();
                 LinuxBash.Bash($"chmod +x /app/yt-dlp");
                 LinuxBash.Bash($"alias yt-dlp='python3 /app/yt-dlp'");
                 //if (getYtDl)
@@ -136,7 +136,7 @@ namespace SyncStreamAPI.ServerData
                             result.Progress = perc;
                             await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadProgress(result);
                         }
-                        catch (Exception ex) { Console.WriteLine(ex.Message); }
+                        catch (Exception ex) { Console.WriteLine(ex.StackTrace); }
                     });
                     downloadClient.Stopwatch = Stopwatch.StartNew();
                     var res = await ytdl.RunVideoDownload(downloadClient.Url, format: $"bestvideo[height<={downloadClient.Quality}]+bestaudio/best", progress: progress, ct: downloadClient.CancellationToken.Token, recodeFormat: VideoRecodeFormat.Mp4, mergeFormat: DownloadMergeFormat.Mp4);
@@ -153,7 +153,7 @@ namespace SyncStreamAPI.ServerData
                     }
                 }
             }
-            catch (Exception ex) { Console.WriteLine(ex.Message); }
+            catch (Exception ex) { Console.WriteLine(ex.StackTrace); }
         }
 
         public async void AddDownload(DownloadClientValue downloadClient)
@@ -203,6 +203,7 @@ namespace SyncStreamAPI.ServerData
                     userWebDownloads.Remove(webClient);
                     webClient.Dispose();
                     await _hub.Clients.Group(downloadClient.UserId.ToString()).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
+                    Console.WriteLine(ex.StackTrace);
                     return;
                 }
             }
@@ -238,7 +239,7 @@ namespace SyncStreamAPI.ServerData
                             result.Progress = args.Percent;
                             await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadProgress(result);
                         }
-                        catch (Exception ex) { Console.WriteLine(ex.Message); }
+                        catch (Exception ex) { Console.WriteLine(ex.StackTrace); }
                     };
                     if (downloadClient?.CancellationToken?.Token != null)
                         await conversion.UseMultiThread(true).SetPreset(downloadClient.Preset).Start(downloadClient.CancellationToken.Token);
@@ -261,6 +262,7 @@ namespace SyncStreamAPI.ServerData
                     var header = ex?.InnerException?.GetType()?.Name;
                     var msg = ex?.Message;
                     await _hub.Clients.Group(downloadClient.UserId.ToString()).dialog(new Dialog(AlertTypes.Danger) { Header = header, Question = $"{header} \n{msg}", Answer1 = "Ok" });
+                    Console.WriteLine(ex.StackTrace);
                 }
                 try
                 {
@@ -368,6 +370,7 @@ namespace SyncStreamAPI.ServerData
                 catch (Exception ex)
                 {
                     await _hub.Clients.Group(client.UserId.ToString()).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
+                    Console.WriteLine(ex.StackTrace);
                 }
                 await _hub.Clients.Group(client.UserId.ToString()).downloadFinished(client.UniqueId);
             }
@@ -399,7 +402,7 @@ namespace SyncStreamAPI.ServerData
             }
             catch (Exception ex)
             {
-
+                Console.WriteLine(ex.StackTrace);
             }
         }
 
@@ -455,7 +458,7 @@ namespace SyncStreamAPI.ServerData
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(ex.Message);
+                    Console.WriteLine(ex.StackTrace);
                 }
             }
         }

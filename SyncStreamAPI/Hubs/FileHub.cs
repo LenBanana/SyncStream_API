@@ -51,7 +51,7 @@ namespace SyncStreamAPI.Hubs
             catch (Exception ex)
             {
                 Console.WriteLine("Error in 'GetDownloads'");
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
             }
         }
 
@@ -101,7 +101,7 @@ namespace SyncStreamAPI.Hubs
             catch (Exception ex)
             {
                 Console.WriteLine("Error in 'GetFolders'");
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
             }
         }
 
@@ -129,7 +129,7 @@ namespace SyncStreamAPI.Hubs
             {
                 Console.WriteLine("Error in 'AddFolder'");
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Warning) { Header = "Error", Question = ex?.Message, Answer1 = "Ok" });
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
             }
         }
 
@@ -160,7 +160,7 @@ namespace SyncStreamAPI.Hubs
             {
                 Console.WriteLine("Error in 'DeleteFolder'");
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Warning) { Header = "Error", Question = ex?.Message, Answer1 = "Ok" });
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
             }
         }
 
@@ -219,6 +219,7 @@ namespace SyncStreamAPI.Hubs
             }
             catch (Exception ex)
             {
+                Console.WriteLine(ex.StackTrace);
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Warning) { Header = "Error", Question = ex?.Message, Answer1 = "Ok" });
             }
         }
@@ -259,6 +260,7 @@ namespace SyncStreamAPI.Hubs
             catch (Exception ex)
             {
                 Console.WriteLine("Error in 'ShareFolder'");
+                Console.WriteLine(ex.StackTrace);
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Warning) { Header = "Error", Question = ex?.Message, Answer1 = "Ok" });
             }
         }
@@ -284,7 +286,7 @@ namespace SyncStreamAPI.Hubs
             catch (Exception ex)
             {
                 Console.WriteLine("Error in 'GetFolderFiles'");
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
             }
         }
 
@@ -309,7 +311,7 @@ namespace SyncStreamAPI.Hubs
             catch (Exception ex)
             {
                 Console.WriteLine("Error in 'ChangeFolderName'");
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
             }
         }
 
@@ -333,7 +335,7 @@ namespace SyncStreamAPI.Hubs
             catch (Exception ex)
             {
                 Console.WriteLine("Error in 'ChangeFolder'");
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
             }
         }
 

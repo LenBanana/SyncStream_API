@@ -81,7 +81,7 @@ namespace SyncStreamAPI.Hubs
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
             }
         }
 
@@ -255,6 +255,7 @@ namespace SyncStreamAPI.Hubs
             }
             catch (Exception ex)
             {
+                Console.WriteLine(ex.StackTrace);
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
             }
             List<DbUser> users = _postgres.Users.ToList();
@@ -305,7 +306,7 @@ namespace SyncStreamAPI.Hubs
             catch (Exception ex)
             {
                 await Clients.Caller.userlogin(new DbUser("").ToDTO());
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
             }
         }
     }

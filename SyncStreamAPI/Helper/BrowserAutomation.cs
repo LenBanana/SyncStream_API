@@ -44,7 +44,7 @@ namespace SyncStreamAPI.Helper
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error initiating browser\n\n" + ex.Message);
+                Console.WriteLine("Error initiating browser\n\n" + ex.StackTrace);
             }
         }
 
