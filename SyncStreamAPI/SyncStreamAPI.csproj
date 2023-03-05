@@ -23,6 +23,7 @@
   <ItemGroup>
     <Reference Include="YoutubeDLSharp">
       <HintPath>..\..\YoutubeDLSharp\YoutubeDLSharp\bin\Debug\netstandard2.0\YoutubeDLSharp.dll</HintPath>
+      <CopyLocal>True</CopyLocal>
     </Reference>
   </ItemGroup>
 </Project>
