@@ -139,7 +139,7 @@ namespace SyncStreamAPI.ServerData
                         catch (Exception ex) { Console.WriteLine(ex.Message); }
                     });
                     downloadClient.Stopwatch = Stopwatch.StartNew();
-                    var res = await ytdl.RunVideoDownload(downloadClient.Url, progress: progress, ct: downloadClient.CancellationToken.Token, recodeFormat: VideoRecodeFormat.Mp4, mergeFormat: DownloadMergeFormat.Mp4);
+                    var res = await ytdl.RunVideoDownload(downloadClient.Url, format: "bestvideo[height<=2160]+bestaudio/best", progress: progress, ct: downloadClient.CancellationToken.Token, recodeFormat: VideoRecodeFormat.Mp4, mergeFormat: DownloadMergeFormat.Mp4);
                     await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
                     if (res.Success)
                     {
