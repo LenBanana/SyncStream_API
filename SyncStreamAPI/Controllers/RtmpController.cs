@@ -60,7 +60,7 @@ namespace SyncStreamAPI.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
                 return StatusCode(StatusCodes.Status500InternalServerError);
             }
         }
@@ -86,7 +86,7 @@ namespace SyncStreamAPI.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
                 return StatusCode(StatusCodes.Status500InternalServerError);
             }
         }
@@ -109,7 +109,7 @@ namespace SyncStreamAPI.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
                 return StatusCode(StatusCodes.Status500InternalServerError);
             }
         }
@@ -134,7 +134,7 @@ namespace SyncStreamAPI.Controllers
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
                 return StatusCode(StatusCodes.Status500InternalServerError);
             }
         }

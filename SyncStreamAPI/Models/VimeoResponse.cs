@@ -48,7 +48,7 @@ namespace SyncStreamAPI.Models
                 }
             } catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
                 return null;
             }
         }

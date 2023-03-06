@@ -35,7 +35,6 @@ namespace SyncStreamAPI.ServerData
         public List<DownloadClientValue> userM3U8Conversions { get; set; } = new List<DownloadClientValue>();
         IServiceProvider _serviceProvider { get; set; }
         IConfiguration Configuration { get; }
-        int MaxParallelConversions { get; set; } = 4;
         public DataManager(IServiceProvider provider)
         {
             FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official).Wait();
@@ -66,8 +65,8 @@ namespace SyncStreamAPI.ServerData
             Rooms.Add(new Room("Dreckroom", "dreck", false, true));
             Rooms.Add(new Room("Randomkeller", "random", false, true));
             Rooms.Add(new Room("Guffelstübchen", "guffel", false, true));
-            for (int i = 1; i < 5; i++)
-                Rooms.Add(new Room($"Guest Room - {i}", $"guest{i}", true, false));
+            for (int i = 1; i <= General.GuestRoomAmount; i++)
+                Rooms.Add(new Room($"Guest Room - {i}", $"guest{i}", false, false));
 
             try
             {
@@ -91,7 +90,7 @@ namespace SyncStreamAPI.ServerData
         public async void ReadSettings()
         {
             var section = Configuration.GetSection("MaxParallelConversions");
-            MaxParallelConversions = Convert.ToInt32(section.Value);
+            General.MaxParallelConversions = Convert.ToInt32(section.Value);
         }
 
         public async void AddMember(int id, string connectionId)
@@ -136,7 +135,7 @@ namespace SyncStreamAPI.ServerData
                             result.Progress = perc;
                             await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadProgress(result);
                         }
-                        catch (Exception ex) { Console.WriteLine(ex.StackTrace); }
+                        catch (Exception ex) { Console.WriteLine(ex.ToString()); }
                     });
                     downloadClient.Stopwatch = Stopwatch.StartNew();
                     var res = await ytdl.RunVideoDownload(downloadClient.Url, format: $"bestvideo[height<={downloadClient.Quality}]+bestaudio/best", progress: progress, ct: downloadClient.CancellationToken.Token, recodeFormat: VideoRecodeFormat.Mp4, mergeFormat: DownloadMergeFormat.Mp4);
@@ -153,7 +152,7 @@ namespace SyncStreamAPI.ServerData
                     }
                 }
             }
-            catch (Exception ex) { Console.WriteLine(ex.StackTrace); }
+            catch (Exception ex) { Console.WriteLine(ex.ToString()); }
         }
 
         public async void AddDownload(DownloadClientValue downloadClient)
@@ -166,7 +165,7 @@ namespace SyncStreamAPI.ServerData
                 {
                     userM3U8Conversions.Add(downloadClient);
                     SendStatusToM3U8Clients();
-                    if (userM3U8Conversions.Count > MaxParallelConversions)
+                    if (userM3U8Conversions.Count > General.MaxParallelConversions)
                         return;
                     RunM3U8Conversion(downloadClient);
                     return;
@@ -203,7 +202,7 @@ namespace SyncStreamAPI.ServerData
                     userWebDownloads.Remove(webClient);
                     webClient.Dispose();
                     await _hub.Clients.Group(downloadClient.UserId.ToString()).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
-                    Console.WriteLine(ex.StackTrace);
+                    Console.WriteLine(ex.ToString());
                     return;
                 }
             }
@@ -239,7 +238,7 @@ namespace SyncStreamAPI.ServerData
                             result.Progress = args.Percent;
                             await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadProgress(result);
                         }
-                        catch (Exception ex) { Console.WriteLine(ex.StackTrace); }
+                        catch (Exception ex) { Console.WriteLine(ex.ToString()); }
                     };
                     if (downloadClient?.CancellationToken?.Token != null)
                         await conversion.UseMultiThread(true).SetPreset(downloadClient.Preset).Start(downloadClient.CancellationToken.Token);
@@ -262,7 +261,7 @@ namespace SyncStreamAPI.ServerData
                     var header = ex?.InnerException?.GetType()?.Name;
                     var msg = ex?.Message;
                     await _hub.Clients.Group(downloadClient.UserId.ToString()).dialog(new Dialog(AlertTypes.Danger) { Header = header, Question = $"{header} \n{msg}", Answer1 = "Ok" });
-                    Console.WriteLine(ex.StackTrace);
+                    Console.WriteLine(ex.ToString());
                 }
                 try
                 {
@@ -318,7 +317,7 @@ namespace SyncStreamAPI.ServerData
                 if (userM3U8Conversions.Count > 0)
                 {
                     SendStatusToM3U8Clients();
-                    if (userM3U8Conversions.Where(x => x.Running).Count() < MaxParallelConversions)
+                    if (userM3U8Conversions.Where(x => x.Running).Count() < General.MaxParallelConversions)
                     {
                         var nextDownload = userM3U8Conversions.FirstOrDefault(x => !x.Running);
                         if (nextDownload != null)
@@ -370,7 +369,7 @@ namespace SyncStreamAPI.ServerData
                 catch (Exception ex)
                 {
                     await _hub.Clients.Group(client.UserId.ToString()).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
-                    Console.WriteLine(ex.StackTrace);
+                    Console.WriteLine(ex.ToString());
                 }
                 await _hub.Clients.Group(client.UserId.ToString()).downloadFinished(client.UniqueId);
             }
@@ -402,7 +401,7 @@ namespace SyncStreamAPI.ServerData
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
             }
         }
 
@@ -458,7 +457,7 @@ namespace SyncStreamAPI.ServerData
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(ex.StackTrace);
+                    Console.WriteLine(ex.ToString());
                 }
             }
         }

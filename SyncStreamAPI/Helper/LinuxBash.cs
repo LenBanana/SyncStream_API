@@ -33,7 +33,7 @@ namespace SyncStreamAPI.Helper
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
                 return false;
             }
         }
@@ -65,11 +65,11 @@ namespace SyncStreamAPI.Helper
 
             string downloadUrl = "";
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                downloadUrl = $"{General.BASE_GITHUB_URL}.exe";
+                downloadUrl = $"{General.YtDLPUrl}.exe";
             if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-                downloadUrl = $"{General.BASE_GITHUB_URL}_macos";
+                downloadUrl = $"{General.YtDLPUrl}_macos";
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                downloadUrl = General.BASE_GITHUB_URL;
+                downloadUrl = General.YtDLPUrl;
 
             var downloadLocation = Path.Combine(directoryPath, Path.GetFileName(downloadUrl));
             var data = await DownloadFileBytesAsync(downloadUrl);

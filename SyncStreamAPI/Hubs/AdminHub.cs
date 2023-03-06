@@ -71,9 +71,9 @@ namespace SyncStreamAPI.Hubs
         {
             try
             {
-                var dbUser = _postgres.Users.First(x => x.ID == requestUser.ID);
-                var token = dbUser.GenerateToken(userInfo);
-                if (requestUser?.RememberTokens.Any(x => x.Token == token.Token) == true)
+                var dbUser = _postgres.Users.FirstOrDefault(x => x.ID == requestUser.ID);
+                var token = dbUser?.GenerateToken(userInfo);
+                if (requestUser?.RememberTokens.Any(x => x.Token == token?.Token) == true)
                 {
                     await Clients.Caller.rememberToken(new RememberTokenDTO(token, requestUser.ID));
                     return;
@@ -81,7 +81,7 @@ namespace SyncStreamAPI.Hubs
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
             }
         }
 
@@ -255,7 +255,7 @@ namespace SyncStreamAPI.Hubs
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
             }
             List<DbUser> users = _postgres.Users.ToList();
@@ -306,7 +306,7 @@ namespace SyncStreamAPI.Hubs
             catch (Exception ex)
             {
                 await Clients.Caller.userlogin(new DbUser("").ToDTO());
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
             }
         }
     }

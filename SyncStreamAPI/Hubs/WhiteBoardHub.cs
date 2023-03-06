@@ -22,7 +22,7 @@ namespace SyncStreamAPI.Hubs
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
             }
         }
         public async Task PlayGallowsSettings(string UniqueId, Language language, int gameLength)
@@ -60,7 +60,7 @@ namespace SyncStreamAPI.Hubs
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
             }
         }
 
@@ -77,7 +77,7 @@ namespace SyncStreamAPI.Hubs
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
             }
         }
 
@@ -96,7 +96,7 @@ namespace SyncStreamAPI.Hubs
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
             }
         }
 
@@ -125,7 +125,7 @@ namespace SyncStreamAPI.Hubs
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
             }
         }
 
@@ -141,7 +141,7 @@ namespace SyncStreamAPI.Hubs
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
             }
         }
 
@@ -153,7 +153,7 @@ namespace SyncStreamAPI.Hubs
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
             }
         }
 
@@ -165,7 +165,7 @@ namespace SyncStreamAPI.Hubs
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
             }
         }
     }

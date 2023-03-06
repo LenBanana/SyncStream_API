@@ -16,7 +16,9 @@ namespace SyncStreamAPI.Helper
     {
         public static Random random = new Random();        
         public static string FilePath = System.IO.Directory.GetCurrentDirectory() + "/VideoFiles";
-        public const string BASE_GITHUB_URL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp";
+        public const string YtDLPUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp";
+        public static int GuestRoomAmount = 6;
+        public static int MaxParallelConversions = 6;
 
         public static int GallowGameLength = 90;
         public static int GallowGameLengthMin = 60;
@@ -27,8 +29,8 @@ namespace SyncStreamAPI.Helper
         public static int GallowWordLengthMultiplierHost = 12;
 
         public static int BlackjackShoeSize = 6;
-        public static string LoggedInGroupName = "approved";
-        public static string BottedInGroupName = "dreckbots";
+        public const string LoggedInGroupName = "approved";
+        public const string BottedInGroupName = "dreckbots";
 
         public static string GetGallowWord(Language language)
         {
@@ -68,7 +70,7 @@ namespace SyncStreamAPI.Helper
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(ex.StackTrace);
+                    Console.WriteLine(ex.ToString());
                 }
             }
             if (title.Length == 0)
@@ -101,7 +103,7 @@ namespace SyncStreamAPI.Helper
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(ex.StackTrace);
+                    Console.WriteLine(ex.ToString());
                 }
             }
             if (title.Length == 0)
@@ -136,7 +138,7 @@ namespace SyncStreamAPI.Helper
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
             }
             return apiResult;
         }
@@ -166,7 +168,7 @@ namespace SyncStreamAPI.Helper
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
                 return "";
             }
         }
@@ -195,7 +197,7 @@ namespace SyncStreamAPI.Helper
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.StackTrace);
+                Console.WriteLine(ex.ToString());
                 return ("External source", "");
             }
         }
