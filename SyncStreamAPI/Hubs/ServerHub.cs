@@ -273,21 +273,12 @@ namespace SyncStreamAPI.Hubs
         {
             try
             {
-                string title, source;
-                (title, source) = await General.ResolveTitle(url, 8);
-                if (source.Length > 0)
+                var ytdl = General.GetYoutubeDL();
+                var playlistInfo = await ytdl.RunVideoDataFetch(url);
+                if (playlistInfo != null)
                 {
-                    HtmlDocument doc = new HtmlDocument();
-                    doc.LoadHtml(source);
-                    HtmlNode vids = doc.DocumentNode.ChildNodes[1].ChildNodes[1].ChildNodes[15];
-                    string json = vids.InnerText.Split(new[] { '=' }, 2)[1].Split(new[] { ';' }, 2)[0];
-                    PlaylistInfo playlistInfo = new PlaylistInfo().FromJson(json);
-                    var playlist = playlistInfo.Contents.TwoColumnBrowseResultsRenderer.Tabs[0].TabRenderer.Content.SectionListRenderer.Contents[0].ItemSectionRenderer.Contents[0].PlaylistVideoListRenderer.Contents;
-                    foreach (var video in playlist)
-                    {
-                        DreckVideo vid = new DreckVideo(video.PlaylistVideoRenderer?.Title.Runs[0].Text, "https://www.youtube.com/watch?v=" + video.PlaylistVideoRenderer?.VideoId, false, TimeSpan.FromSeconds((double)(video.PlaylistVideoRenderer?.LengthSeconds ?? 0d)), "Playlist");
-                        await AddVideo(vid, UniqueId).ConfigureAwait(false);
-                    }
+                    var vids = playlistInfo.Data.Entries.Select(x => new DreckVideo(x.Title, x.Url, false, TimeSpan.FromSeconds((double)(x.Duration ?? 0d)), "Playlist")).ToList();
+                    vids.ForEach(async x => { await AddVideo(x, UniqueId); });
                 }
             }
             catch (Exception ex)
@@ -299,7 +290,7 @@ namespace SyncStreamAPI.Hubs
 
         public async Task RemoveVideo(string key, string UniqueId)
         {
-            Room room = GetRoom(UniqueId);
+            Room? room = GetRoom(UniqueId);
             if (room == null)
                 return;
             if (!CheckPrivileges(room))
@@ -318,7 +309,7 @@ namespace SyncStreamAPI.Hubs
 
         public async Task NextVideo(string UniqueId)
         {
-            Room room = GetRoom(UniqueId);
+            Room? room = GetRoom(UniqueId);
             if (room == null)
                 return;
             if (!CheckPrivileges(room))
@@ -352,7 +343,7 @@ namespace SyncStreamAPI.Hubs
 
         public async Task PlayVideo(string key, string UniqueId)
         {
-            Room room = GetRoom(UniqueId);
+            Room? room = GetRoom(UniqueId);
             if (room == null)
                 return;
             if (!CheckPrivileges(room))
@@ -378,7 +369,7 @@ namespace SyncStreamAPI.Hubs
 
         public async Task MoveVideo(int fromIndex, int toIndex, string UniqueId)
         {
-            Room room = GetRoom(UniqueId);
+            Room? room = GetRoom(UniqueId);
             if (room == null)
                 return;
             if (!CheckPrivileges(room))
@@ -394,7 +385,7 @@ namespace SyncStreamAPI.Hubs
 
         public async Task SetTime(double time, string UniqueId)
         {
-            Room room = GetRoom(UniqueId);
+            Room? room = GetRoom(UniqueId);
             if (room == null)
                 return;
             if (!CheckPrivileges(room))
@@ -408,7 +399,7 @@ namespace SyncStreamAPI.Hubs
 
         public async Task PlayPause(bool isplaying, string UniqueId)
         {
-            Room room = GetRoom(UniqueId);
+            Room? room = GetRoom(UniqueId);
             if (room == null)
                 return;
             if (!CheckPrivileges(room))
@@ -428,13 +419,26 @@ namespace SyncStreamAPI.Hubs
             while (Rooms?.Any(x => x.uniqueId == room.uniqueId) == true)
                 room.uniqueId = room.uniqueId + RoomCount++;
             room.deletable = true;
-            Rooms.Add(room);
+            Rooms?.Add(room);
             await Clients.All.getrooms(DataManager.GetRooms());
+        }
+
+        public async Task ChangeRoom(Room room)
+        {
+            var Rooms = DataManager.GetRooms();
+            var changeRoom = Rooms.FirstOrDefault(x => x.uniqueId == room.uniqueId);
+            if (changeRoom != null)
+            {
+                changeRoom.name = room.name;
+                changeRoom.password = room.password;
+                changeRoom.deletable = room.deletable;
+                await Clients.All.getrooms(DataManager.GetRooms());
+            }
         }
 
         public async Task RemoveRoom(string UniqueId)
         {
-            Room room = GetRoom(UniqueId);
+            Room? room = GetRoom(UniqueId);
             if (room == null)
                 return;
             DataManager.GetRooms().Remove(room);

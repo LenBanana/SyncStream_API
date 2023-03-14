@@ -7,8 +7,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Web;
+using YoutubeDLSharp;
 
 namespace SyncStreamAPI.Helper
 {
@@ -31,6 +33,16 @@ namespace SyncStreamAPI.Helper
         public static int BlackjackShoeSize = 6;
         public const string LoggedInGroupName = "approved";
         public const string BottedInGroupName = "dreckbots";
+
+        public static YoutubeDL GetYoutubeDL()
+        {
+            var ytdl = new YoutubeDL();
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                ytdl.YoutubeDLPath = "/app/yt-dlp";
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                ytdl.YoutubeDLPath = "yt-dlp.exe";
+            return ytdl;
+        }
 
         public static string GetGallowWord(Language language)
         {

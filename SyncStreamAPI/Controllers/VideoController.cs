@@ -80,12 +80,7 @@ namespace SyncStreamAPI.Controllers
                         await _hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertTypes.Danger) { Question = "You do not have permissions to view this content", Answer1 = "Ok" });
                     return StatusCode(StatusCodes.Status403Forbidden);
                 }
-                var ytdl = new YoutubeDL();
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                    ytdl.YoutubeDLPath = "/app/yt-dlp";
-                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                    ytdl.YoutubeDLPath = "yt-dlp.exe";
-                else return StatusCode(StatusCodes.Status403Forbidden);
+                var ytdl = General.GetYoutubeDL();
                 RunResult<VideoData> data = await ytdl.RunVideoDataFetch(url);
                 if (data != null)
                 {
