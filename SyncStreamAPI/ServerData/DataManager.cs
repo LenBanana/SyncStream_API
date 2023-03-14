@@ -225,7 +225,7 @@ namespace SyncStreamAPI.ServerData
                 {
                     if (dbUser == null)
                         throw new Exception($"Unable to find user");
-                    var conv = await FFmpeg.Conversions.New().AddParameter($"ffmpeg -i \"{downloadClient.Url}\" -c copy \"{downloadClient.FileName}\".mp4").UseMultiThread(true).Start(downloadClient.CancellationToken.Token);
+                    //var conv = await FFmpeg.Conversions.New().AddParameter($"ffmpeg -i \"{downloadClient.Url}\" -c copy \"{downloadClient.FileName}\".mp4").UseMultiThread(true).Start(downloadClient.CancellationToken.Token);
                     var conversion = (await FFmpeg.Conversions.FromSnippet.SaveM3U8Stream(new Uri(downloadClient.Url), filePath)).UseMultiThread(true).SetOverwriteOutput(true);
                     conversion.OnProgress += async (sender, args) =>
                     {
