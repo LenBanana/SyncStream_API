@@ -49,10 +49,6 @@ namespace SyncStreamAPI.Hubs
                         }
                     }
                 }
-                else if (lowerMessage.StartsWith("/c") && !lowerMessage.StartsWith("/chess"))
-                {
-                    await ClearChat(UniqueId);
-                }
                 else if (lowerMessage.StartsWith("/cp"))
                 {
                     if (MainServer.playlist.Count > 1)
@@ -62,6 +58,10 @@ namespace SyncStreamAPI.Hubs
                         MainServer.playlist = pl;
                         await Clients.Group(UniqueId).playlistupdate(MainServer.playlist);
                     }
+                }
+                else if (lowerMessage.StartsWith("/c") && !lowerMessage.StartsWith("/chess"))
+                {
+                    await ClearChat(UniqueId);
                 }
                 else if (lowerMessage.StartsWith("/playgallows") || lowerMessage.StartsWith("/playgallow") || lowerMessage.StartsWith("/gallows") || lowerMessage.StartsWith("/gallow") || lowerMessage.StartsWith("/galgenraten") || lowerMessage.StartsWith("/galgen") || lowerMessage.StartsWith("/g"))
                 {
