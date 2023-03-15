@@ -23,7 +23,7 @@ namespace SyncStreamAPI.Models
     {
         public SystemMessage(string msg)
         {
-            username = "System";
+            username = General.SystemMessageName;
             color = Colors.SystemColor;
             usercolor = Colors.SystemUserColor;
             message = msg;

@@ -16,7 +16,8 @@ namespace SyncStreamAPI.Helper
 {
     public class General
     {
-        public static Random random = new Random();        
+        public static Random random = new Random();
+        public static string SystemMessageName = "Dreckbot";
         public static string FilePath = System.IO.Directory.GetCurrentDirectory() + "/VideoFiles";
         public const string YtDLPUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp";
         public static int GuestRoomAmount = 6;
