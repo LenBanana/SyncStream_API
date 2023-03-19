@@ -105,7 +105,7 @@ namespace SyncStreamAPI.ServerData
                 userM3U8Conversions[clientQueueIdx].ConnectionId = connectionId;
         }
 
-        public async void YtDownload(DownloadClientValue downloadClient)
+        public async void YtDownload(DownloadClientValue downloadClient, bool audioOnly = false)
         {
             try
             {
@@ -115,14 +115,14 @@ namespace SyncStreamAPI.ServerData
                     var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
                     await _hub.Clients.Client(downloadClient.ConnectionId).downloadListen(downloadClient.UniqueId);
                     var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == downloadClient.Token)).FirstOrDefault();
-                    var dbFile = new DbFile(downloadClient.FileName, ".mp4", dbUser);
-                    var filePath = $"{General.FilePath}/{dbFile.FileKey}.mp4".Replace('\\', '/');
+                    var dbFile = new DbFile(downloadClient.FileName, audioOnly ? ".mp3" : ".mp4", dbUser);
+                    var filePath = $"{General.FilePath}/{dbFile.FileKey}{(audioOnly ? ".mp3" : ".mp4")}".Replace('\\', '/');
                     var ytdl = new YoutubeDL();
                     ytdl.YoutubeDLPath = "/app/yt-dlp";
                     ytdl.FFmpegPath = "/app/ffmpeg";
                     ytdl.OutputFolder = General.FilePath;
                     ytdl.RestrictFilenames = true;
-                    ytdl.OutputFileTemplate = $"{dbFile.FileKey}.mp4";
+                    ytdl.OutputFileTemplate = $"{dbFile.FileKey}{(audioOnly ? ".mp3" : ".mp4")}";
                     var progress = new Progress<DownloadProgress>(async p =>
                     {
                         try
@@ -138,7 +138,7 @@ namespace SyncStreamAPI.ServerData
                         catch (Exception ex) { Console.WriteLine(ex.ToString()); }
                     });
                     downloadClient.Stopwatch = Stopwatch.StartNew();
-                    var res = await ytdl.RunVideoDownload(downloadClient.Url, format: $"bestvideo[height<={downloadClient.Quality}]+bestaudio/best", progress: progress, ct: downloadClient.CancellationToken.Token, recodeFormat: VideoRecodeFormat.Mp4, mergeFormat: DownloadMergeFormat.Mp4);
+                    var res = audioOnly ? await ytdl.RunAudioDownload(downloadClient.Url, AudioConversionFormat.Mp3) : await ytdl.RunVideoDownload(downloadClient.Url, format: $"bestvideo[height<={downloadClient.Quality}]+bestaudio/best", progress: progress, ct: downloadClient.CancellationToken.Token, recodeFormat: VideoRecodeFormat.Mp4, mergeFormat: DownloadMergeFormat.Mp4);
                     await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
                     if (res.Success)
                     {
