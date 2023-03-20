@@ -191,13 +191,18 @@ namespace SyncStreamAPI.Hubs
                     var vids = playlistInfo.Data.Entries.Select(x => new DownloadClientValue(dbUser.ID, x.Title, token, x.Url, quality)).ToList();
                     foreach (var vid in vids)
                     {
+                        _manager.userM3U8Conversions.Add(vid);
                         if (!vid.CancellationToken.IsCancellationRequested)
                             await _manager.YtDownload(vid, audioOnly);
+                        _manager.userM3U8Conversions.Remove(vid);
                     }
                     return;
                 }
                 var fileName = await General.ResolveURL(url, Configuration);
-                await _manager.YtDownload(new DownloadClientValue(dbUser.ID, fileName, token, url, quality), audioOnly);
+                var conv = new DownloadClientValue(dbUser.ID, fileName, token, url, quality);
+                _manager.userM3U8Conversions.Add(conv);
+                await _manager.YtDownload(conv, audioOnly);
+                _manager.userM3U8Conversions.Remove(conv);
             }
         }
 
