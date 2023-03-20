@@ -5,6 +5,7 @@ using SyncStreamAPI.Helper;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.PostgresModels;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -171,19 +172,32 @@ namespace SyncStreamAPI.Hubs
                 return;
             if (dbUser.userprivileges >= UserPrivileges.Administrator)
             {
-                _manager.AddDownload(new(dbUser.ID, fileName, Context.ConnectionId, token, url, preset));
+                _manager.AddDownload(new(dbUser.ID, fileName, token, url, preset));
             }
         }
 
-        public async Task DownloadYtVideo(string token, string url, string quality = "1080", bool audioOnly = false)
+        public async void DownloadYtVideo(string token, string url, string quality = "1080", bool audioOnly = false)
         {
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
                 return;
             if (dbUser.userprivileges >= UserPrivileges.Administrator)
             {
+
+                if (url.Contains("playlist?list="))
+                {
+                    var ytdl = General.GetYoutubeDL();
+                    var playlistInfo = await ytdl.RunVideoDataFetch(url);
+                    var vids = playlistInfo.Data.Entries.Select(x => new DownloadClientValue(dbUser.ID, x.Title, token, x.Url, quality)).ToList();
+                    foreach (var vid in vids)
+                    {
+                        if (!vid.CancellationToken.IsCancellationRequested)
+                            await _manager.YtDownload(vid, audioOnly);
+                    }
+                    return;
+                }
                 var fileName = await General.ResolveURL(url, Configuration);
-                _manager.YtDownload(new(dbUser.ID, fileName, Context.ConnectionId, token, url, quality), audioOnly);
+                await _manager.YtDownload(new DownloadClientValue(dbUser.ID, fileName, token, url, quality), audioOnly);
             }
         }
 

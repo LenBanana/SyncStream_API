@@ -9,11 +9,10 @@ namespace SyncStreamAPI.Models
 {
     public class DownloadClientValue
     {
-        public DownloadClientValue(int userId, string fileName, string connectionId, string token, string url, ConversionPreset preset)
+        public DownloadClientValue(int userId, string fileName, string token, string url, ConversionPreset preset)
         {
             UserId = userId;
             Preset = preset;
-            ConnectionId = connectionId;
             Token = token;
             FileName = fileName;
             Url = url;
@@ -22,12 +21,11 @@ namespace SyncStreamAPI.Models
             CancellationToken = new CancellationTokenSource();
             KeepUrlAlive();
         }
-        public DownloadClientValue(int userId, string fileName, string connectionId, string token, string url, string quality)
+        public DownloadClientValue(int userId, string fileName, string token, string url, string quality)
         {
             UserId = userId;
             Preset = ConversionPreset.Faster;
             Quality = quality;
-            ConnectionId = connectionId;
             Token = token;
             FileName = fileName;
             Url = url;
@@ -41,7 +39,6 @@ namespace SyncStreamAPI.Models
         public string Quality { get; set; }
         public string FileName { get; set; }
         public string Url { get; set; }
-        public string ConnectionId { get; set; }
         public string Token { get; set; }
         public string UniqueId { get; set; }
         public bool Running { get; set; }

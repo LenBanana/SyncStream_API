@@ -18,7 +18,7 @@ namespace SyncStreamAPI.Helper
     {
         public static Random random = new Random();
         public static string SystemMessageName = "Dreckbot";
-        public static string FilePath = System.IO.Directory.GetCurrentDirectory() + "/VideoFiles";
+        public static string FilePath = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? System.IO.Directory.GetCurrentDirectory() + "/VideoFiles" : System.IO.Directory.GetCurrentDirectory() + "\\VideoFiles";
         public const string YtDLPUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp";
         public static int GuestRoomAmount = 6;
         public static int MaxParallelConversions = 6;
@@ -39,9 +39,15 @@ namespace SyncStreamAPI.Helper
         {
             var ytdl = new YoutubeDL();
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
                 ytdl.YoutubeDLPath = "/app/yt-dlp";
+                ytdl.FFmpegPath = "/app/ffmpeg";
+            }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                ytdl.FFmpegPath = "ffmpeg.exe";
                 ytdl.YoutubeDLPath = "yt-dlp.exe";
+            }
             return ytdl;
         }
 
@@ -70,6 +76,8 @@ namespace SyncStreamAPI.Helper
                 else
                     return "v" + url.Split('/').Last();
             }
+            if (url.Contains("playlist?list="))
+                return "Playlistvideo";
             string title = "";
             title = (await NoEmbedYTApi(url)).Title;
 

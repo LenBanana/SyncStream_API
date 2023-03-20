@@ -101,11 +101,9 @@ namespace SyncStreamAPI.ServerData
                 await _hub.Groups.AddToGroupAsync(connectionId, id.ToString());
             }
             var clientQueueIdx = userM3U8Conversions.FindIndex(x => x.UserId == id);
-            if (clientQueueIdx >= 0)
-                userM3U8Conversions[clientQueueIdx].ConnectionId = connectionId;
         }
 
-        public async void YtDownload(DownloadClientValue downloadClient, bool audioOnly = false)
+        public async Task YtDownload(DownloadClientValue downloadClient, bool audioOnly = false)
         {
             try
             {
@@ -113,13 +111,11 @@ namespace SyncStreamAPI.ServerData
                 {
                     var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
                     var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                    await _hub.Clients.Client(downloadClient.ConnectionId).downloadListen(downloadClient.UniqueId);
+                    await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadListen(downloadClient.UniqueId);
                     var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == downloadClient.Token)).FirstOrDefault();
                     var dbFile = new DbFile(downloadClient.FileName, audioOnly ? ".mp3" : ".mp4", dbUser);
                     var filePath = $"{General.FilePath}/{dbFile.FileKey}{(audioOnly ? ".mp3" : ".mp4")}".Replace('\\', '/');
-                    var ytdl = new YoutubeDL();
-                    ytdl.YoutubeDLPath = "/app/yt-dlp";
-                    ytdl.FFmpegPath = "/app/ffmpeg";
+                    var ytdl = General.GetYoutubeDL();
                     ytdl.OutputFolder = General.FilePath;
                     ytdl.RestrictFilenames = true;
                     ytdl.OutputFileTemplate = $"{dbFile.FileKey}{(audioOnly ? ".mp3" : ".mp4")}";
@@ -128,19 +124,21 @@ namespace SyncStreamAPI.ServerData
                         try
                         {
                             var perc = Math.Round(p.Progress * 100f, 2);
-                            var text = $"{Math.Round(perc, 0)}%";
+                            var text = $"{Math.Round(perc, 0)}% {p.DownloadSpeed}";
                             var timeString = StopwatchCalc.CalculateRemainingTime(downloadClient.Stopwatch, perc);
                             text += $" - {timeString} remaining";
                             var result = new DownloadInfo(text, downloadClient.FileName, downloadClient.UniqueId);
                             result.Progress = perc;
                             await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadProgress(result);
+                            if (p.State == DownloadState.Success)
+                                await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
                         }
                         catch (Exception ex) { Console.WriteLine(ex.ToString()); }
                     });
                     downloadClient.Stopwatch = Stopwatch.StartNew();
-                    var res = audioOnly ? await ytdl.RunAudioDownload(downloadClient.Url, AudioConversionFormat.Mp3, progress: progress, ct: downloadClient.CancellationToken.Token) : await ytdl.RunVideoDownload(downloadClient.Url, format: $"bestvideo[height<={downloadClient.Quality}]+bestaudio/best", progress: progress, ct: downloadClient.CancellationToken.Token, recodeFormat: VideoRecodeFormat.Mp4, mergeFormat: DownloadMergeFormat.Mp4);
+                    RunResult<string> runResult = audioOnly ? await ytdl.RunAudioDownload(downloadClient.Url, AudioConversionFormat.Mp3, progress: progress, ct: downloadClient.CancellationToken.Token, overrideOptions: new OptionSet() { AudioMultistreams = false }) : await ytdl.RunVideoDownload(downloadClient.Url, format: $"bestvideo[height<={downloadClient.Quality}]+bestaudio/best", progress: progress, ct: downloadClient.CancellationToken.Token, recodeFormat: VideoRecodeFormat.Mp4, mergeFormat: DownloadMergeFormat.Mp4);
                     await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
-                    if (res.Success)
+                    if (runResult?.Success == true)
                     {
                         dbUser.Files.Add(dbFile);
                         await _postgres.SaveChangesAsync();
@@ -148,7 +146,7 @@ namespace SyncStreamAPI.ServerData
                     }
                     else
                     {
-                        Console.WriteLine($"Error downloading {downloadClient.Url}: {res.ErrorOutput.FirstOrDefault()}");
+                        Console.WriteLine($"Error downloading {downloadClient.Url}: {runResult?.ErrorOutput.FirstOrDefault()}");
                     }
                 }
             }
@@ -190,10 +188,9 @@ namespace SyncStreamAPI.ServerData
                             }
                             var response = await _browser.GetM3U8FromUrl(downloadClient.Url);
                             if (response != null)
-                                await _hub.Clients.Client(downloadClient.ConnectionId).browserResults(response.OutputUrls);
+                                await _hub.Clients.Group(downloadClient.UserId.ToString()).browserResults(response.OutputUrls);
                             return;
                         }
-                        await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadListen(downloadClient.ConnectionId);
                         webClient.DownloadDataAsync(new Uri(downloadClient.Url));
                     }
                 }
@@ -396,7 +393,7 @@ namespace SyncStreamAPI.ServerData
                     var result = new DownloadInfo($"{Math.Round(e.BytesReceived / 1024d / 1024d, 2)}MB of {Math.Round(e.TotalBytesToReceive / 1024d / 1024d, 2)}MB - {timeString} remaining", id.FileName, id.UniqueId);
                     result.Id = id.UniqueId;
                     result.Progress = perc;
-                    await _hub.Clients.Client(id.ConnectionId).downloadProgress(result);
+                    await _hub.Clients.Group(id.UserId.ToString()).downloadProgress(result);
                 }
             }
             catch (Exception ex)
