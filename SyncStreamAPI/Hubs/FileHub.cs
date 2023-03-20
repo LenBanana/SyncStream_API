@@ -192,8 +192,9 @@ namespace SyncStreamAPI.Hubs
                     foreach (var vid in vids)
                     {
                         _manager.userM3U8Conversions.Add(vid);
-                        if (!vid.CancellationToken.IsCancellationRequested)
-                            await _manager.YtDownload(vid, audioOnly);
+                        await _manager.YtDownload(vid, audioOnly);
+                        if (vid.CancellationToken.IsCancellationRequested)
+                            break;
                         _manager.userM3U8Conversions.Remove(vid);
                     }
                     return;
