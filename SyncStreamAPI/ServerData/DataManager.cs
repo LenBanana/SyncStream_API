@@ -10,6 +10,7 @@ using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.RTMP;
 using SyncStreamAPI.PostgresModels;
+using SyncStreamAPI.ServerData.Helper;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -29,6 +30,12 @@ namespace SyncStreamAPI.ServerData
     public class DataManager
     {
         public static List<Room> Rooms { get; set; } = new List<Room>();
+        public static GeneralManager GeneralManager { get; set; }
+        public static RoomManager RoomManager { get; set; }
+        public static GeneralManager GetGeneralManager() => GeneralManager;
+        public static RoomManager GetRoomManager() => RoomManager;
+        public static Room GetRoom(string UniqueId) => RoomManager.GetRoom(UniqueId);
+        public static List<Room> GetRooms() => RoomManager.GetRooms();
         public List<LiveUser> LiveUsers { get; set; } = new List<LiveUser>();
         public static bool checking { get; set; } = false;
         public Dictionary<WebClient, DownloadClientValue> userWebDownloads { get; set; } = new Dictionary<WebClient, DownloadClientValue>();
@@ -47,8 +54,6 @@ namespace SyncStreamAPI.ServerData
                 LinuxBash.Bash($"chmod +x /app/ffmpeg && chmod +x /app/ffprobe");
                 LinuxBash.Bash($"chmod +x /app/yt-dlp");
                 LinuxBash.Bash($"alias yt-dlp='python3 /app/yt-dlp'");
-                //if (getYtDl)
-                //    LinuxBash.Bash($"chmod a+rx /usr/local/bin/youtube-dl");
             }
             _serviceProvider = provider;
             using (var scope = _serviceProvider.CreateScope())
@@ -56,51 +61,10 @@ namespace SyncStreamAPI.ServerData
                 var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
                 Configuration = config;
             }
-            ReadSettings();
-            AddDefaultRooms();
-        }
-
-        public async void AddDefaultRooms()
-        {
-            Rooms.Add(new Room("Dreckroom", "dreck", false, true));
-            Rooms.Add(new Room("Randomkeller", "random", false, true));
-            Rooms.Add(new Room("Guffelstübchen", "guffel", false, true));
-            for (int i = 1; i <= General.GuestRoomAmount; i++)
-                Rooms.Add(new Room($"Guest Room - {i}", $"guest{i}", false, false));
-
-            try
-            {
-                using (var scope = _serviceProvider.CreateScope())
-                {
-                    var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
-                    await _postgres.Database.EnsureCreatedAsync();
-                    if (await _postgres.Folders.CountAsync() == 0)
-                    {
-                        _postgres.Folders.Add(new DbFileFolder("Default"));
-                        await _postgres.SaveChangesAsync();
-                    }
-                }
-            }
-            catch
-            {
-
-            }
-        }
-
-        public async void ReadSettings()
-        {
-            var section = Configuration.GetSection("MaxParallelConversions");
-            General.MaxParallelConversions = Convert.ToInt32(section.Value);
-        }
-
-        public async void AddMember(int id, string connectionId)
-        {
-            using (var scope = _serviceProvider.CreateScope())
-            {
-                var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                await _hub.Groups.AddToGroupAsync(connectionId, id.ToString());
-            }
-            var clientQueueIdx = userM3U8Conversions.FindIndex(x => x.UserId == id);
+            GeneralManager = new GeneralManager(_serviceProvider, Rooms);
+            RoomManager = new RoomManager(_serviceProvider, Rooms);
+            GeneralManager.ReadSettings(Configuration);
+            GeneralManager.AddDefaultRooms();
         }
 
         public async Task YtDownload(DownloadClientValue downloadClient, bool audioOnly = false)
@@ -111,33 +75,29 @@ namespace SyncStreamAPI.ServerData
                 {
                     var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
                     var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                    await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadListen(downloadClient.UniqueId);
-                    var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == downloadClient.Token)).FirstOrDefault();
-                    var dbFile = new DbFile(downloadClient.FileName, audioOnly ? ".mp3" : ".mp4", dbUser);
-                    var filePath = $"{General.FilePath}/{dbFile.FileKey}{(audioOnly ? ".mp3" : ".mp4")}".Replace('\\', '/');
+                    var userId = downloadClient.UserId.ToString();
+                    await _hub.Clients.Group(userId).downloadListen(downloadClient.UniqueId);
+
+                    var dbUser = _postgres.Users
+                        .Include(x => x.RememberTokens)
+                        .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == downloadClient.Token) == true);
+
+                    var fileExtension = audioOnly ? ".mp3" : ".mp4";
+                    var dbFile = new DbFile(downloadClient.FileName, fileExtension, dbUser);
+                    var filePath = $"{General.FilePath}/{dbFile.FileKey}{fileExtension}".Replace('\\', '/');
+
                     var ytdl = General.GetYoutubeDL();
                     ytdl.OutputFolder = General.FilePath;
                     ytdl.RestrictFilenames = true;
-                    ytdl.OutputFileTemplate = $"{dbFile.FileKey}{(audioOnly ? ".mp3" : ".mp4")}";
-                    var progress = new Progress<DownloadProgress>(async p =>
-                    {
-                        try
-                        {
-                            var perc = Math.Round(p.Progress * 100f, 2);
-                            var text = $"{Math.Round(perc, 0)}% {p.DownloadSpeed}";
-                            var timeString = StopwatchCalc.CalculateRemainingTime(downloadClient.Stopwatch, perc);
-                            text += $" - {timeString} remaining";
-                            var result = new DownloadInfo(text, downloadClient.FileName, downloadClient.UniqueId);
-                            result.Progress = perc;
-                            await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadProgress(result);
-                            if (p.State == DownloadState.Success)
-                                await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
-                        }
-                        catch (Exception ex) { Console.WriteLine(ex.ToString()); }
-                    });
+                    ytdl.OutputFileTemplate = $"{dbFile.FileKey}{fileExtension}";
+
+                    var progress = new Progress<DownloadProgress>(async p => await YtDLPHelper.UpdateDownloadProgress(downloadClient, _hub, p));
+
                     downloadClient.Stopwatch = Stopwatch.StartNew();
-                    RunResult<string> runResult = audioOnly ? await ytdl.RunAudioDownload(downloadClient.Url, AudioConversionFormat.Mp3, progress: progress, ct: downloadClient.CancellationToken.Token, overrideOptions: new OptionSet() { AudioMultistreams = false }) : await ytdl.RunVideoDownload(downloadClient.Url, format: $"bestvideo[height<={downloadClient.Quality}]+bestaudio/best", progress: progress, ct: downloadClient.CancellationToken.Token, recodeFormat: VideoRecodeFormat.Mp4, mergeFormat: DownloadMergeFormat.Mp4);
-                    await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
+                    RunResult<string> runResult = await YtDLPHelper.DownloadMedia(ytdl, downloadClient, audioOnly, progress);
+
+                    await _hub.Clients.Group(userId).downloadFinished(downloadClient.UniqueId);
+
                     if (runResult?.Success == true)
                     {
                         dbUser.Files.Add(dbFile);
@@ -222,17 +182,13 @@ namespace SyncStreamAPI.ServerData
                 {
                     if (dbUser == null)
                         throw new Exception($"Unable to find user");
-                    //var conv = await FFmpeg.Conversions.New().AddParameter($"ffmpeg -i \"{downloadClient.Url}\" -c copy \"{downloadClient.FileName}\".mp4").UseMultiThread(true).Start(downloadClient.CancellationToken.Token);
                     var conversion = (await FFmpeg.Conversions.FromSnippet.SaveM3U8Stream(new Uri(downloadClient.Url), filePath)).UseMultiThread(true).SetOverwriteOutput(true);
                     conversion.OnProgress += async (sender, args) =>
                     {
                         try
                         {
-                            var text = $"{args.Duration}/{args.TotalLength}";
-                            var timeString = StopwatchCalc.CalculateRemainingTime(downloadClient.Stopwatch, args.Percent);
-                            text += $" - {timeString} remaining";
-                            var result = new DownloadInfo(text, downloadClient.FileName, downloadClient.UniqueId);
-                            result.Progress = args.Percent;
+                            var text = $"{args.Duration}/{args.TotalLength} - {StopwatchCalc.CalculateRemainingTime(downloadClient.Stopwatch, args.Percent)} remaining";
+                            var result = new DownloadInfo(text, downloadClient.FileName, downloadClient.UniqueId) { Progress = args.Percent };
                             await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadProgress(result);
                         }
                         catch (Exception ex) { Console.WriteLine(ex.ToString()); }
@@ -376,86 +332,17 @@ namespace SyncStreamAPI.ServerData
         {
             try
             {
-                using (var scope = _serviceProvider.CreateScope())
-                {
-                    var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                    var id = userWebDownloads[sender as WebClient];
-                    var perc = e.BytesReceived / (double)e.TotalBytesToReceive * 100d;
-                    if (perc < 0)
-                        perc = -1;
-                    var millis = id.Stopwatch.ElapsedMilliseconds;
-                    var timeLeft = (double)millis / perc * (100 - perc);
-                    if (timeLeft < 0)
-                        timeLeft = 0;
-                    if (timeLeft > TimeSpan.MaxValue.TotalMilliseconds)
-                        timeLeft = TimeSpan.MaxValue.TotalMilliseconds;
-                    var timeString = TimeSpan.FromMilliseconds(timeLeft).ToString(@"HH\:mm\:ss");
-                    var result = new DownloadInfo($"{Math.Round(e.BytesReceived / 1024d / 1024d, 2)}MB of {Math.Round(e.TotalBytesToReceive / 1024d / 1024d, 2)}MB - {timeString} remaining", id.FileName, id.UniqueId);
-                    result.Id = id.UniqueId;
-                    result.Progress = perc;
-                    await _hub.Clients.Group(id.UserId.ToString()).downloadProgress(result);
-                }
+                using var scope = _serviceProvider.CreateScope();
+                var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+                var id = userWebDownloads[sender as WebClient];
+                var perc = Math.Max(0, e.BytesReceived / (double)e.TotalBytesToReceive * 100);
+                var timeLeft = TimeSpan.FromMilliseconds(id.Stopwatch.ElapsedMilliseconds / perc * (100 - perc)).ToString(@"HH\:mm\:ss");
+                var result = new DownloadInfo($"{Math.Round(e.BytesReceived / 1048576d, 2)}MB of {Math.Round(e.TotalBytesToReceive / 1048576d, 2)}MB - {timeLeft} remaining", id.FileName, id.UniqueId) { Id = id.UniqueId, Progress = perc };
+                await _hub.Clients.Group(id.UserId.ToString()).downloadProgress(result);
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex.ToString());
-            }
-        }
-
-        public static Room GetRoom(string UniqueId)
-        {
-            return Rooms.FirstOrDefault(x => x.uniqueId == UniqueId);
-        }
-        public static List<Room> GetRooms()
-        {
-            return Rooms;
-        }
-
-        public void AddToMemberCheck(Member member)
-        {
-            member.Kicked += Member_Kicked;
-        }
-
-        private async void Member_Kicked(Member e)
-        {
-            await KickMember(e);
-        }
-
-        public async Task KickMember(Member e)
-        {
-            if (e != null)
-            {
-                try
-                {
-                    int idx = Rooms.FindIndex(x => x.uniqueId == e.RoomId);
-                    if (idx > -1)
-                    {
-                        Room room = Rooms[idx];
-                        e.Kicked -= Member_Kicked;
-                        if (!room.server.members.Contains(e))
-                            return;
-                        room.server.members.Remove(e);
-                        using (var scope = _serviceProvider.CreateScope())
-                        {
-                            var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                            if (room.server.members.Count > 0)
-                            {
-                                var game = room.GallowGame;
-                                if (e.ishost)
-                                {
-                                    room.server.members[0].ishost = true;
-                                    await _hub.Clients.Client(room.server.members[0].ConnectionId).hostupdate(true);
-                                }
-                            }
-                            await _hub.Clients.Group(room.uniqueId).userupdate(room.server.members?.Select(x => x.ToDTO()).ToList());
-                            await _hub.Clients.All.getrooms(Rooms);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.ToString());
-                }
             }
         }
     }

@@ -1,6 +1,7 @@
 ﻿using SyncStreamAPI.DTOModel;
 using SyncStreamAPI.Games.Blackjack;
 using SyncStreamAPI.Models.GameModels.Members;
+using SyncStreamAPI.ServerData;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -25,10 +26,10 @@ namespace SyncStreamAPI.Models
         public delegate void KickEvent(Member e);
         public event KickEvent Kicked;
 
-        public Member(ServerData.DataManager _manager)
+        public Member()
         {
             CountDown();
-            _manager.AddToMemberCheck(this);
+            DataManager.GetRoomManager().AddToMemberCheck(this);
         }
 
         public MemberDTO ToDTO() => new MemberDTO(username, ishost);

@@ -4,6 +4,7 @@ using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.PostgresModels;
+using SyncStreamAPI.ServerData.Helper;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -75,7 +76,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             if (dbUser.userprivileges >= UserPrivileges.Elevated)
             {
-                _manager.ReadSettings();
+                GeneralManager.ReadSettings(Configuration);
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Reload configuration", Question = "Reload successful", Answer1 = "Ok" });
             }
         }

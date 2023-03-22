@@ -33,7 +33,7 @@ namespace SyncStreamAPI.Hubs
             {
                 MainServer.members = new List<Member>();
             }
-            Member newMember = new Member(_manager) { username = username, ishost = MainServer.members.Count == 0 ? true : false, ConnectionId = ip, RoomId = UniqueId };
+            Member newMember = new Member() { username = username, ishost = MainServer.members.Count == 0 ? true : false, ConnectionId = ip, RoomId = UniqueId };
             if (MainServer?.bannedMembers.Any(x => x.ConnectionId == newMember.ConnectionId) == true)
             {
                 await Clients.Caller.adduserupdate((int)UserUpdate.Banned);

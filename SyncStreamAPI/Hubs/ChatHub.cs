@@ -12,120 +12,98 @@ namespace SyncStreamAPI.Hubs
 {
     public partial class ServerHub
     {
-        public async Task SendMessage(ChatMessage message, string UniqueId)
+        public async Task SendMessage(ChatMessage message, string uniqueId)
         {
-            Room room = GetRoom(UniqueId);
-            if (room == null)
-                return;
-            Server MainServer = room.server;
+            Room room = GetRoom(uniqueId);
+            if (room == null) return;
+            Server mainServer = room.server;
             var lowerMessage = message.message.ToLower().Trim();
-            if (lowerMessage.StartsWith("/"))
+
+            if (!lowerMessage.StartsWith("/"))
             {
-                if (lowerMessage.StartsWith("/w"))
+                mainServer.chatmessages.Add(message);
+                if (mainServer.chatmessages.Count >= 100)
+                    mainServer.chatmessages.RemoveAt(0);
+
+                switch (room.GameMode)
                 {
-                    var regEx = new Regex("^\\/[wW] (?<wName>[^\\s]+) (?<wMsg>.*)$");
-                    var match = regEx.Match(message.message);
-                    if (match.Success)
-                    {
-                        var wName = match.Groups["wName"].Value.Trim();
-                        var wMsg = match.Groups["wMsg"].Value.Trim();
-                        var receiverMember = MainServer.members.FirstOrDefault(x => x.username.ToLower() == wName.ToLower());
-                        if (receiverMember != null)
-                        {
-                            var wChatUserMsg = new WhisperUserMessage() { username = $"To {wName}", message = $"{wMsg}" };
-                            var wChatReceiverMsg = new WhisperReceiverMessage() { username = $"From {message.username}", message = $"{wMsg}" };
-                            await Clients.Caller.sendmessage(wChatUserMsg);
-                            if (wName.ToLower() == "all")
-                                await Clients.Others.sendmessage(wChatReceiverMsg);
-                            else
-                                await Clients.Client(receiverMember.ConnectionId).sendmessage(wChatReceiverMsg);
-                            return;
-                        }
-                        else
-                        {
-                            var errorMsg = new SystemMessage($"Could not find user: {wName}");
-                            await Clients.Caller.sendmessage(errorMsg);
-                            return;
-                        }
-                    }
-                }
-                else if (lowerMessage.StartsWith("/cp"))
-                {
-                    if (MainServer.playlist.Count > 1)
-                    {
-                        var pl = new List<DreckVideo>();
-                        pl.Add(MainServer.playlist[0]);
-                        MainServer.playlist = pl;
-                        await Clients.Group(UniqueId).playlistupdate(MainServer.playlist);
-                    }
-                }
-                else if (lowerMessage.StartsWith("/c") && !lowerMessage.StartsWith("/chess"))
-                {
-                    await ClearChat(UniqueId);
-                }
-                else if (lowerMessage.StartsWith("/playgallows") || lowerMessage.StartsWith("/playgallow") || lowerMessage.StartsWith("/gallows") || lowerMessage.StartsWith("/gallow") || lowerMessage.StartsWith("/galgenraten") || lowerMessage.StartsWith("/galgen") || lowerMessage.StartsWith("/g"))
-                {
-                    var split = lowerMessage.Split(" ");
-                    var lang = Language.German;
-                    var length = 90;
-                    if (split.Length > 1)
-                        lang = split[1].StartsWith("e") ? Language.English : Language.German;
-                    if (split.Length > 2)
-                        int.TryParse(split[2], out length);
-                    await PlayGallowsSettings(UniqueId, lang, length);
-                }
-                else if (lowerMessage.StartsWith("/s") || lowerMessage.StartsWith("/spectate"))
-                {
-                    await SpectateBlackjack(UniqueId);
-                }
-                else if (lowerMessage.StartsWith("/ai"))
-                {
-                    await AddBlackjackAi(UniqueId);
-                }
-                else if (lowerMessage.StartsWith("/mai"))
-                {
-                    await MakeAi(UniqueId);
-                }
-                else if (lowerMessage.StartsWith("/playblackjack") || lowerMessage.StartsWith("/playbj") || lowerMessage.StartsWith("/blackjack") || lowerMessage.StartsWith("/bj") || lowerMessage.StartsWith("/b"))
-                {
-                    await PlayBlackjack(UniqueId);
-                }
-                else if (lowerMessage.StartsWith("/chess"))
-                {
-                    lowerMessage += " ";
-                    var regEx = new Regex("^\\/chess (?<wName1>[^\\s]+) (?<wName2>[^\\s]+)?$");
-                    var match = regEx.Match(message.message);
-                    if (match.Success || lowerMessage.Trim() == "/chess")
-                    {
-                        var user1 = match.Groups["wName1"].Value.Trim();
-                        var user2 = match.Groups["wName2"].Value.Trim();
-                        var lightPlayerAi = user1.ToLower() == "ai";
-                        var darkPlayerAi = user2.ToLower() == "ai";
-                        var member1 = MainServer.members.FirstOrDefault(x => x.username == user1);
-                        var member2 = MainServer.members.FirstOrDefault(x => x.username == user1);
-                        if (room.GameMode != GameMode.Chess)
-                            await PlayChess(UniqueId, member1 != null ? member1.username : "", member2 != null ? member2.username : "", lightPlayerAi, darkPlayerAi);
-                        else
-                            await EndChess(UniqueId);
-                    }
+                    case GameMode.NotPlaying:
+                    case GameMode.Blackjack:
+                    case GameMode.Chess:
+                        await Clients.Group(mainServer.RoomId).sendmessage(message);
+                        break;
+                    case GameMode.Gallows:
+                        var sender = mainServer.members.FirstOrDefault(x => Context.ConnectionId == x.ConnectionId);
+                        await _gallowGameManager.PlayGallow(room.GallowGame, sender, message, room.GallowGame.GallowTime);
+                        break;
                 }
                 return;
             }
-            MainServer.chatmessages.Add(message);
-            if (MainServer.chatmessages.Count >= 100)
-                MainServer.chatmessages.RemoveAt(0);
-            switch (room.GameMode)
+
+            var args = lowerMessage.Split(" ").Skip(1).ToArray();
+            var command = lowerMessage.Split(" ", 2)[0];
+            Match match;
+
+            async Task WhisperHandler()
             {
-                case GameMode.NotPlaying:
-                case GameMode.Blackjack:
-                case GameMode.Chess:
-                    await Clients.Group(MainServer.RoomId).sendmessage(message);
-                    break;
-                case GameMode.Gallows:
-                    Member sender = MainServer.members.FirstOrDefault(x => Context.ConnectionId == x.ConnectionId);
-                    var game = room.GallowGame;
-                    await _gallowGameManager.PlayGallow(game, sender, message, game.GallowTime);
-                    break;
+                match = new Regex("^\\/[wW] (?<wName>[^\\s]+) (?<wMsg>.*)$").Match(message.message);
+                if (!match.Success) return;
+
+                var wName = match.Groups["wName"].Value.Trim();
+                var wMsg = match.Groups["wMsg"].Value.Trim();
+                var receiverMember = mainServer.members.FirstOrDefault(x => x.username.Equals(wName, StringComparison.OrdinalIgnoreCase));
+
+                if (receiverMember != null)
+                {
+                    var wChatUserMsg = new WhisperUserMessage() { username = $"To {wName}", message = $"{wMsg}" };
+                    var wChatReceiverMsg = new WhisperReceiverMessage() { username = $"From {message.username}", message = $"{wMsg}" };
+                    await Task.WhenAll(
+                        Clients.Caller.sendmessage(wChatUserMsg),
+                        wName.Equals("all", StringComparison.OrdinalIgnoreCase) ? Clients.Others.sendmessage(wChatReceiverMsg) : Clients.Client(receiverMember.ConnectionId).sendmessage(wChatReceiverMsg));
+                }
+                else
+                {
+                    await Clients.Caller.sendmessage(new SystemMessage($"Could not find user: {wName}"));
+                }
+            }
+
+            async Task ChessHandler()
+            {
+                match = new Regex("^\\/chess (?<wName1>[^\\s]+) (?<wName2>[^\\s]+)?$").Match(message.message);
+                var user1 = match.Groups["wName1"].Value.Trim();
+                var user2 = match.Groups["wName2"].Value.Trim();
+
+                var lightPlayerAi = user1.Equals("ai", StringComparison.OrdinalIgnoreCase);
+                var darkPlayerAi = user2.Equals("ai", StringComparison.OrdinalIgnoreCase);
+
+                var member1 = mainServer.members.FirstOrDefault(x => x.username.Equals(user1, StringComparison.OrdinalIgnoreCase));
+                var member2 = mainServer.members.FirstOrDefault(x => x.username.Equals(user2, StringComparison.OrdinalIgnoreCase));
+
+                if (room.GameMode != GameMode.Chess)
+                {
+                    await PlayChess(uniqueId, member1?.username, member2?.username, lightPlayerAi, darkPlayerAi);
+                }
+                else
+                {
+                    await EndChess(uniqueId);
+                }
+            }
+            var commandHandlers = new Dictionary<string, Func<Task>>
+            {
+                { "/w", WhisperHandler },
+                { "/cp", async () => { if (mainServer.playlist.Count > 1) { mainServer.playlist = new List<DreckVideo> { mainServer.playlist[0] }; await Clients.Group(uniqueId).playlistupdate(mainServer.playlist); } } },
+                { "/c", async () => await ClearChat(uniqueId)},
+                { "/playgallows", async () => { var lang = args.Length > 1 && args[1].StartsWith("e") ? Language.English : Language.German; int.TryParse(args.ElementAtOrDefault(2), out int len); await PlayGallowsSettings(uniqueId, lang, len == 0 ? 90 : len); } },
+                { "/s", async () => await SpectateBlackjack(uniqueId) },
+                { "/ai", async () => await AddBlackjackAi(uniqueId) },
+                { "/mai", async () => await MakeAi(uniqueId) },
+                { "/playblackjack", async () => await PlayBlackjack(uniqueId) },
+                { "/chess", ChessHandler },
+            };
+
+            if (commandHandlers.TryGetValue(command, out var commandHandler))
+            {
+                await commandHandler();
             }
         }
 
@@ -138,26 +116,19 @@ namespace SyncStreamAPI.Hubs
             await Clients.Caller.sendmessages(MainServer.chatmessages);
         }
 
-        public async Task SendPrivateMessage(string UniqueId, string FromUser, string ToUser, string Message)
+        public async Task SendPrivateMessage(string uniqueId, string fromUser, string toUser, string message)
         {
             try
             {
-                Room room = GetRoom(UniqueId);
+                var room = GetRoom(uniqueId)?.server;
                 if (room == null)
                     return;
-                Server MainServer = room.server;
-                Member FromIdx = MainServer.members.FirstOrDefault(x => x.username == FromUser);
-                Member ToIdx = MainServer.members.FirstOrDefault(x => x.username == ToUser);
-                if (FromIdx != null && ToIdx != null)
-                {
-                    string FullMessage = FromIdx.AddMessage(ToUser, Message);
-                    await Clients.Caller.PrivateMessage(FullMessage);
-                    await Clients.Client(ToIdx.ConnectionId).PrivateMessage(FullMessage);
-                }
-                else
-                {
+                var fromMember = room.members.FirstOrDefault(x => x.username == fromUser);
+                var toMember = room.members.FirstOrDefault(x => x.username == toUser);
+                if (fromMember == null || toMember == null)
                     throw new Exception("User was not found");
-                }
+                var fullMessage = fromMember.AddMessage(toUser, message);
+                await Task.WhenAll(Clients.Caller.PrivateMessage(fullMessage), Clients.Client(toMember.ConnectionId).PrivateMessage(fullMessage));
             }
             catch (Exception ex)
             {

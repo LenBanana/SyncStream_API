@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using SyncStreamAPI.Enums;
 using System.Text.RegularExpressions;
+using SyncStreamAPI.ServerData;
 
 namespace SyncStreamAPI.Hubs
 {
@@ -24,7 +25,7 @@ namespace SyncStreamAPI.Hubs
                     await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Thanks for registering", Question = @$"Please wait until the admin team approves your account", Answer1 = "Ok" });
                     return;
                 }
-                _manager.AddMember(user.ID, Context.ConnectionId);
+                DataManager.GetRoomManager().AddMember(user.ID, Context.ConnectionId);
                 var token = user.GenerateToken(userInfo);
                 var dbToken = user.RememberTokens.FirstOrDefault(x => x.Token == token.Token);
                 if (dbToken == null)
@@ -47,30 +48,41 @@ namespace SyncStreamAPI.Hubs
 
         public async Task RegisterRequest(DbUser requestUser)
         {
-            var result = new DbUser();
             if (_postgres.Users?.Any(x => x.username == requestUser.username) == false)
             {
-                var userNameRegexString = @"^\w(?:\w|[.-](?=\w)){2,31}$";
+                var userNameRegexString = @"^\w(?:\w|.-){2,31}$";
                 var userNameRegex = new Regex(userNameRegexString);
                 if (!userNameRegex.IsMatch(requestUser.username))
                 {
-                    await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = @$"Username {requestUser.username} not allowed", Answer1 = "Ok" });
+                    await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = $"Username {requestUser.username} not allowed", Answer1 = "Ok" });
                     return;
                 }
+                // Make sure the password hash length is 128 characters (SHA512 length)
+                if (requestUser.password.Length != 128)
+                {
+                    await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Invalid password hash", Answer1 = "Ok" });
+                    return;
+                }
+
                 requestUser.StreamToken = requestUser.GenerateStreamToken().Token;
                 await _postgres.Users.AddAsync(requestUser);
                 await _postgres.SaveChangesAsync();
-                result = requestUser;
-                List<DbUser> users = _postgres.Users.ToList();
-                await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
+
+                await Clients.Group(General.LoggedInGroupName).getusers(_postgres.Users.Select(x => x.ToDTO()).ToList());
+                await Clients.Caller.userRegister(requestUser.ToDTO());
             }
-            await Clients.Caller.userRegister(result.ToDTO());
+            else
+            {
+                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Username already exists", Answer1 = "Ok" });
+            }
         }
 
         public async Task GenerateRememberToken(DbUser requestUser, string userInfo)
         {
             try
             {
+                if (requestUser == null || string.IsNullOrEmpty(requestUser.password))
+                    return;
                 var dbUser = _postgres.Users.FirstOrDefault(x => x.ID == requestUser.ID);
                 var token = dbUser?.GenerateToken(userInfo);
                 if (dbUser?.RememberTokens.Any(x => x.Token == token?.Token) == true)
@@ -156,7 +168,7 @@ namespace SyncStreamAPI.Hubs
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var removeUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == removeID);
-                    if (removeUser != null)
+                    if (removeUser != null && dbUser.userprivileges > removeUser.userprivileges)
                     {
                         _postgres.Users.Remove(removeUser);
                         await _postgres.SaveChangesAsync();
@@ -291,7 +303,7 @@ namespace SyncStreamAPI.Hubs
                 DbRememberToken Token = dbUser.RememberTokens.FirstOrDefault(x => x.Token == token);
                 if (Token != null)
                 {
-                    _manager.AddMember(dbUser.ID, Context.ConnectionId);
+                    DataManager.GetRoomManager().AddMember(dbUser.ID, Context.ConnectionId);
                     await Groups.AddToGroupAsync(Context.ConnectionId, Token.Token);
                     await Groups.AddToGroupAsync(Context.ConnectionId, General.LoggedInGroupName);
                     await Clients.Caller.userlogin(dbUser.ToDTO());
