@@ -84,7 +84,7 @@ namespace SyncStreamAPI.ServerData
 
                     var fileExtension = audioOnly ? ".mp3" : ".mp4";
                     var dbFile = new DbFile(downloadClient.FileName, fileExtension, dbUser);
-                    var filePath = $"{General.FilePath}/{dbFile.FileKey}{fileExtension}".Replace('\\', '/');
+                    var filePath = dbFile.GetPath();
 
                     var ytdl = General.GetYoutubeDL();
                     ytdl.OutputFolder = General.FilePath;
@@ -177,7 +177,7 @@ namespace SyncStreamAPI.ServerData
                 await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadListen(downloadClient.UniqueId);
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == downloadClient.Token)).FirstOrDefault();
                 var dbFile = new DbFile(downloadClient.FileName, ".mp4", dbUser);
-                var filePath = $"{General.FilePath}/{dbFile.FileKey}.mp4".Replace('\\', '/');
+                var filePath = dbFile.GetPath();
                 try
                 {
                     if (dbUser == null)
@@ -313,7 +313,7 @@ namespace SyncStreamAPI.ServerData
                         if (!Directory.Exists(General.FilePath))
                             Directory.CreateDirectory(General.FilePath);
                         var dbFile = new DbFile(client.FileName, $".{client.Url.Split('.').Last()}", dbUser);
-                        var filePath = $"{General.FilePath}/{dbFile.FileKey}{dbFile.FileEnding}".Replace('\\', '/');
+                        var filePath = dbFile.GetPath();
                         File.WriteAllBytes(filePath, file);
                         dbUser.Files.Add(dbFile);
                         await _postgres.SaveChangesAsync();

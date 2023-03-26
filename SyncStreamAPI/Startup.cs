@@ -14,6 +14,7 @@ using SyncStreamAPI.Helper;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.ServerData;
+using SyncStreamAPI.ServerData.Background;
 
 namespace SyncStreamAPI
 {
@@ -28,6 +29,7 @@ namespace SyncStreamAPI
 
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddHostedService<DataBackgroundService>();
             services.AddSingleton(provider =>
             {
                 DataManager manager = new DataManager(provider);
@@ -51,7 +53,6 @@ namespace SyncStreamAPI
                        .AllowAnyMethod()
                        .AllowAnyHeader()
                        .AllowCredentials();
-                //
             }));
             services.AddSignalR(options =>
             {

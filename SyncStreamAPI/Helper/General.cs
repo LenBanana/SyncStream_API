@@ -23,6 +23,9 @@ namespace SyncStreamAPI.Helper
         public static int GuestRoomAmount = 6;
         public static int MaxParallelConversions = 6;
 
+        public const int DaysToKeepImages = 14;
+        public const int CheckIntervalInMinutes = 60;
+
         public static int GallowGameLength = 90;
         public static int GallowGameLengthMin = 60;
         public static int GallowGameLengthMax = 300;
