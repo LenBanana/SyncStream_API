@@ -91,7 +91,7 @@ namespace SyncStreamAPI.Hubs
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var shareFolders = _postgres.FolderShare?.Where(x => x.DbUserID == dbUser.ID);
-                    var folder = _postgres.Folders?.Include(x => x.Files).Where(x => x.DbUserID == null || x.DbUserID == dbUser.ID || shareFolders.FirstOrDefault(y => y.DbFolderID == x.Id) != null || shareFolders.FirstOrDefault(y => y.DbFolderID == x.ParentId) != null).OrderBy(x => x.Name).ToList();
+                    var folder = _postgres.Folders?.Where(x => x.DbUserID == null || x.DbUserID == dbUser.ID || shareFolders.FirstOrDefault(y => y.DbFolderID == x.Id) != null || shareFolders.FirstOrDefault(y => y.DbFolderID == x.ParentId) != null).OrderBy(x => x.Name).ToList();
                     var defaultFolder = folder.FirstOrDefault(x => x.Id == folderId);
                     if (defaultFolder != null)
                     {
