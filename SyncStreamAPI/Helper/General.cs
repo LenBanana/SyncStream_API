@@ -19,6 +19,7 @@ namespace SyncStreamAPI.Helper
         public static Random random = new Random();
         public static string SystemMessageName = "Dreckbot";
         public static string FilePath = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? System.IO.Directory.GetCurrentDirectory() + "/VideoFiles" : System.IO.Directory.GetCurrentDirectory() + "\\VideoFiles";
+        public static string TemporaryFilePath = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? System.IO.Directory.GetCurrentDirectory() + "/Temp" : System.IO.Directory.GetCurrentDirectory() + "\\Temp";
         public const string YtDLPUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp";
         public static int GuestRoomAmount = 6;
         public static int MaxParallelConversions = 6;

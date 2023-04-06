@@ -351,3 +351,4 @@ healthchecksdb
 /SyncStreamAPI/.local-chromium
 /SyncStreamAPI/Dockerfile
 /SyncStreamAPI/yt-dlp.exe
+/SyncStreamAPI/Temp

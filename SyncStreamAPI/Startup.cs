@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,6 +30,7 @@ namespace SyncStreamAPI
 
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddSingleton<IContentTypeProvider, FileExtensionContentTypeProvider>();
             services.AddHostedService<DataBackgroundService>();
             services.AddSingleton(provider =>
             {
