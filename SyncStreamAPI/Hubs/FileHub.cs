@@ -367,8 +367,11 @@ namespace SyncStreamAPI.Hubs
                 return;
             if (dbUser.userprivileges >= UserPrivileges.Elevated)
             {
-                var files = Directory.GetFiles(General.FilePath).ToList();
-                files.AddRange(Directory.GetFiles(General.TemporaryFilePath));
+                List<string> files = new List<string>();
+                if (Directory.Exists(General.FilePath))
+                    files = Directory.GetFiles(General.FilePath).ToList();
+                if (Directory.Exists(General.TemporaryFilePath))
+                    files.AddRange(Directory.GetFiles(General.TemporaryFilePath));
                 if (files.Count() > 0)
                 {
                     var dbFiles = _postgres.Files.ToList();
