@@ -42,12 +42,12 @@ namespace SyncStreamAPI.Controllers
         }
 
         [HttpGet("[action]")]
-        public async Task<IActionResult> fileByToken(int uniqueId, string fileKey, string token)
+        public async Task<IActionResult> fileByToken(string fileKey, string token)
         {
             try
             {
                 // Fetch the file record from the database based on the unique ID and video key
-                var dbFile = _postgres.Files?.FirstOrDefault(x => x.FileKey == fileKey || x.ID == uniqueId);
+                var dbFile = _postgres.Files?.FirstOrDefault(x => x.FileKey == fileKey);
                 if (dbFile == null)
                 {
                     // If the file record is not found, return a 404 error with a specific error message
@@ -219,7 +219,7 @@ namespace SyncStreamAPI.Controllers
                 await _postgres.SaveChangesAsync();
 
                 // Return Ok response code
-                return Ok(new { fileKey = savedFile.Entity.FileKey, fileId = savedFile.Entity.ID });
+                return Ok(new { fileKey = savedFile.Entity.Name, fileId = savedFile.Entity.FileKey });
             }
             catch (Exception ex)
             {
