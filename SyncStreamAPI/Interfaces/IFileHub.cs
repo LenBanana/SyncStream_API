@@ -12,6 +12,7 @@ namespace SyncStreamAPI.Interfaces
         Task getFolders(FolderDto folder);
         Task getFileInfo(DownloadFileInfo info);
         Task getFolderFiles(List<FileDto> files);
+        Task updateFolders(FileDto file);
         Task downloadListen(string id);
         Task downloadRemoved(string id);
         Task downloadProgress(DownloadInfo info);
