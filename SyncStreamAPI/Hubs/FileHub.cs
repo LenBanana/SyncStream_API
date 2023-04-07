@@ -220,7 +220,7 @@ namespace SyncStreamAPI.Hubs
                 var file = _postgres.Files.ToList().FirstOrDefault(x => x.ID == id);
                 if (file == null)
                     throw new Exception("File not found in database");
-                var path = $"{General.FilePath}/{file.FileKey}{file.FileEnding}";
+                var path = $"{(file.Temporary ? General.TemporaryFilePath : General.FilePath)}/{file.FileKey}{file.FileEnding}";
                 if (!File.Exists(path))
                     throw new Exception($"File {path} not found");
                 var mediaInfo = await Xabe.FFmpeg.FFmpeg.GetMediaInfo(path);
@@ -367,7 +367,8 @@ namespace SyncStreamAPI.Hubs
                 return;
             if (dbUser.userprivileges >= UserPrivileges.Elevated)
             {
-                var files = Directory.GetFiles(General.FilePath);
+                var files = Directory.GetFiles(General.FilePath).ToList();
+                files.AddRange(Directory.GetFiles(General.TemporaryFilePath));
                 if (files.Count() > 0)
                 {
                     var dbFiles = _postgres.Files.ToList();
@@ -415,7 +416,7 @@ namespace SyncStreamAPI.Hubs
                 var file = _postgres.Files.ToList().FirstOrDefault(x => x.ID == id);
                 if (file != null)
                 {
-                    var path = $"{General.FilePath}/{file.FileKey}{file.FileEnding}";
+                    var path = $"{(file.Temporary ? General.TemporaryFilePath : General.FilePath)}/{file.FileKey}{file.FileEnding}";
                     if (System.IO.File.Exists(path))
                         System.IO.File.Delete(path);
                     _postgres.Files.Remove(file);

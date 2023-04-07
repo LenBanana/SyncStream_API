@@ -35,7 +35,7 @@ namespace SyncStreamAPI.PostgresModels
 
         public string GetPath()
         {
-            var filePath = $"{General.FilePath}/{FileKey}{FileEnding}".Replace('\\', '/');
+            var filePath = $"{(Temporary ? General.TemporaryFilePath : General.FilePath)}/{FileKey}{FileEnding}".Replace('\\', '/');
             return filePath;
         }
     }
