@@ -412,14 +412,31 @@ namespace SyncStreamAPI.Hubs
             await Clients.All.getrooms(DataManager.GetRooms());
         }
 
-        public async Task AddRoom(Room room)
+        public async Task AddRoom(Room room, string token)
         {
             var Rooms = DataManager.GetRooms();
             int RoomCount = 0;
             while (Rooms?.Any(x => x.uniqueId == room.uniqueId) == true)
                 room.uniqueId = room.uniqueId + RoomCount++;
-            room.deletable = true;
             Rooms?.Add(room);
+            if (!room.deletable)
+            {
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
+                var tokenObj = dbUser?.RememberTokens.SingleOrDefault(x => x.Token == token);
+                if (tokenObj == null || dbUser == null || dbUser.userprivileges < UserPrivileges.Administrator)
+                {
+                    if (dbUser != null)
+                    {
+                        var errorMessage = "You do not have permissions to make a room permanent";
+                        await Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertTypes.Danger) { Question = errorMessage, Answer1 = "Ok" });
+                        return;
+                    }
+                    return;
+                }
+                DbRoom dbRoom = new DbRoom(room);
+                var roomEntity = await _postgres.Rooms.AddAsync(dbRoom);
+                await _postgres.SaveChangesAsync();
+            }
             await Clients.All.getrooms(DataManager.GetRooms());
         }
 
@@ -436,11 +453,29 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
-        public async Task RemoveRoom(string UniqueId)
+        public async Task RemoveRoom(string UniqueId, string token)
         {
             Room? room = GetRoom(UniqueId);
-            if (room == null)
+            if (room == null || room.isPrivileged)
                 return;
+            var dbRoom = _postgres.Rooms.FirstOrDefault(x => x.uniqueId == UniqueId);
+            if (dbRoom != null)
+            {
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
+                var tokenObj = dbUser?.RememberTokens.SingleOrDefault(x => x.Token == token);
+                if (tokenObj == null || dbUser == null || dbUser.userprivileges < UserPrivileges.Administrator)
+                {
+                    if (dbUser != null)
+                    {
+                        var errorMessage = "You do not have permissions to delete this room";
+                        await Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertTypes.Danger) { Question = errorMessage, Answer1 = "Ok" });
+                        return;
+                    }
+                    return;
+                }
+                _postgres.Rooms.Remove(dbRoom);
+                await _postgres.SaveChangesAsync();
+            }
             DataManager.GetRooms().Remove(room);
             await Clients.All.getrooms(DataManager.GetRooms());
         }

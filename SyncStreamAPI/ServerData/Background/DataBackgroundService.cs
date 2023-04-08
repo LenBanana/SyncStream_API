@@ -32,6 +32,7 @@ namespace SyncStreamAPI.ServerData.Background
             using (var scope = _serviceScope.CreateScope())
             {
                 var dbContext = scope.ServiceProvider.GetRequiredService<PostgresContext>();
+                await dbContext.Database.EnsureCreatedAsync();
                 var thresholdDate = DateTime.UtcNow.AddDays(-General.DaysToKeepImages);
                 var outdatedImages = await dbContext.Files.Where(e => e.Created < thresholdDate && e.Temporary).ToListAsync();
                 foreach (var image in outdatedImages)
