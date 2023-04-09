@@ -11,15 +11,15 @@ namespace SyncStreamAPI.Models
 
         public UserDTO(DbUser user)
         {
-            this.username = user.username;
-            this.userprivileges = user.userprivileges;
-            this.approved = user.approved;
-            this.ID = user.ID;
-            this.password = null;
-            this.usersalt = null;
-            this.RememberTokens = null;
-            this.StreamToken = user.StreamToken;
-            this.ApiKey = user.ApiKey;
+            username = user.username;
+            userprivileges = user.userprivileges;
+            approved = user.approved;
+            ID = user.ID;
+            password = null;
+            usersalt = null;
+            RememberTokens = null;
+            StreamToken = user.StreamToken;
+            ApiKey = user.ApiKey;
         }
     }
 }

@@ -76,12 +76,19 @@ namespace SyncStreamAPI.Helper
             if (url.Contains("twitch.tv"))
             {
                 if ((url.ToLower().StartsWith("http") && url.Count(x => x == '/') == 3) || url.Count(x => x == '/') == 1)
+                {
                     return url.Split('/').Last();
+                }
                 else
+                {
                     return "v" + url.Split('/').Last();
+                }
             }
             if (url.Contains("playlist?list="))
+            {
                 return "Playlistvideo";
+            }
+
             string title = "";
             title = (await NoEmbedYTApi(url)).Title;
 
@@ -143,7 +150,10 @@ namespace SyncStreamAPI.Helper
             Uri uri = new Uri(url);
             string videokey = System.Web.HttpUtility.ParseQueryString(uri.Query).Get("v");
             if (videokey == null)
+            {
                 videokey = System.Web.HttpUtility.ParseQueryString(uri.Query).Get("list");
+            }
+
             return videokey;
         }
 
@@ -188,7 +198,10 @@ namespace SyncStreamAPI.Helper
                     apiResult = new Ytapi().FromJson(await reader.ReadToEndAsync());
                 }
                 if (apiResult != null && apiResult.Items.Count > 0)
+                {
                     title = apiResult.Items.First().Snippet.Title + " - " + apiResult.Items.First().Snippet.ChannelTitle;
+                }
+
                 return title;
             }
             catch (Exception ex)
@@ -216,7 +229,10 @@ namespace SyncStreamAPI.Helper
                         i++;
                     }
                     if (title.Length == 0)
+                    {
                         title = "External source";
+                    }
+
                     return (title, source);
                 }
             }

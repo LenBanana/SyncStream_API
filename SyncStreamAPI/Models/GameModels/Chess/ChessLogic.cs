@@ -18,9 +18,14 @@ namespace SyncStreamAPI.Models.GameModels.Chess
             var idx = ChessGames.FindIndex(x => x.UniqueId == uniqueId);
             var game = new ChessGame(lightPlayer, darkPlayer, uniqueId, lightPlayerAi, darkPlayerAi);
             if (idx == -1)
+            {
                 ChessGames.Add(game);
+            }
             else
+            {
                 ChessGames[idx] = game;
+            }
+
             return game;
         }
 
@@ -28,7 +33,10 @@ namespace SyncStreamAPI.Models.GameModels.Chess
         {
             var idx = ChessGames.FindIndex(x => x.UniqueId == uniqueId);
             if (idx == -1)
+            {
                 return;
+            }
+
             ChessGames.RemoveAt(idx);
         }
     }

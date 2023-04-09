@@ -104,21 +104,32 @@ namespace SyncStreamAPI.Games.Blackjack
                 var totalText = $"You had {member.points}";
 
                 if (member.didSplit)
+                {
                     totalText += $" on your main hand. {member.splitPoints} on your split hand. ";
+                }
                 else
+                {
                     totalText += ". ";
+                }
+
                 totalText += dealerText;
                 var money = member.AddMoney(game.dealer.points);
                 if (money > 0)
                 {
                     game.dealer.money -= money;
                     if (money > member.Bet)
+                    {
                         totalText += $"Congratulations you won.";
+                    }
                     else
+                    {
                         totalText += $"Pushed, you got your money back.";
+                    }
                 }
                 else
+                {
                     totalText += $"Better luck next time.";
+                }
 
                 member.cards = new List<PlayingCard>();
                 member.didSplit = false;
@@ -134,7 +145,9 @@ namespace SyncStreamAPI.Games.Blackjack
             game.members.ForEach(x => x.NewlyJoined = false);
             await Task.Delay(timeout);
             if (!game.GameEnded)
+            {
                 AskForBet(game, 0);
+            }
         }
 
         public async Task SendAllUsers(BlackjackLogic game)
@@ -155,7 +168,9 @@ namespace SyncStreamAPI.Games.Blackjack
                 Room room = DataManager.GetRoomManager().GetRoom(UniqueId);
                 List<BlackjackMember> bjMember = new List<BlackjackMember>();
                 foreach (var member in room.server.members.Take(5).ToList())
+                {
                     bjMember.Add(member.ToBlackjackMember(this));
+                }
 
                 if (room.server.members.Count > 5)
                 {
@@ -213,7 +228,9 @@ namespace SyncStreamAPI.Games.Blackjack
                     }
                 }
                 else
+                {
                     AskForBet(game, memberIdx + 1);
+                }
             }
             else
             {
@@ -223,9 +240,13 @@ namespace SyncStreamAPI.Games.Blackjack
                 await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(1000), TimeSpan.FromMilliseconds(2500));
                 var idx = game.members.FindIndex(x => !x.notPlaying && !x.NewlyJoined && x.blackjack == false && x.points < 21);
                 if (idx > -1)
+                {
                     AskForPull(game, idx);
+                }
                 else
+                {
                     AskForPull(game, game.members.Count);
+                }
             }
         }
 
@@ -271,7 +292,9 @@ namespace SyncStreamAPI.Games.Blackjack
                 AskForPull(game, memberIdx + 1);
             }
             else
+            {
                 DealerPull(game);
+            }
         }
 
         public async void AskForSplitPull(BlackjackLogic game, int memberIdx, bool pullForSplitHand)
@@ -303,7 +326,10 @@ namespace SyncStreamAPI.Games.Blackjack
                     }
                 }
                 else
+                {
                     AskForSplitPull(game, memberIdx, true);
+                }
+
                 return;
             }
             else

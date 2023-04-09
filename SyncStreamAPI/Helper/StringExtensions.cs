@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Helper
 {
@@ -15,9 +13,15 @@ namespace SyncStreamAPI.Helper
 
             var matrix = new int[source1Length + 1, source2Length + 1];
             if (source1Length == 0)
+            {
                 return source2Length;
+            }
+
             if (source2Length == 0)
+            {
                 return source1Length;
+            }
+
             for (var i = 0; i <= source1Length; matrix[i, 0] = i++) { }
             for (var j = 0; j <= source2Length; matrix[0, j] = j++) { }
             for (var i = 1; i <= source1Length; i++)

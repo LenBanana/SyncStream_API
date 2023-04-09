@@ -1,9 +1,4 @@
-﻿using SyncStreamAPI.DTOModel;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using static SyncStreamAPI.Models.Member;
+﻿using static SyncStreamAPI.Models.Member;
 
 namespace SyncStreamAPI.Models.GameModels.Members
 {

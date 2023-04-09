@@ -8,13 +8,10 @@ using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
-using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.RTMP;
 using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
 using System;
-using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,11 +22,12 @@ namespace SyncStreamAPI.Controllers
     [Route("api/rtmp")]
     public class RtmpController : Controller
     {
-        private IHubContext<ServerHub, IServerHub> _hub;
-        PostgresContext _postgres;
+        private readonly IHubContext<ServerHub, IServerHub> _hub;
+        readonly PostgresContext _postgres;
         IConfiguration Configuration { get; }
-        CancellationTokenSource source = new CancellationTokenSource();
-        DataManager _manager;
+
+        readonly CancellationTokenSource source = new CancellationTokenSource();
+        readonly DataManager _manager;
 
         public RtmpController(IConfiguration configuration, IHubContext<ServerHub, IServerHub> hub, PostgresContext postgres, DataManager manager)
         {
@@ -47,7 +45,10 @@ namespace SyncStreamAPI.Controllers
                 var dbUser = _postgres.Users?.FirstOrDefault(x => x.StreamToken != null && x.StreamToken == rtmpData.token && x.username.ToLower() == rtmpData.name.ToLower());
                 string Token = dbUser?.StreamToken;
                 if (Token == null || Token.Length == 0 || dbUser.userprivileges < UserPrivileges.Approved)
+                {
                     return StatusCode(StatusCodes.Status403Forbidden);
+                }
+
                 var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.id == rtmpData.token);
                 if (liveUser == null)
                 {
@@ -73,7 +74,10 @@ namespace SyncStreamAPI.Controllers
                 var dbUser = _postgres.Users?.FirstOrDefault(x => x.StreamToken != null && x.StreamToken == rtmpData.token && x.username.ToLower() == rtmpData.name.ToLower());
                 string Token = dbUser?.StreamToken;
                 if (Token == null || Token.Length == 0 || dbUser.userprivileges < UserPrivileges.Approved)
+                {
                     return StatusCode(StatusCodes.Status403Forbidden);
+                }
+
                 var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.id == rtmpData.token);
                 if (liveUser != null)
                 {
@@ -98,10 +102,16 @@ namespace SyncStreamAPI.Controllers
             {
                 var liveUser = _manager.LiveUsers?.FirstOrDefault(x => x.userName.ToLower() == rtmpData.name.ToLower());
                 if (liveUser == null)
+                {
                     return StatusCode(StatusCodes.Status404NotFound);
+                }
+
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == rtmpData.token)).FirstOrDefault();
                 if (dbUser == null || dbUser.userprivileges < UserPrivileges.Approved)
+                {
                     return StatusCode(StatusCodes.Status403Forbidden);
+                }
+
                 liveUser.watchMember.Add(dbUser.ToDTO());
                 var liveUsers = _manager.LiveUsers;
                 await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
@@ -121,13 +131,22 @@ namespace SyncStreamAPI.Controllers
             {
                 var liveUser = _manager.LiveUsers?.FirstOrDefault(x => x.userName.ToLower() == rtmpData.name.ToLower());
                 if (liveUser == null)
+                {
                     return StatusCode(StatusCodes.Status404NotFound);
+                }
+
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == rtmpData.token)).FirstOrDefault();
                 if (dbUser == null || dbUser.userprivileges < UserPrivileges.Approved)
+                {
                     return StatusCode(StatusCodes.Status403Forbidden);
+                }
+
                 var watchMemberIdx = liveUser.watchMember.FindIndex(x => x.ID == dbUser.ID);
                 if (watchMemberIdx != -1)
+                {
                     liveUser.watchMember.RemoveAt(watchMemberIdx);
+                }
+
                 var liveUsers = _manager.LiveUsers;
                 await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
                 return Ok();

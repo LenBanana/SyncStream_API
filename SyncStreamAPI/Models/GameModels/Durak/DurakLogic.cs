@@ -3,8 +3,6 @@ using SyncStreamAPI.Helper;
 using SyncStreamAPI.Models.GameModels.Members;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Models.GameModels.Durak
 {
@@ -24,7 +22,7 @@ namespace SyncStreamAPI.Models.GameModels.Durak
             {
                 foreach (PlayingCardRank rank in Enum.GetValues(typeof(PlayingCardRank)))
                 {
-                    if ((int)rank > 5) 
+                    if ((int)rank > 5)
                     {
                         PlayingCard nextCard = new PlayingCard(suit, rank);
                         cardDeck.Add(nextCard);

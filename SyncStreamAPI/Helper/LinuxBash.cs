@@ -52,7 +52,9 @@ namespace SyncStreamAPI.Helper
             using (client)
             {
                 if (!Uri.TryCreate(uri, UriKind.Absolute, out Uri uriResult))
+                {
                     throw new InvalidOperationException("URI is invalid.");
+                }
 
                 byte[] fileBytes = await client.GetByteArrayAsync(uri);
                 return fileBytes;
@@ -65,11 +67,19 @@ namespace SyncStreamAPI.Helper
 
             string downloadUrl = "";
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
                 downloadUrl = $"{General.YtDLPUrl}.exe";
+            }
+
             if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
                 downloadUrl = $"{General.YtDLPUrl}_macos";
+            }
+
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
                 downloadUrl = General.YtDLPUrl;
+            }
 
             var downloadLocation = Path.Combine(directoryPath, Path.GetFileName(downloadUrl));
             var data = await DownloadFileBytesAsync(downloadUrl);

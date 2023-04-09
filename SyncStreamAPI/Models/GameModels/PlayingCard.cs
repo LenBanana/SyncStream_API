@@ -1,9 +1,5 @@
 ﻿using SyncStreamAPI.Enums.Games.Cards;
-using SyncStreamAPI.Helper;
-using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Models.GameModels
 {
@@ -12,7 +8,7 @@ namespace SyncStreamAPI.Models.GameModels
         public string Id => $"{Suit.ToString()}{Rank.ToString()}";
         public string SuitS => $"{Suit.ToString().First().ToString()}";
         public string RankS => GetRank();
-        public string CardName => this.ToString();
+        public string CardName => ToString();
         public PlayingCardSuit Suit { get; set; }
         public PlayingCardRank Rank { get; set; }
         public bool FaceUp { get; set; } = false;

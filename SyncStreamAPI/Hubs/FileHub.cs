@@ -25,14 +25,19 @@ namespace SyncStreamAPI.Hubs
             }
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
+            {
                 return;
+            }
+
             if (dbUser.userprivileges >= UserPrivileges.Administrator)
             {
                 var result = _postgres.Users.Include(x => x.Files).FirstOrDefault(x => x.ID == dbUser.ID)?.Files.FirstOrDefault(x => x.ID == fileId);
                 result.Name = name;
                 await _postgres.SaveChangesAsync();
                 if (result.DbFileFolderId > 0)
+                {
                     await GetFolderFiles(token, result.DbFileFolderId);
+                }
             }
         }
 
@@ -42,7 +47,10 @@ namespace SyncStreamAPI.Hubs
             {
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 if (dbUser == null)
+                {
                     return;
+                }
+
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var userFiles = _postgres.Files?.Where(x => x.DbUserID == dbUser.ID).ToList();
@@ -61,7 +69,10 @@ namespace SyncStreamAPI.Hubs
         {
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
+            {
                 return;
+            }
+
             if (dbUser.userprivileges >= UserPrivileges.Elevated)
             {
                 var result = _postgres.Files?.Select(x => new FileDto(x)).OrderBy(x => x.Name).ToList();
@@ -73,7 +84,10 @@ namespace SyncStreamAPI.Hubs
         {
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
+            {
                 return;
+            }
+
             if (dbUser.userprivileges >= UserPrivileges.Elevated)
             {
                 GeneralManager.ReadSettings(Configuration);
@@ -87,7 +101,10 @@ namespace SyncStreamAPI.Hubs
             {
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 if (dbUser == null)
+                {
                     return;
+                }
+
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var shareFolders = _postgres.FolderShare?.Where(x => x.DbUserID == dbUser.ID);
@@ -113,14 +130,23 @@ namespace SyncStreamAPI.Hubs
             {
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 if (dbUser == null)
+                {
                     return;
+                }
+
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var parent = _postgres.Folders?.FirstOrDefault(x => x.Id == folderId);
                     if (parent == null)
+                    {
                         throw new Exception("Could not find folder");
+                    }
+
                     if (parent.DbUserID != null && parent.DbUserID != dbUser.ID)
+                    {
                         throw new Exception("You do not own this folder");
+                    }
+
                     var newFolder = new DbFileFolder("New Folder", parent.Id, dbUser.ID);
                     _postgres.Folders.Add(newFolder);
                     await _postgres.SaveChangesAsync();
@@ -141,7 +167,10 @@ namespace SyncStreamAPI.Hubs
             {
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 if (dbUser == null)
+                {
                     return;
+                }
+
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var folder = _postgres.Folders?.Include(x => x.Files).FirstOrDefault(x => x.Id == folderId && (x.DbUserID == dbUser.ID || dbUser.userprivileges > UserPrivileges.Administrator));
@@ -170,7 +199,10 @@ namespace SyncStreamAPI.Hubs
         {
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
+            {
                 return;
+            }
+
             if (dbUser.userprivileges >= UserPrivileges.Administrator)
             {
                 _manager.AddDownload(new(dbUser.ID, fileName, token, url, preset));
@@ -181,7 +213,10 @@ namespace SyncStreamAPI.Hubs
         {
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
+            {
                 return;
+            }
+
             if (dbUser.userprivileges >= UserPrivileges.Administrator)
             {
 
@@ -195,7 +230,10 @@ namespace SyncStreamAPI.Hubs
                         _manager.userM3U8Conversions.Add(vid);
                         await _manager.YtDownload(vid, audioOnly);
                         if (vid.CancellationToken.IsCancellationRequested)
+                        {
                             break;
+                        }
+
                         _manager.userM3U8Conversions.Remove(vid);
                     }
                     return;
@@ -214,18 +252,33 @@ namespace SyncStreamAPI.Hubs
             {
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 if (dbUser == null)
+                {
                     return;
+                }
+
                 if (dbUser.userprivileges < UserPrivileges.Administrator)
+                {
                     throw new Exception("Permission denied");
+                }
+
                 var file = _postgres.Files.ToList().FirstOrDefault(x => x.ID == id);
                 if (file == null)
+                {
                     throw new Exception("File not found in database");
+                }
+
                 var path = $"{(file.Temporary ? General.TemporaryFilePath : General.FilePath)}/{file.FileKey}{file.FileEnding}";
                 if (!File.Exists(path))
+                {
                     throw new Exception($"File {path} not found");
+                }
+
                 var mediaInfo = await Xabe.FFmpeg.FFmpeg.GetMediaInfo(path);
                 if (mediaInfo == null)
+                {
                     throw new Exception("Media info was null");
+                }
+
                 var fileInfo = new FileInfo(path);
                 var downloadFileInfo = new DownloadFileInfo(
                     file.Name,
@@ -251,19 +304,37 @@ namespace SyncStreamAPI.Hubs
             {
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 if (dbUser == null)
+                {
                     throw new Exception("Requesting user not found");
+                }
+
                 if (dbUser.ID == folderId)
+                {
                     throw new Exception("Can't share folders with yourself");
+                }
+
                 if (dbUser.userprivileges < UserPrivileges.Administrator)
+                {
                     throw new Exception("Permission denied");
+                }
+
                 var shareUser = _postgres.Users?.FirstOrDefault(x => x.ID == userId);
                 if (shareUser == null)
+                {
                     throw new Exception("Share user does not exist");
+                }
+
                 var shareFolder = _postgres.Folders?.FirstOrDefault(x => x.Id == folderId);
                 if (shareFolder == null)
+                {
                     throw new Exception("Share folder does not exist");
+                }
+
                 if (shareFolder.DbUserID != dbUser.ID)
+                {
                     throw new Exception($"Can't share folder {shareFolder.Name} because you don't have ownership");
+                }
+
                 var oldFolderShare = _postgres.FolderShare?.FirstOrDefault(x => x.DbFolderID == shareFolder.Id && x.DbUserID == shareUser.ID);
                 if (oldFolderShare != null)
                 {
@@ -292,16 +363,24 @@ namespace SyncStreamAPI.Hubs
             {
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 if (dbUser == null)
+                {
                     return;
+                }
+
                 var dbFolder = _postgres.Folders?.Where(x => x.Id == folderId).FirstOrDefault();
                 if (dbFolder == null)
+                {
                     return;
+                }
+
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var shareFolders = _postgres.FolderShare?.Where(x => x.DbUserID == dbUser.ID);
                     var files = _postgres.Files?.Where(x => x.DbFileFolderId == folderId && (x.DbUserID == dbUser.ID || shareFolders.FirstOrDefault(y => y.DbFolderID == folderId) != null || shareFolders.FirstOrDefault(y => y.DbFolderID == dbFolder.ParentId) != null || dbFolder.DbUserID == dbUser.ID));
                     if (files != null)
+                    {
                         await Clients.Caller.getFolderFiles(files.Select(x => new FileDto(x)).ToList());
+                    }
                 }
             }
             catch (Exception ex)
@@ -317,7 +396,10 @@ namespace SyncStreamAPI.Hubs
             {
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 if (dbUser == null)
+                {
                     return;
+                }
+
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var folder = _postgres.Folders?.FirstOrDefault(x => x.Id == folderId);
@@ -342,7 +424,10 @@ namespace SyncStreamAPI.Hubs
             {
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 if (dbUser == null)
+                {
                     return;
+                }
+
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var file = _postgres.Files?.FirstOrDefault(x => x.ID == fileId);
@@ -364,14 +449,23 @@ namespace SyncStreamAPI.Hubs
         {
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
+            {
                 return;
+            }
+
             if (dbUser.userprivileges >= UserPrivileges.Elevated)
             {
                 List<string> files = new List<string>();
                 if (Directory.Exists(General.FilePath))
+                {
                     files = Directory.GetFiles(General.FilePath).ToList();
+                }
+
                 if (Directory.Exists(General.TemporaryFilePath))
+                {
                     files.AddRange(Directory.GetFiles(General.TemporaryFilePath));
+                }
+
                 if (files.Count() > 0)
                 {
                     var dbFiles = _postgres.Files.ToList();
@@ -382,27 +476,42 @@ namespace SyncStreamAPI.Hubs
                         foreach (var file in result)
                         {
                             if (File.Exists(file))
+                            {
                                 if (delete)
+                                {
                                     File.Delete(file);
+                                }
                                 else
+                                {
                                     text += "\n" + $"{file} - {new FileInfo(file).Name}";
+                                }
+                            }
                         }
                         if (delete)
+                        {
                             await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Clean up", Question = $"Removed {result?.Count()} files", Answer1 = "Ok" });
+                        }
                         else
+                        {
                             await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Clean up", Question = text, Answer1 = "Ok" });
+                        }
                     }
                 }
             }
             else
+            {
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to clean up the video files", Answer1 = "Ok" });
+            }
         }
 
         public async Task CancelConversion(string token, string downloadId)
         {
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
+            {
                 return;
+            }
+
             if (dbUser.userprivileges >= UserPrivileges.Administrator)
             {
                 _manager.CancelM3U8Conversion(downloadId);
@@ -413,7 +522,10 @@ namespace SyncStreamAPI.Hubs
         {
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
             if (dbUser == null)
+            {
                 return;
+            }
+
             if (dbUser.userprivileges >= UserPrivileges.Administrator)
             {
                 var file = _postgres.Files.ToList().FirstOrDefault(x => x.ID == id);
@@ -421,13 +533,17 @@ namespace SyncStreamAPI.Hubs
                 {
                     var path = $"{(file.Temporary ? General.TemporaryFilePath : General.FilePath)}/{file.FileKey}{file.FileEnding}";
                     if (System.IO.File.Exists(path))
+                    {
                         System.IO.File.Delete(path);
+                    }
+
                     _postgres.Files.Remove(file);
                     await _postgres.SaveChangesAsync();
                     await Clients.Caller.downloadRemoved(id.ToString());
                     if (file.DbFileFolderId > 0)
+                    {
                         await GetFolderFiles(token, file.DbFileFolderId);
-
+                    }
                 }
             }
         }

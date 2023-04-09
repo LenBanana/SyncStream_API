@@ -50,7 +50,10 @@ namespace SyncStreamAPI.ServerData.Helper
                         Room room = Rooms[idx];
                         e.Kicked -= Member_Kicked;
                         if (!room.server.members.Contains(e))
+                        {
                             return;
+                        }
+
                         room.server.members.Remove(e);
                         using (var scope = _serviceProvider.CreateScope())
                         {

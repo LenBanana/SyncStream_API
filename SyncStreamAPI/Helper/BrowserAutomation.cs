@@ -25,10 +25,13 @@ namespace SyncStreamAPI.Helper
                 options = new NavigationOptions() { WaitUntil = new[] { WaitUntilNavigation.Networkidle2 } };
                 BrowserFetcher browserFetcher = new BrowserFetcher();
                 var dl = await browserFetcher.DownloadAsync(BrowserFetcher.DefaultChromiumRevision);
-                var path = dl.FolderPath + "/chrome-linux";                
+                var path = dl.FolderPath + "/chrome-linux";
                 Console.WriteLine($"Download to {path} was {dl.Downloaded}");
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                {
                     LinuxBash.Bash($"chmod -R +x {path}");
+                }
+
                 browser = await Puppeteer.LaunchAsync(new LaunchOptions
                 {
                     Headless = true,
@@ -51,7 +54,10 @@ namespace SyncStreamAPI.Helper
         public async Task<BrowserM3U8Response> GetM3U8FromUrl(string url)
         {
             if (browser == null)
+            {
                 return new BrowserM3U8Response();
+            }
+
             var result = new BrowserM3U8Response();
             result.InputUrl = url;
             var page = await browser.NewPageAsync();
@@ -68,16 +74,27 @@ namespace SyncStreamAPI.Helper
             doc.LoadHtml(html);
             var videoNodes = doc.DocumentNode.SelectNodes("//video");
             if (videoNodes == null)
+            {
                 videoNodes = doc.DocumentNode.SelectNodes("//a");
+            }
+
             if (videoNodes == null)
+            {
                 return new BrowserM3U8Response();
+            }
+
             foreach (var node in videoNodes)
             {
                 var src = node.GetAttributeValue("src", "").Trim();
                 if (src.Length == 0)
+                {
                     src = node.GetAttributeValue("href", "").Trim();
+                }
+
                 if (src.Length > 0 && !result.OutputUrls.Contains(src))
+                {
                     result.OutputUrls.Add(src);
+                }
             }
             await page.DisposeAsync();
             return result;

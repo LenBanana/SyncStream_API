@@ -1,7 +1,6 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.Models;
-using SyncStreamAPI.Models.GameModels.Gallows;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,7 +16,10 @@ namespace SyncStreamAPI.Hubs
             {
                 Room room = GetRoom(UniqueId);
                 if (room == null)
+                {
                     return;
+                }
+
                 await Clients.Group(UniqueId).gallowusers(room.GallowGame.members);
             }
             catch (Exception ex)
@@ -32,7 +34,10 @@ namespace SyncStreamAPI.Hubs
                 await Clients.Group(UniqueId).playertype(PlayerType.WhiteBoard);
                 Room room = GetRoom(UniqueId);
                 if (room == null)
+                {
                     return;
+                }
+
                 var gallows = room.GallowGame;
 
                 if (gallows == null || gallows.PlayingGallows)
@@ -40,7 +45,10 @@ namespace SyncStreamAPI.Hubs
                     if (_gallowGameManager.PlayNewRound(room.uniqueId))
                     {
                         if (room.BlackjackGame != null)
+                        {
                             await _blackjackManager.PlayNewRound(UniqueId);
+                        }
+
                         gallows = room.GallowGame;
                     }
                 }
@@ -70,10 +78,15 @@ namespace SyncStreamAPI.Hubs
             {
                 Room room = GetRoom(UniqueId);
                 if (room == null)
+                {
                     return;
+                }
+
                 var game = room.GallowGame;
                 if (game != null && game.PlayingGallows)
+                {
                     game.UpdateGallowWord(false);
+                }
             }
             catch (Exception ex)
             {
@@ -87,7 +100,10 @@ namespace SyncStreamAPI.Hubs
             {
                 Room room = GetRoom(UniqueId);
                 if (room == null)
+                {
                     return;
+                }
+
                 var drawings = room.GallowGame.drawings.OrderBy(x => x.Uuid).ToList();
                 if (drawings.Count > 0)
                 {
@@ -116,10 +132,15 @@ namespace SyncStreamAPI.Hubs
                 }
                 Room room = GetRoom(UniqueId);
                 if (room == null)
+                {
                     return;
+                }
+
                 var game = room.GallowGame;
                 if (game != null)
+                {
                     game.drawings.AddRange(drawings);
+                }
 
                 await Clients.GroupExcept(UniqueId, Context.ConnectionId).whiteboardupdate(drawings.ToList());
             }
@@ -135,7 +156,10 @@ namespace SyncStreamAPI.Hubs
             {
                 Room room = GetRoom(UniqueId);
                 if (room == null)
+                {
                     return;
+                }
+
                 room.GallowGame.drawings.Clear();
                 await Clients.GroupExcept(UniqueId, Context.ConnectionId).whiteboardclear(true);
             }

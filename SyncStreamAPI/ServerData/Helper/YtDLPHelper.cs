@@ -21,7 +21,9 @@ namespace SyncStreamAPI.ServerData.Helper
                 var result = new DownloadInfo(text, downloadClient.FileName, downloadClient.UniqueId) { Progress = perc };
                 await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadProgress(result);
                 if (p.State == DownloadState.Success)
+                {
                     await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
+                }
             }
             catch (Exception ex) { Console.WriteLine(ex.ToString()); }
         }

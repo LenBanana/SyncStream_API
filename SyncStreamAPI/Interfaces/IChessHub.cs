@@ -1,8 +1,4 @@
-﻿using SyncStreamAPI.DTOModel;
-using SyncStreamAPI.Models;
-using SyncStreamAPI.Models.GameModels.Chess;
-using SyncStreamAPI.Models.GameModels.Members;
-using System.Collections.Generic;
+﻿using SyncStreamAPI.Models.GameModels.Chess;
 using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Interfaces

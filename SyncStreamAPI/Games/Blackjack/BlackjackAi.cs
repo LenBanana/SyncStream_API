@@ -2,10 +2,6 @@
 using SyncStreamAPI.Enums.Games.Cards;
 using SyncStreamAPI.Models.GameModels.Blackjack;
 using SyncStreamAPI.Models.GameModels.Members;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Games.Blackjack
 {
@@ -16,13 +12,17 @@ namespace SyncStreamAPI.Games.Blackjack
             var dealerCard = dealer.cards[0].Rank;
             var dealerPoints = dealer.pointsDTO;
             if (member.splitable && !member.didSplit)
+            {
                 return ReactToSplit(member.cards[0].Rank, (int)dealerPoints, doubleOption);
+            }
 
             if ((!forSplitHand && member.cards.Count == 2) || (forSplitHand && member.splitCards.Count == 2))
             {
                 var aceIdx = forSplitHand ? member.splitCards.FindIndex(x => x.Rank == PlayingCardRank.Ace) : member.cards.FindIndex(x => x.Rank == PlayingCardRank.Ace);
                 if (aceIdx != -1)
+                {
                     return ReactToSingleAce(forSplitHand ? member.splitCards[aceIdx == 1 ? 0 : 1].Rank : member.cards[aceIdx == 1 ? 0 : 1].Rank, (int)dealerPoints, doubleOption);
+                }
             }
             return ReactToNormalHand(forSplitHand ? member.splitPoints : member.points, (int)dealerPoints, doubleOption);
         }

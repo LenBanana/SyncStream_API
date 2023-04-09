@@ -18,7 +18,10 @@ namespace SyncStreamAPI.DTOModel
             UserId = folder.DbUserID;
             Name = folder.Name;
             if (folder.Parent != null)
+            {
                 Parent = new FolderDto(folder.Parent.Id, folder.Parent.Name);
+            }
+
             Children = folder.Children?.Select(x => new FolderDto(x)).ToList();
             Files = folder.Files?.Select(x => new FileDto(x)).ToList();
         }

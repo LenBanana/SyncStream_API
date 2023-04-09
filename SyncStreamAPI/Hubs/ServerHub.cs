@@ -1,5 +1,4 @@
-﻿using HtmlAgilityPack;
-using Microsoft.AspNetCore.Cors;
+﻿using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -27,13 +26,10 @@ namespace SyncStreamAPI.Hubs
     {
         IConfiguration Configuration { get; }
 
-        DataManager _manager;
-
-        PostgresContext _postgres;
-
-        GallowGameManager _gallowGameManager;
-
-        BlackjackManager _blackjackManager;
+        readonly DataManager _manager;
+        readonly PostgresContext _postgres;
+        readonly GallowGameManager _gallowGameManager;
+        readonly BlackjackManager _blackjackManager;
 
         public ServerHub(IConfiguration configuration, DataManager manager, PostgresContext postgres, GallowGameManager gallowGameManager, BlackjackManager blackjackManager)
         {
@@ -69,7 +65,9 @@ namespace SyncStreamAPI.Hubs
                     var game = room.GallowGame;
                     var gameMemberIdx = game.members.FindIndex(x => x.ConnectionId == e?.ConnectionId);
                     if (gameMemberIdx > -1)
+                    {
                         game.members.RemoveAt(gameMemberIdx);
+                    }
                 }
                 if (gameMode == Enums.Games.GameMode.Blackjack)
                 {
@@ -91,12 +89,18 @@ namespace SyncStreamAPI.Hubs
                             await _blackjackManager.SendAllUsers(blackjack);
                         }
                         else
+                        {
                             await _blackjackManager.SendAllUsers(blackjack);
+                        }
                     }
                     if (blackjack.members.Count < 1)
+                    {
                         await _blackjackManager.PlayNewRound(blackjack.RoomId);
+                    }
                     else
+                    {
                         await _blackjackManager.SendAllUsers(blackjack);
+                    }
                 }
             }
             await base.OnDisconnectedAsync(ex);
@@ -110,13 +114,20 @@ namespace SyncStreamAPI.Hubs
                 if (member != null)
                 {
                     if (member.ishost)
+                    {
                         return true;
+                    }
+
                     var user = _postgres.Users.FirstOrDefault(x => x.username == member.username);
                     if (user == null || user.userprivileges < (UserPrivileges)minPriv)
+                    {
                         return false;
+                    }
                 }
                 else
+                {
                     return false;
+                }
             }
             return true;
         }
@@ -131,7 +142,10 @@ namespace SyncStreamAPI.Hubs
             List<Room> Rooms = DataManager.GetRooms();
             Room? room = Rooms.FirstOrDefault(x => x.uniqueId == UniqueId);
             if (room == null)
+            {
                 return null;
+            }
+
             return room;
         }
 
@@ -144,7 +158,10 @@ namespace SyncStreamAPI.Hubs
         {
             Room? room = GetRoom(UniqueId);
             if (room == null)
+            {
                 return;
+            }
+
             if (!CheckPrivileges(room))
             {
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to add a video to this room", Answer1 = "Ok" });
@@ -157,18 +174,24 @@ namespace SyncStreamAPI.Hubs
                 if (playerType == PlayerType.Live)
                 {
                     if (key.title.Length == 0)
+                    {
                         key.title = key.url.Split('=').Last().FirstCharToUpper();
+                    }
                 }
                 else if (playerType == PlayerType.External)
                 {
                     if (key.title.Length == 0)
+                    {
                         key.title = "External Source";
+                    }
                 }
                 else if (playerType == PlayerType.Vimeo)
                 {
                     VimeoResponse? vimeo = Vimeo.FromUrl(key.url);
                     if (vimeo != null)
+                    {
                         key.title = vimeo?.Title + (vimeo?.UserName == null ? "" : " - " + vimeo.UserName);
+                    }
                 }
                 else if (playerType == PlayerType.YouTube)
                 {
@@ -178,9 +201,14 @@ namespace SyncStreamAPI.Hubs
                         return;
                     }
                     if (key.url.Contains("shorts"))
+                    {
                         key.url = $"https://www.youtube.com/watch?v={key.url.Split('/').Last()}";
+                    }
+
                     if (key.title == null || key.title.Length == 0)
+                    {
                         key.title = await General.ResolveURL(key.url, Configuration);
+                    }
                 }
                 else if (playerType == PlayerType.Twitch)
                 {
@@ -198,7 +226,9 @@ namespace SyncStreamAPI.Hubs
                         var titleRegEx = new Regex(titleRegExString);
                         var titleMatches = titleRegEx.Matches(key.url);
                         if (titleMatches != null && titleMatches.Count > 0)
+                        {
                             key.title = titleMatches[0]?.Groups[1]?.Value;
+                        }
                     }
                 }
                 else if (playerType == PlayerType.Nothing)
@@ -223,13 +253,19 @@ namespace SyncStreamAPI.Hubs
             if (type != PlayerType.Nothing)
             {
                 if (sendToUsers)
+                {
                     await Clients.Group(UniqueId).playertype(type);
+                }
+
                 return type;
             }
             if (key.url == null || key.url.Length == 0 || key.ended)
             {
                 if (sendToUsers)
+                {
                     await Clients.Group(UniqueId).playertype(PlayerType.Nothing);
+                }
+
                 return result;
             }
             Uri uriResult;
@@ -237,7 +273,10 @@ namespace SyncStreamAPI.Hubs
             if (!validUri)
             {
                 if (sendToUsers)
+                {
                     await Clients.Group(UniqueId).playertype(PlayerType.Nothing);
+                }
+
                 return result;
             }
             var ytRegEx = @"^(https?\:\/\/)?((www\.)?youtube\.com|youtu\.be)\/.+$";
@@ -249,23 +288,39 @@ namespace SyncStreamAPI.Hubs
             if (key.url.ToLower().Contains("//live.drecktu.be/") || key.url.StartsWith("rtmp") || key.url.Contains("//drecktu.be:8088/live"))
             {
                 if (sendToUsers)
+                {
                     await Clients.Group(General.BottedInGroupName).sendBotChannelUpdate(new BotLiveChannelInfo() { ChannelId = key.url.Split('=').Last(), RoomName = UniqueId });
+                }
+
                 result = PlayerType.Live;
             }
             else if (ytRegex.IsMatch(key.url))
+            {
                 result = PlayerType.YouTube;
+            }
             else if (twitchRegex.IsMatch(key.url))
             {
                 if (key.url.Contains("/clip/"))
+                {
                     return PlayerType.Nothing;
+                }
+
                 result = PlayerType.Twitch;
             }
             else if (vimeoRegex.IsMatch(key.url))
+            {
                 result = PlayerType.Vimeo;
+            }
             else
+            {
                 result = PlayerType.External;
+            }
+
             if (sendToUsers)
+            {
                 await Clients.Group(UniqueId).playertype(result);
+            }
+
             return result;
         }
 
@@ -292,7 +347,10 @@ namespace SyncStreamAPI.Hubs
         {
             Room? room = GetRoom(UniqueId);
             if (room == null)
+            {
                 return;
+            }
+
             if (!CheckPrivileges(room))
             {
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to remove videos from this room", Answer1 = "Ok" });
@@ -311,7 +369,10 @@ namespace SyncStreamAPI.Hubs
         {
             Room? room = GetRoom(UniqueId);
             if (room == null)
+            {
                 return;
+            }
+
             if (!CheckPrivileges(room))
             {
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to skip videos in this room", Answer1 = "Ok" });
@@ -345,7 +406,10 @@ namespace SyncStreamAPI.Hubs
         {
             Room? room = GetRoom(UniqueId);
             if (room == null)
+            {
                 return;
+            }
+
             if (!CheckPrivileges(room))
             {
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to skip videos in this room", Answer1 = "Ok" });
@@ -371,7 +435,10 @@ namespace SyncStreamAPI.Hubs
         {
             Room? room = GetRoom(UniqueId);
             if (room == null)
+            {
                 return;
+            }
+
             if (!CheckPrivileges(room))
             {
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to move videos in this room", Answer1 = "Ok" });
@@ -387,9 +454,14 @@ namespace SyncStreamAPI.Hubs
         {
             Room? room = GetRoom(UniqueId);
             if (room == null)
+            {
                 return;
+            }
+
             if (!CheckPrivileges(room))
+            {
                 return;
+            }
             //if (room.server.currentVideo.url.Contains("twitch.tv"))
             //    await Clients.Group(UniqueId).twitchTimeUpdate(time);
             //else
@@ -401,9 +473,15 @@ namespace SyncStreamAPI.Hubs
         {
             Room? room = GetRoom(UniqueId);
             if (room == null)
+            {
                 return;
+            }
+
             if (!CheckPrivileges(room))
+            {
                 return;
+            }
+
             room.server.isplaying = isplaying;
             //if (room.server.currentVideo.url.Contains("twitch.tv"))
             //    await Clients.Group(UniqueId).twitchPlaying(isplaying);
@@ -417,7 +495,10 @@ namespace SyncStreamAPI.Hubs
             var Rooms = DataManager.GetRooms();
             int RoomCount = 0;
             while (Rooms?.Any(x => x.uniqueId == room.uniqueId) == true)
+            {
                 room.uniqueId = room.uniqueId + RoomCount++;
+            }
+
             Rooms?.Add(room);
             if (!room.deletable)
             {
@@ -457,7 +538,10 @@ namespace SyncStreamAPI.Hubs
         {
             Room? room = GetRoom(UniqueId);
             if (room == null || room.isPrivileged)
+            {
                 return;
+            }
+
             var dbRoom = _postgres.Rooms.FirstOrDefault(x => x.uniqueId == UniqueId);
             if (dbRoom != null)
             {

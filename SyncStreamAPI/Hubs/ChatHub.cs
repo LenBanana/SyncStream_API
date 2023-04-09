@@ -1,6 +1,5 @@
 ﻿using SyncStreamAPI.Enums;
 using SyncStreamAPI.Enums.Games;
-using SyncStreamAPI.Helper;
 using SyncStreamAPI.Models;
 using System;
 using System.Collections.Generic;
@@ -15,7 +14,11 @@ namespace SyncStreamAPI.Hubs
         public async Task SendMessage(ChatMessage message, string uniqueId)
         {
             Room room = GetRoom(uniqueId);
-            if (room == null) return;
+            if (room == null)
+            {
+                return;
+            }
+
             Server mainServer = room.server;
             var lowerMessage = message.message.ToLower().Trim();
 
@@ -23,7 +26,9 @@ namespace SyncStreamAPI.Hubs
             {
                 mainServer.chatmessages.Add(message);
                 if (mainServer.chatmessages.Count >= 100)
+                {
                     mainServer.chatmessages.RemoveAt(0);
+                }
 
                 switch (room.GameMode)
                 {
@@ -47,7 +52,10 @@ namespace SyncStreamAPI.Hubs
             async Task WhisperHandler()
             {
                 match = new Regex("^\\/[wW] (?<wName>[^\\s]+) (?<wMsg>.*)$").Match(message.message);
-                if (!match.Success) return;
+                if (!match.Success)
+                {
+                    return;
+                }
 
                 var wName = match.Groups["wName"].Value.Trim();
                 var wMsg = match.Groups["wMsg"].Value.Trim();
@@ -111,7 +119,10 @@ namespace SyncStreamAPI.Hubs
         {
             Room room = GetRoom(UniqueId);
             if (room == null)
+            {
                 return;
+            }
+
             Server MainServer = room.server;
             await Clients.Caller.sendmessages(MainServer.chatmessages);
         }
@@ -122,11 +133,17 @@ namespace SyncStreamAPI.Hubs
             {
                 var room = GetRoom(uniqueId)?.server;
                 if (room == null)
+                {
                     return;
+                }
+
                 var fromMember = room.members.FirstOrDefault(x => x.username == fromUser);
                 var toMember = room.members.FirstOrDefault(x => x.username == toUser);
                 if (fromMember == null || toMember == null)
+                {
                     throw new Exception("User was not found");
+                }
+
                 var fullMessage = fromMember.AddMessage(toUser, message);
                 await Task.WhenAll(Clients.Caller.PrivateMessage(fullMessage), Clients.Client(toMember.ConnectionId).PrivateMessage(fullMessage));
             }
@@ -142,7 +159,10 @@ namespace SyncStreamAPI.Hubs
             {
                 Room room = GetRoom(UniqueId);
                 if (room == null)
+                {
                     return;
+                }
+
                 Server MainServer = room.server;
                 MainServer.chatmessages = new List<ChatMessage>();
                 await Clients.Group(UniqueId).sendmessages(MainServer.chatmessages);

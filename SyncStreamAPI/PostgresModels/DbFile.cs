@@ -20,7 +20,7 @@ namespace SyncStreamAPI.PostgresModels
             ID = 0;
             DbFileFolderId = 1;
             DbUserID = user == null ? -1 : user.ID;
-            Name = name;            
+            Name = name;
             FileEnding = fileEnding;
             FileKey = user?.GenerateToken(Guid.NewGuid().ToString() + name).Token;
             Created = DateTime.Now;

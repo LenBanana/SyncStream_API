@@ -5,7 +5,7 @@ namespace SyncStreamAPI.Helper
 {
     public static class BlackjackTimer
     {
-        static Random rnd = new Random();
+        static readonly Random rnd = new Random();
         public static async Task RndDelay(TimeSpan min, TimeSpan max)
         {
             var rndTime = rnd.NextDouble() * (max.TotalMilliseconds - min.TotalMilliseconds) + min.TotalMilliseconds;

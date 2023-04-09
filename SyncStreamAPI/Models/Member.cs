@@ -5,7 +5,6 @@ using SyncStreamAPI.ServerData;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
 using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Models
@@ -42,7 +41,9 @@ namespace SyncStreamAPI.Models
             await Task.Delay(1000);
             ConsecutiveAFK += 1;
             if (ConsecutiveAFK < 10)
+            {
                 CountDown();
+            }
         }
 
         public void InvokeKick()
@@ -58,18 +59,26 @@ namespace SyncStreamAPI.Models
         public string AddMessage(string User, string Message)
         {
             if (!PrivateMessages.ContainsKey(User))
+            {
                 PrivateMessages.Add(User, new List<string>());
+            }
+
             string FullMessage = String.Format("{0} {1}: {2}", DateTime.Now.ToString("HH:mm"), username, Message);
             PrivateMessages[User].Add(FullMessage);
             if (PrivateMessages[User].Count > 150)
+            {
                 PrivateMessages[User].RemoveAt(0);
+            }
+
             return FullMessage;
         }
 
         public void RemoveMessages(string User)
         {
             if (!PrivateMessages.ContainsKey(User))
+            {
                 PrivateMessages.Remove(User);
+            }
         }
     }
 }

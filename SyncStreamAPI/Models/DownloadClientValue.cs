@@ -44,7 +44,8 @@ namespace SyncStreamAPI.Models
         public bool Running { get; set; }
         public Stopwatch Stopwatch { get; set; }
         public CancellationTokenSource CancellationToken { get; set; }
-        WebClient keepAliveClient = new WebClient();
+
+        readonly WebClient keepAliveClient = new WebClient();
         bool stopKeepAlive = false;
         async void KeepUrlAlive()
         {
@@ -52,7 +53,7 @@ namespace SyncStreamAPI.Models
             {
                 try
                 {
-                   await keepAliveClient?.DownloadStringTaskAsync(new Uri(Url));
+                    await keepAliveClient?.DownloadStringTaskAsync(new Uri(Url));
                 }
                 catch { }
                 await Task.Delay(1000);

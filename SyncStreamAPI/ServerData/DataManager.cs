@@ -18,12 +18,10 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Runtime.InteropServices;
-using System.Threading;
 using System.Threading.Tasks;
 using Xabe.FFmpeg;
 using Xabe.FFmpeg.Downloader;
 using YoutubeDLSharp;
-using YoutubeDLSharp.Options;
 
 namespace SyncStreamAPI.ServerData
 {
@@ -47,7 +45,10 @@ namespace SyncStreamAPI.ServerData
             FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official).Wait();
             var path = FFmpeg.ExecutablesPath;
             if (path == null)
+            {
                 FFmpeg.SetExecutablesPath(Directory.GetCurrentDirectory());
+            }
+
             LinuxBash.DownloadYtDlp().Wait();
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
@@ -124,7 +125,10 @@ namespace SyncStreamAPI.ServerData
                     userM3U8Conversions.Add(downloadClient);
                     SendStatusToM3U8Clients();
                     if (userM3U8Conversions.Count > General.MaxParallelConversions)
+                    {
                         return;
+                    }
+
                     RunM3U8Conversion(downloadClient);
                     return;
                 }
@@ -138,7 +142,7 @@ namespace SyncStreamAPI.ServerData
                     using (var stream = webClient.OpenRead(downloadClient.Url))
                     {
                         var totalDownload = Convert.ToInt64(webClient.ResponseHeaders["Content-Length"]);
-                        var mb = ((double)totalDownload / 1024d / 1024d);
+                        var mb = (totalDownload / 1024d / 1024d);
                         if (totalDownload <= 0)
                         {
                             if (_browser == null)
@@ -148,7 +152,10 @@ namespace SyncStreamAPI.ServerData
                             }
                             var response = await _browser.GetM3U8FromUrl(downloadClient.Url);
                             if (response != null)
+                            {
                                 await _hub.Clients.Group(downloadClient.UserId.ToString()).browserResults(response.OutputUrls);
+                            }
+
                             return;
                         }
                         webClient.DownloadDataAsync(new Uri(downloadClient.Url));
@@ -181,7 +188,10 @@ namespace SyncStreamAPI.ServerData
                 try
                 {
                     if (dbUser == null)
+                    {
                         throw new Exception($"Unable to find user");
+                    }
+
                     var conversion = (await FFmpeg.Conversions.FromSnippet.SaveM3U8Stream(new Uri(downloadClient.Url), filePath)).UseMultiThread(true).SetOverwriteOutput(true);
                     conversion.OnProgress += async (sender, args) =>
                     {
@@ -194,9 +204,14 @@ namespace SyncStreamAPI.ServerData
                         catch (Exception ex) { Console.WriteLine(ex.ToString()); }
                     };
                     if (downloadClient?.CancellationToken?.Token != null)
+                    {
                         await conversion.UseMultiThread(true).SetPreset(downloadClient.Preset).Start(downloadClient.CancellationToken.Token);
+                    }
                     else
+                    {
                         throw new OperationCanceledException();
+                    }
+
                     if (!File.Exists(filePath))
                     {
                         await _hub.Clients.Group(downloadClient.UserId.ToString()).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "There has been an error trying to save the file", Answer1 = "Ok" });
@@ -219,12 +234,17 @@ namespace SyncStreamAPI.ServerData
                 try
                 {
                     if (File.Exists(filePath) && dbUser.Files.FirstOrDefault(x => x.FileKey == dbFile.FileKey) == null)
+                    {
                         File.Delete(filePath);
+                    }
                 }
                 catch { }
                 await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
                 if (userM3U8Conversions.Contains(downloadClient))
+                {
                     userM3U8Conversions.Remove(downloadClient);
+                }
+
                 StartNextDownload();
             }
         }
@@ -257,7 +277,9 @@ namespace SyncStreamAPI.ServerData
                     userM3U8Conversions[idx].CancellationToken.Cancel();
                     userM3U8Conversions[idx].StopKeepAlive();
                     if (idx > 0)
+                    {
                         userM3U8Conversions.RemoveAt(idx);
+                    }
                 }
             }
         }
@@ -304,14 +326,23 @@ namespace SyncStreamAPI.ServerData
 
                     var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == client.Token)).FirstOrDefault();
                     if (dbUser == null)
+                    {
                         return;
+                    }
+
                     DbRememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == client.Token);
                     if (Token == null)
+                    {
                         return;
+                    }
+
                     if (dbUser.userprivileges >= UserPrivileges.Administrator)
                     {
                         if (!Directory.Exists(General.FilePath))
+                        {
                             Directory.CreateDirectory(General.FilePath);
+                        }
+
                         var dbFile = new DbFile(client.FileName, $".{client.Url.Split('.').Last()}", dbUser);
                         var filePath = dbFile.GetPath();
                         File.WriteAllBytes(filePath, file);

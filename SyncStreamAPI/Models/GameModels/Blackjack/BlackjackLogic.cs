@@ -1,12 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using SyncStreamAPI.Games.Blackjack;
 using SyncStreamAPI.Helper;
-using System.Linq;
 using SyncStreamAPI.Models.GameModels.Members;
-using SyncStreamAPI.Games.Blackjack;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
-using SyncStreamAPI.Enums.Games.Cards;
-using SyncStreamAPI.Enums.Games;
 
 namespace SyncStreamAPI.Models.GameModels.Blackjack
 {
@@ -50,7 +48,10 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
             member.Kicked += X_Kicked;
             var newMember = new BlackjackMember(member, manager);
             if (members.Count >= 5)
+            {
                 newMember.notPlaying = true;
+            }
+
             members.Add(newMember);
         }
 
@@ -58,7 +59,10 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
         {
             playingCardDecks = new List<PlayingCardDeck>();
             for (int i = 0; i < General.BlackjackShoeSize; i++)
+            {
                 playingCardDecks.Add(new PlayingCardDeck());
+            }
+
             playingCards = playingCardDecks.SelectMany(x => x.CardDeck).ToList();
             Shuffle();
         }
@@ -84,11 +88,17 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
 
             var idx = members.FindIndex(x => x.ConnectionId == ConnectionId);
             if (idx > -1)
+            {
                 mCards = members[idx].cards;
+            }
 
             for (int i = 0; i < members.Count; i++)
+            {
                 if (i != idx)
+                {
                     oCards.AddRange(members[i].cards);
+                }
+            }
 
             return (mCards, oCards, dCards);
         }
@@ -105,8 +115,11 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
 
         public bool DealCard(BlackjackMember member)
         {
-            if (member.NewlyJoined||member.notPlaying)
+            if (member.NewlyJoined || member.notPlaying)
+            {
                 return false;
+            }
+
             var card = PullCard();
             card.FaceUp = true;
             member.cards.Add(card);
@@ -129,7 +142,10 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
             {
                 var dealersCard = PullCard();
                 if (dealer.cards.Count != 1)
+                {
                     dealersCard.FaceUp = true;
+                }
+
                 dealer.cards.Add(dealersCard);
                 DealerDealed?.Invoke(this);
                 return true;
@@ -141,7 +157,9 @@ namespace SyncStreamAPI.Models.GameModels.Blackjack
         {
             var remainingSize = playingCards.Count();
             if (remainingSize < (General.BlackjackShoeSize * 52 / 2))
+            {
                 ResetBlackjackDeck();
+            }
         }
 
         public async void EndRound()

@@ -3,8 +3,6 @@ using SyncStreamAPI.Helper;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.GameModels.Members;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Hubs
@@ -152,17 +150,26 @@ namespace SyncStreamAPI.Hubs
             if (pull)
             {
                 if (pullForSplitHand == true)
+                {
                     game.DealSplitCard(member);
+                }
                 else
+                {
                     game.DealCard(member);
+                }
+
                 _blackjackManager.AskForSplitPull(game, idx, pullForSplitHand);
             }
             else
             {
                 if (pullForSplitHand == false)
+                {
                     _blackjackManager.AskForSplitPull(game, idx, true);
+                }
                 else
+                {
                     _blackjackManager.AskForPull(game, idx + 1);
+                }
             }
         }
     }

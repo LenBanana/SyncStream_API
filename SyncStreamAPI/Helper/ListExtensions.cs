@@ -1,9 +1,6 @@
 ﻿using SyncStreamAPI.Models.GameModels;
-using SyncStreamAPI.PostgresModels;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Helper
 {
@@ -27,15 +24,22 @@ namespace SyncStreamAPI.Helper
         {
             var idx = cards.FindIndex(x => x.Id == cardId);
             if (idx > -1)
+            {
                 cards.RemoveAt(idx);
+            }
             else
+            {
                 throw new KeyNotFoundException("Could not find the specified card id");
+            }
         }
         public static int CalculatePoints(this List<PlayingCard> cards)
         {
             int points = 0;
             foreach (var card in cards.OrderBy(x => (int)x.Rank).ToList())
+            {
                 points += card.CardValue(points);
+            }
+
             return points;
         }
 

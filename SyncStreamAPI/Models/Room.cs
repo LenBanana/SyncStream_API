@@ -37,10 +37,13 @@ namespace SyncStreamAPI.Models
 
         GameMode GetGameMode()
         {
-            var gM = GallowGame; 
+            var gM = GallowGame;
             var bG = BlackjackGame;
             if (gM == null && bG == null && ChessLogic.GetChessGame(uniqueId) != null)
+            {
                 return GameMode.Chess;
+            }
+
             return gM == null ? bG == null ? GameMode.NotPlaying : GameMode.Blackjack : GameMode.Gallows;
         }
 

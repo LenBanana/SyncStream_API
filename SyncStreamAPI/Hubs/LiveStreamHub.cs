@@ -14,12 +14,17 @@ namespace SyncStreamAPI.Hubs
             {
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 if (dbUser == null)
+                {
                     return;
+                }
+
                 if (dbUser.userprivileges >= UserPrivileges.Approved)
                 {
                     var liveUser = _manager.LiveUsers;
                     if (liveUser.Count > 0)
+                    {
                         await Clients.Caller.getliveusers(liveUser.Select(x => x.ToDTO()).ToList());
+                    }
                 }
             }
             catch (Exception ex)
@@ -35,12 +40,17 @@ namespace SyncStreamAPI.Hubs
             {
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
                 if (dbUser == null)
+                {
                     return;
+                }
+
                 if (dbUser.userprivileges >= UserPrivileges.Approved)
                 {
                     var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.userName == name);
                     if (liveUser != null)
+                    {
                         await Clients.Caller.getwatchingusers(liveUser.watchMember);
+                    }
                 }
             }
             catch (Exception ex)

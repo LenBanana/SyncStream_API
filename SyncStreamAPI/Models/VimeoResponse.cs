@@ -1,9 +1,7 @@
 ﻿using Newtonsoft.Json;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Models
 {
@@ -46,7 +44,8 @@ namespace SyncStreamAPI.Models
                     VimeoResponse result = JsonConvert.DeserializeObject<VimeoResponse>(json);
                     return result;
                 }
-            } catch (Exception ex)
+            }
+            catch (Exception ex)
             {
                 Console.WriteLine(ex.ToString());
                 return null;

@@ -1,10 +1,4 @@
-﻿using SyncStreamAPI.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-
-namespace SyncStreamAPI.DTOModel
+﻿namespace SyncStreamAPI.DTOModel
 {
     public class MemberDTO
     {

@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-
-namespace SyncStreamAPI.Helper
+﻿namespace SyncStreamAPI.Helper
 {
     public static class Colors
     {

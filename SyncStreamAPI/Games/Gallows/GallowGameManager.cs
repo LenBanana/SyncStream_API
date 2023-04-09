@@ -5,11 +5,8 @@ using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.GameModels.Gallows;
 using SyncStreamAPI.ServerData;
-using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
-using System.Net;
 using System.Threading.Tasks;
 
 
@@ -67,7 +64,10 @@ namespace SyncStreamAPI.Games.Gallows
         private async void Server_GallowTimerUpdate(int Time, GallowLogic game)
         {
             if (Time % 5 == 0)
+            {
                 await _hub.Clients.Group(game.RoomId).gallowusers(game.members);
+            }
+
             await _hub.Clients.Group(game.RoomId).gallowtimerupdate(Time);
         }
 
@@ -89,7 +89,10 @@ namespace SyncStreamAPI.Games.Gallows
         {
             var gallowMember = game.members.FirstOrDefault(x => x.username == sender.username);
             if (gallowMember.isDrawing || gallowMember.guessedGallow)
+            {
                 return;
+            }
+
             string msg = message.message.Trim().ToLower();
             string gallowWord = game.GallowWord.ToLower();
             if (msg == gallowWord)
@@ -97,7 +100,7 @@ namespace SyncStreamAPI.Games.Gallows
                 var guessedGallow = game.members?.Where(x => x.guessedGallow).Count();
                 var points = General.GallowGuessPoints - guessedGallow + Time + (game.GallowWord.Length * General.GallowWordLengthMultiplierPlayer);
                 gallowMember.guessedGallowTime = Time;
-                gallowMember.gallowPoints +=  points != null && points > 0 ? (int)points : 0;
+                gallowMember.gallowPoints += points != null && points > 0 ? (int)points : 0;
                 gallowMember.guessedGallow = true;
 
                 var correntAnswerServerMsg = new SystemMessage($"{message.username} answered correctly");
@@ -105,7 +108,9 @@ namespace SyncStreamAPI.Games.Gallows
                 var correntAnswerPrivateMsg = new SystemMessage($"{message.username} you answered correct. You've been awarded {points} points");
                 await _hub.Clients.Client(sender.ConnectionId).sendmessage(correntAnswerPrivateMsg);
                 if (game.members?.Where(x => !x.isDrawing).All(x => x.guessedGallow) == true)
+                {
                     await EndGallow(game, Time);
+                }
 
                 await _hub.Clients.Group(game.RoomId).gallowusers(game.members);
             }
@@ -132,7 +137,9 @@ namespace SyncStreamAPI.Games.Gallows
 
             int idx = game.members.FindIndex(x => x.isDrawing);
             if (idx == -1)
+            {
                 await _hub.Clients.Group(game.RoomId).gallowusers(game.members);
+            }
 
             if (idx > -1)
             {
@@ -141,7 +148,7 @@ namespace SyncStreamAPI.Games.Gallows
                 {
                     hostPoints += (game.GallowWord.Length * General.GallowWordLengthMultiplierHost);
                     hostPoints += General.GallowDrawBasePoints;
-                    hostPoints += (int)((double)guessedGallow.Sum(x => x.guessedGallowTime) / (double)guessedGallow.Count());
+                    hostPoints += (int)(guessedGallow.Sum(x => x.guessedGallowTime) / (double)guessedGallow.Count());
                     game.members[idx].gallowPoints += hostPoints > 0 ? hostPoints : 0;
                     var hostMsg = new SystemMessage($"{game.members[idx].username} {guessedGallow.Count()} users got the word correct, good job. You've been awarded {hostPoints} points");
                     await _hub.Clients.Client(game.members[idx].ConnectionId).sendmessage(hostMsg);

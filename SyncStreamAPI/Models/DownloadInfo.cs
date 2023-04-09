@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace SyncStreamAPI.Models
+﻿namespace SyncStreamAPI.Models
 {
     public class DownloadInfo
     {

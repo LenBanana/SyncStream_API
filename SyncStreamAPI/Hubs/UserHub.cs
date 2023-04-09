@@ -25,7 +25,10 @@ namespace SyncStreamAPI.Hubs
             if (room.password != null && room.password.Length > 0 && room.password != password)
             {
                 if (password == null || password.Length > 0)
+                {
                     await Clients.Caller.adduserupdate((int)UserUpdate.WrongPassword);
+                }
+
                 return;
             }
             Server MainServer = room.server;
@@ -40,7 +43,10 @@ namespace SyncStreamAPI.Hubs
                 return;
             }
             if (MainServer.chatmessages == null)
+            {
                 MainServer.chatmessages = new List<ChatMessage>();
+            }
+
             await Groups.AddToGroupAsync(Context.ConnectionId, UniqueId);
             MainServer.members.Add(newMember);
 
@@ -49,7 +55,9 @@ namespace SyncStreamAPI.Hubs
             {
                 var game = ChessLogic.GetChessGame(room.uniqueId);
                 if (game != null)
+                {
                     await Clients.Caller.playchess(game);
+                }
             }
             if (room.GameMode == GameMode.Gallows)
             {
@@ -76,20 +84,28 @@ namespace SyncStreamAPI.Hubs
             await Clients.Caller.hostupdate(newMember.ishost);
             var type = await SendPlayerType(UniqueId, MainServer.currentVideo);
             if (type != PlayerType.Nothing)
+            {
                 await Clients.Caller.videoupdate(MainServer.currentVideo);
+            }
+
             await Clients.Caller.isplayingupdate(MainServer.isplaying);
             await Clients.Caller.timeupdate(MainServer.currenttime);
             await Clients.All.getrooms(DataManager.GetRooms());
             await Clients.Caller.adduserupdate((int)UserUpdate.Success);
             if (MainServer.playlist.Count > 0)
+            {
                 await Clients.Caller.playlistupdate(MainServer.playlist);
+            }
         }
 
         public async Task UpdateUser(string username, string UniqueId)
         {
             Room room = GetRoom(UniqueId);
             if (room == null)
+            {
                 return;
+            }
+
             Server MainServer = room.server;
             int idx = MainServer.members.FindIndex(x => x != null && x.ConnectionId == Context.ConnectionId);
             if (idx != -1)
@@ -126,7 +142,10 @@ namespace SyncStreamAPI.Hubs
         {
             Room room = GetRoom(UniqueId);
             if (room == null)
+            {
                 return;
+            }
+
             if (!CheckPrivileges(room))
             {
                 await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to change the host in this room", Answer1 = "Ok" });
@@ -139,7 +158,10 @@ namespace SyncStreamAPI.Hubs
             {
                 var game = room.GallowGame;
                 if (game != null && game.PlayingGallows)
+                {
                     game.UpdateGallowWord(true);
+                }
+
                 if (idxHost != -1)
                 {
                     MainServer.members[idxHost].uptime = DateTime.Now.ToString("MM.dd.yyyy HH:mm:ss");
@@ -157,11 +179,17 @@ namespace SyncStreamAPI.Hubs
         {
             Room room = GetRoom(UniqueId);
             if (room == null)
+            {
                 return;
+            }
+
             Server MainServer = room.server;
             Member member = MainServer.members.FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
             if (member == null)
+            {
                 return;
+            }
+
             bool isHost = member.ishost;
             MainServer.members.Remove(member);
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, UniqueId);
@@ -169,15 +197,25 @@ namespace SyncStreamAPI.Hubs
             {
                 var gallowGame = room.GallowGame;
                 if (gallowGame != null && gallowGame.PlayingGallows)
+                {
                     if (MainServer.members.Count < 2)
+                    {
                         await PlayGallowsSettings(UniqueId, gallowGame.GameLanguage, gallowGame.GameLength);
+                    }
+                }
 
                 if (isHost)
                 {
                     if (gallowGame != null && gallowGame.PlayingGallows)
+                    {
                         gallowGame.UpdateGallowWord(true);
+                    }
+
                     if (MainServer.members.Count > 0 && MainServer.members[0] != null)
+                    {
                         MainServer.members[0].ishost = true;
+                    }
+
                     await Clients.Client(MainServer.members[0]?.ConnectionId).hostupdate(true);
                 }
             }
@@ -209,10 +247,14 @@ namespace SyncStreamAPI.Hubs
                         await _blackjackManager.SendAllUsers(blackjack);
                     }
                     else
+                    {
                         await _blackjackManager.SendAllUsers(blackjack);
+                    }
                 }
                 if (blackjack.members.Count < 1)
+                {
                     await _blackjackManager.PlayNewRound(UniqueId);
+                }
             }
             await Clients.Group(UniqueId).userupdate(MainServer.members?.Select(x => x?.ToDTO()).ToList());
             await Clients.All.getrooms(DataManager.GetRooms());
@@ -222,7 +264,10 @@ namespace SyncStreamAPI.Hubs
         {
             Room room = GetRoom(UniqueId);
             if (room == null)
+            {
                 return;
+            }
+
             Server MainServer = room.server;
             var member = MainServer.members.FirstOrDefault(x => x.username == username);
             if (member != null)

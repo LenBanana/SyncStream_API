@@ -1,8 +1,6 @@
 ﻿using SyncStreamAPI.Games.Blackjack;
 using SyncStreamAPI.Helper;
-using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using static SyncStreamAPI.Models.Member;
@@ -70,9 +68,13 @@ namespace SyncStreamAPI.Models.GameModels.Members
             {
                 _WaitingForBet = value;
                 if (!value)
+                {
                     cancelWait.Cancel();
+                }
                 else
+                {
                     WaitFor();
+                }
             }
         }
         public bool waitingForPull
@@ -82,9 +84,13 @@ namespace SyncStreamAPI.Models.GameModels.Members
             {
                 _WaitingForPull = value;
                 if (value == false)
+                {
                     cancelWait.Cancel();
+                }
                 else
+                {
                     WaitFor();
+                }
             }
         }
         private CancellationTokenSource cancelWait { get; set; } = new CancellationTokenSource();
@@ -99,7 +105,9 @@ namespace SyncStreamAPI.Models.GameModels.Members
             await Task.Delay(60000, cancelWait.Token).ContinueWith(task =>
             {
                 if (waitingForBet || waitingForPull)
+                {
                     FailedToReact?.Invoke(this);
+                }
             });
         }
 
@@ -109,32 +117,53 @@ namespace SyncStreamAPI.Models.GameModels.Members
             if ((dealerPoints < points || dealerPoints > 21) && points <= 21)
             {
                 if (blackjack)
+                {
                     Money = Money + Bet * 2.5;
+                }
                 else if (doubled)
+                {
                     Money = Money + (Bet * 2) * 2;
+                }
                 else
+                {
                     Money = Money + Bet * 2;
+                }
             }
             else if (dealerPoints == points)
+            {
                 Money = Money + Bet;
+            }
+
             if (didSplit)
             {
                 if ((dealerPoints < splitPoints || dealerPoints > 21) && splitPoints <= 21)
                 {
                     if (splitBlackjack)
+                    {
                         Money = Money + Bet * 2.5;
+                    }
                     else
+                    {
                         Money = Money + Bet * 2;
+                    }
                 }
                 else if (dealerPoints == splitPoints)
+                {
                     Money = Money + Bet;
+                }
             }
             if (money == Money)
+            {
                 return 0;
+            }
             else if (Money == (money + Bet))
+            {
                 return Bet;
+            }
             else
+            {
                 return Money - money;
+            }
         }
 
         public void SetBet(double bet)

@@ -1,13 +1,13 @@
-﻿using System;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Helper;
+using System;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace SyncStreamAPI.ServerData.Background
 {
@@ -39,7 +39,10 @@ namespace SyncStreamAPI.ServerData.Background
                 {
                     var imgPath = image.GetPath();
                     if (File.Exists(imgPath))
+                    {
                         File.Delete(imgPath);
+                    }
+
                     dbContext.Files.Remove(image);
                 }
                 await dbContext.SaveChangesAsync();

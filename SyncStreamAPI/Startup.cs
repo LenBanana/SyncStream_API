@@ -103,9 +103,9 @@ namespace SyncStreamAPI
             app.UseCors("CORSPolicy");
             app.UseAuthentication();
             app.UseAuthorization();
-            applicationLifetime.ApplicationStopping.Register(() => 
-            { 
-                browser?.Dispose(); 
+            applicationLifetime.ApplicationStopping.Register(() =>
+            {
+                browser?.Dispose();
             });
 
             app.UseEndpoints(endpoints =>

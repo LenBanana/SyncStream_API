@@ -20,9 +20,9 @@ namespace SyncStreamAPI.Models.RTMP
         public LiveUserDTO(LiveUser user)
         {
             id = "";
-            this.userName = user.userName;
-            this.watchMember = user.watchMember;
-            this.created = user.created;
+            userName = user.userName;
+            watchMember = user.watchMember;
+            created = user.created;
         }
     }
 }

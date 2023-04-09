@@ -2,9 +2,6 @@
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.GameModels.Chess;
-using SyncStreamAPI.Models.GameModels.Gallows;
-using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -17,10 +14,16 @@ namespace SyncStreamAPI.Hubs
             await Clients.Group(UniqueId).playertype(PlayerType.Chess);
             Room room = GetRoom(UniqueId);
             if (room == null)
+            {
                 return;
+            }
+
             Server MainServer = room.server;
             if (MainServer.members.Count < 2)
+            {
                 return;
+            }
+
             var member1 = MainServer.members.FirstOrDefault(x => x.username == user1);
             var member2 = MainServer.members.FirstOrDefault(x => x.username == user2);
             var lightPlayer = member1 != null ? member1 : MainServer.members[0];
@@ -46,15 +49,27 @@ namespace SyncStreamAPI.Hubs
         {
             Room room = GetRoom(UniqueId);
             if (room == null)
+            {
                 return;
+            }
+
             Server MainServer = room.server;
             var game = ChessLogic.GetChessGame(UniqueId);
             if (game == null)
+            {
                 return;
+            }
+
             if (move.Check)
+            {
                 await Clients.Group(UniqueId).sendmessage(new SystemMessage($"Player {move.Color} made a check!"));
+            }
+
             if (move.Checkmate)
+            {
                 await Clients.Group(UniqueId).sendmessage(new SystemMessage($"Player {move.Color} made a checkmate!"));
+            }
+
             game.GameFEN = move.FEN;
             await Clients.GroupExcept(UniqueId, Context.ConnectionId).moveChessPiece(move);
         }

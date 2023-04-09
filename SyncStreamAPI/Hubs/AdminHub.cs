@@ -1,14 +1,14 @@
-﻿using SyncStreamAPI.Helper;
-using SyncStreamAPI.PostgresModels;
+﻿using Microsoft.EntityFrameworkCore;
+using SyncStreamAPI.Enums;
+using SyncStreamAPI.Helper;
 using SyncStreamAPI.Models;
+using SyncStreamAPI.PostgresModels;
+using SyncStreamAPI.ServerData;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-using SyncStreamAPI.Enums;
 using System.Text.RegularExpressions;
-using SyncStreamAPI.ServerData;
+using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Hubs
 {
@@ -83,7 +83,10 @@ namespace SyncStreamAPI.Hubs
             try
             {
                 if (requestUser == null || string.IsNullOrEmpty(requestUser.password))
+                {
                     return;
+                }
+
                 var dbUser = _postgres.Users.FirstOrDefault(x => x.ID == requestUser.ID);
                 var token = dbUser?.GenerateToken(userInfo);
                 if (dbUser?.RememberTokens.Any(x => x.Token == token?.Token) == true)
@@ -105,12 +108,13 @@ namespace SyncStreamAPI.Hubs
             if (Token != null)
             {
                 if (dbUser != null)
-
+                {
                     if (dbUser.userprivileges >= UserPrivileges.Administrator)
                     {
                         List<DbUser> users = _postgres.Users.ToList();
                         await Clients.Caller.getusers(users?.Select(x => x.ToDTO()).ToList());
                     }
+                }
             }
         }
 
@@ -139,9 +143,14 @@ namespace SyncStreamAPI.Hubs
                     endMsg += "Password";
                 }
                 if (endMsg.Length > 0)
+                {
                     endMsg += " successfully changed";
+                }
                 else
+                {
                     endMsg = "Nothing changed.";
+                }
+
                 await _postgres.SaveChangesAsync();
                 await Clients.Caller.dialog(new Dialog() { Header = "Success", Question = endMsg, Answer1 = "Ok" });
                 List<DbUser> users = _postgres.Users.ToList();
@@ -165,7 +174,10 @@ namespace SyncStreamAPI.Hubs
             if (Token != null)
             {
                 if (dbUser == null)
+                {
                     return;
+                }
+
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var removeUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == removeID);
@@ -206,7 +218,10 @@ namespace SyncStreamAPI.Hubs
             if (Token != null)
             {
                 if (dbUser == null)
+                {
                     return;
+                }
+
                 if (dbUser.userprivileges >= UserPrivileges.Administrator)
                 {
                     var approveUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == approveID);
@@ -214,18 +229,29 @@ namespace SyncStreamAPI.Hubs
                     {
                         approveUser.approved = approve ? 1 : 0;
                         if (approveUser.userprivileges == UserPrivileges.NotApproved && approve)
+                        {
                             approveUser.userprivileges = UserPrivileges.Approved;
+                        }
+
                         if (approveUser.userprivileges != UserPrivileges.NotApproved && !approve)
+                        {
                             approveUser.userprivileges = UserPrivileges.NotApproved;
+                        }
+
                         await _postgres.SaveChangesAsync();
                     }
                     else
+                    {
                         await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Insufficient permissions", Answer1 = "Ok" });
+                    }
+
                     List<DbUser> users = _postgres.Users.ToList();
                     await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
                 }
                 else
+                {
                     await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Insufficient permissions", Answer1 = "Ok" });
+                }
             }
         }
 
@@ -234,13 +260,19 @@ namespace SyncStreamAPI.Hubs
             try
             {
                 if (userID == changeID)
+                {
                     throw new Exception("Unable to change own user");
+                }
+
                 var dbUser = _postgres.Users?.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
                 DbRememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
                 if (Token != null)
                 {
                     if (dbUser == null)
+                    {
                         return;
+                    }
+
                     if (dbUser.userprivileges >= UserPrivileges.Administrator && (dbUser.userprivileges > (UserPrivileges)privileges || dbUser.userprivileges == UserPrivileges.Elevated))
                     {
                         var changeUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == changeID);
@@ -248,19 +280,31 @@ namespace SyncStreamAPI.Hubs
                         {
                             changeUser.userprivileges = (UserPrivileges)privileges;
                             if (changeUser.userprivileges == UserPrivileges.NotApproved)
+                            {
                                 changeUser.approved = 0;
+                            }
+
                             if (changeUser.approved == 0 && changeUser.userprivileges > UserPrivileges.NotApproved)
+                            {
                                 changeUser.approved = 1;
+                            }
+
                             await _postgres.SaveChangesAsync();
                         }
                         else
+                        {
                             throw new UnauthorizedAccessException("Insufficient permissions");
+                        }
                     }
                     else
+                    {
                         throw new UnauthorizedAccessException("Insufficient permissions");
+                    }
                 }
                 else
+                {
                     throw new Exception("User not found");
+                }
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -300,7 +344,10 @@ namespace SyncStreamAPI.Hubs
                     }
                 }
                 if (dbUser.StreamToken == null)
+                {
                     dbUser.StreamToken = dbUser.GenerateStreamToken().Token;
+                }
+
                 DbRememberToken Token = dbUser.RememberTokens.FirstOrDefault(x => x.Token == token);
                 if (Token != null)
                 {

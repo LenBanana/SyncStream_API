@@ -37,9 +37,15 @@ namespace SyncStreamAPI.ServerData.Helper
                     Rooms.Add(new Room("Randomkeller", "random", false, true));
                     Rooms.Add(new Room("Guffelstübchen", "guffel", false, true));
                     for (int i = 1; i <= General.GuestRoomAmount; i++)
+                    {
                         Rooms.Add(new Room($"Guest Room - {i}", $"guest{i}", false, false));
+                    }
+
                     foreach (var room in _postgres.Rooms)
+                    {
                         Rooms.Add(room);
+                    }
+
                     if (await _postgres.Folders.CountAsync() == 0)
                     {
                         _postgres.Folders.Add(new DbFileFolder("Default"));
