@@ -46,7 +46,7 @@ namespace SyncStreamAPI.Controllers
                 string Token = dbUser?.StreamToken;
                 if (Token == null || Token.Length == 0 || dbUser.userprivileges < UserPrivileges.Approved)
                 {
-                    return StatusCode(StatusCodes.Status403Forbidden);
+                    return Unauthorized();
                 }
 
                 var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.id == rtmpData.token);
@@ -75,7 +75,7 @@ namespace SyncStreamAPI.Controllers
                 string Token = dbUser?.StreamToken;
                 if (Token == null || Token.Length == 0 || dbUser.userprivileges < UserPrivileges.Approved)
                 {
-                    return StatusCode(StatusCodes.Status403Forbidden);
+                    return Unauthorized();
                 }
 
                 var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.id == rtmpData.token);
@@ -109,7 +109,7 @@ namespace SyncStreamAPI.Controllers
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == rtmpData.token)).FirstOrDefault();
                 if (dbUser == null || dbUser.userprivileges < UserPrivileges.Approved)
                 {
-                    return StatusCode(StatusCodes.Status403Forbidden);
+                    return Unauthorized();
                 }
 
                 liveUser.watchMember.Add(dbUser.ToDTO());
@@ -138,7 +138,7 @@ namespace SyncStreamAPI.Controllers
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == rtmpData.token)).FirstOrDefault();
                 if (dbUser == null || dbUser.userprivileges < UserPrivileges.Approved)
                 {
-                    return StatusCode(StatusCodes.Status403Forbidden);
+                    return Unauthorized();
                 }
 
                 var watchMemberIdx = liveUser.watchMember.FindIndex(x => x.ID == dbUser.ID);

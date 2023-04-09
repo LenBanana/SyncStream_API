@@ -10,6 +10,7 @@ namespace SyncStreamAPI.DataContext
 
         }
 
+        public DbSet<DbApplicationVersion> AppVersions { get; set; }
         public DbSet<DbUser> Users { get; set; }
         public DbSet<DbRoom> Rooms { get; set; }
         public DbSet<DbFile> Files { get; set; }

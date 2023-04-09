@@ -62,8 +62,7 @@ namespace SyncStreamAPI.Controllers
                     {
                         await _hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertTypes.Danger) { Question = "You do not have permissions to view this content", Answer1 = "Ok" });
                     }
-
-                    return StatusCode(StatusCodes.Status403Forbidden, "You do not have permissions to view this content");
+                    return Unauthorized("You do not have permissions to view this content");
                 }
 
                 // Check if the file exists on disk
@@ -110,9 +109,9 @@ namespace SyncStreamAPI.Controllers
                     {
                         var errorMessage = "You do not have permissions to view this content";
                         await _hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertTypes.Danger) { Question = errorMessage, Answer1 = "Ok" });
-                        return StatusCode(StatusCodes.Status403Forbidden, errorMessage);
+                        return Unauthorized(errorMessage);
                     }
-                    return StatusCode(StatusCodes.Status403Forbidden);
+                    return Unauthorized();
                 }
 
                 // Fetch the video data for the provided YouTube URL using the YouTube DL library
@@ -155,7 +154,7 @@ namespace SyncStreamAPI.Controllers
                 // Check if the request is valid and contains a file
                 if (Request.ContentLength <= 0 || Request.Form == null || !Request.Form.Files.Any())
                 {
-                    return StatusCode(StatusCodes.Status403Forbidden);
+                    return Unauthorized();
                 }
 
                 // Get the user from the database and verify their token
@@ -164,7 +163,7 @@ namespace SyncStreamAPI.Controllers
                 var Token = dbUser?.RememberTokens.SingleOrDefault(x => x.Token == token);
                 if (Token == null || dbUser == null || dbUser.userprivileges < UserPrivileges.Administrator)
                 {
-                    return StatusCode(StatusCodes.Status403Forbidden);
+                    return Unauthorized();
                 }
 
                 // Check if the file is valid
@@ -205,14 +204,14 @@ namespace SyncStreamAPI.Controllers
                 // Ensure request has a file attached
                 if (Request.ContentLength <= 0 || Request.Form == null || Request.Form.Files == null || Request.Form.Files.Count <= 0)
                 {
-                    return StatusCode(StatusCodes.Status403Forbidden);
+                    return Unauthorized();
                 }
 
                 // Validate API key against DbUsers API key
-                var dbUser = _postgres.Users?.Where(x => x.ApiKey == apiKey).FirstOrDefault();
+                var dbUser = _postgres.Users.SingleOrDefault(u => u.ApiKey == apiKey);
                 if (dbUser == null || dbUser.userprivileges < UserPrivileges.Administrator)
                 {
-                    return StatusCode(StatusCodes.Status403Forbidden);
+                    return Unauthorized();
                 }
 
                 // Save file to temporary location
