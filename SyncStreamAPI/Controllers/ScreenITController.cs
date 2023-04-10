@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.Configuration;
 using SyncStreamAPI.DataContext;
+using SyncStreamAPI.Helper;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.PostgresModels;
@@ -43,7 +44,13 @@ namespace SyncStreamAPI.Controllers
             {
                 return NotFound();
             }
-            return Ok(new { Version = latestVersion });
+            var filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, appName);
+            if (!System.IO.File.Exists(filePath))
+            {
+                return NotFound();
+            }
+            var checkSum = Encryption.SHA256CheckSum(filePath);
+            return Ok(new { Version = latestVersion, CheckSum = checkSum });
         }
 
         [HttpGet("download")]
