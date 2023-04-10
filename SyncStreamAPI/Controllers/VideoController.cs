@@ -81,7 +81,7 @@ namespace SyncStreamAPI.Controllers
                 var contentType = _contentTypeProvider.TryGetContentType(path, out var contentTypeResult) ? contentTypeResult : "application/octet-stream";
                 if (dbFile.Temporary)
                 {
-                    Response.Headers.Add("Content-Disposition", "inline");
+                    Response.Headers.Add("Content-Disposition", $"inline;filename={dbFile.Name}{dbFile.FileEnding}");
                     return File(fileStream, contentType);
                 }
                 return File(fileStream, contentType, dbFile.Name.EndsWith(dbFile.FileEnding) ? dbFile.Name : dbFile.Name + dbFile.FileEnding, true);
