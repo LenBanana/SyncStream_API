@@ -41,7 +41,8 @@ namespace SyncStreamAPI.Hubs
                     await Clients.Caller.rememberToken(new RememberTokenDTO(dbToken, user.ID));
                 }
                 await Groups.AddToGroupAsync(Context.ConnectionId, General.LoggedInGroupName);
-                await Groups.AddToGroupAsync(Context.ConnectionId, user.ApiKey);
+                if (user.ApiKey != null)
+                    await Groups.AddToGroupAsync(Context.ConnectionId, user.ApiKey);
                 result = user;
             }
             await Clients.Caller.userlogin(result.ToDTO());
@@ -354,7 +355,8 @@ namespace SyncStreamAPI.Hubs
                     DataManager.GetRoomManager().AddMember(dbUser.ID, Context.ConnectionId);
                     await Groups.AddToGroupAsync(Context.ConnectionId, Token.Token);
                     await Groups.AddToGroupAsync(Context.ConnectionId, General.LoggedInGroupName);
-                    await Groups.AddToGroupAsync(Context.ConnectionId, dbUser.ApiKey);
+                    if (dbUser.ApiKey != null)
+                        await Groups.AddToGroupAsync(Context.ConnectionId, dbUser.ApiKey);
                     await Clients.Caller.userlogin(dbUser.ToDTO());
                     Token.Created = DateTime.Now;
                 }
