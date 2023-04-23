@@ -25,7 +25,8 @@ namespace SyncStreamAPI.Helper
         public static int MaxParallelConversions = 6;
 
         public const int DaysToKeepImages = 14;
-        public const int CheckIntervalInMinutes = 60;
+        public const int MinutesToKeepFFmpeg = 10;
+        public const int CheckIntervalInMinutes = 1;
 
         public static int GallowGameLength = 90;
         public static int GallowGameLengthMin = 60;
@@ -39,20 +40,32 @@ namespace SyncStreamAPI.Helper
         public const string LoggedInGroupName = "approved";
         public const string BottedInGroupName = "dreckbots";
 
+        //FFMpeg
+        public static string DefaultAudioFormat = ".mp3";
+        public static string DefaultAudioMimeType = "audio/mpeg";
+
         public static YoutubeDL GetYoutubeDL()
         {
             var ytdl = new YoutubeDL();
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                ytdl.YoutubeDLPath = "/app/yt-dlp";
-                ytdl.FFmpegPath = "/app/ffmpeg";
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                ytdl.FFmpegPath = "ffmpeg.exe";
-                ytdl.YoutubeDLPath = "yt-dlp.exe";
-            }
+            ytdl.FFmpegPath = GetFFmpegPath();
+            ytdl.YoutubeDLPath = GetYtDlpPath();
             return ytdl;
+        }
+
+        public static string GetFFmpegPath()
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                return "/app/ffmpeg";
+            else
+                return System.IO.Directory.GetCurrentDirectory() + "\\ffmpeg.exe";
+        }
+
+        public static string GetYtDlpPath()
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                return "/app/yt-dlp";
+            else
+                return System.IO.Directory.GetCurrentDirectory() + "\\yt-dlp.exe";
         }
 
         public static string GetGallowWord(Language language)
