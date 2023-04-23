@@ -50,12 +50,6 @@ namespace SyncStreamAPI.Controllers
             return Ok(new { Path = General.GetFFmpegPath() });
         }
 
-        [HttpPost("ExtractAudio")]
-        public async Task<IActionResult> ExtractAudio(IFormFile inputFile, string apiKey)
-        {
-            return await ProcessMedia(inputFile, apiKey, FFMpegTools.ExtractAudio, General.DefaultAudioFormat, General.DefaultAudioMimeType);
-        }
-
         [HttpPost("CutMedia")]
         public async Task<IActionResult> CutMedia(IFormFile inputFile, string apiKey, int startMilliSeconds, int endMilliSeconds)
         {
