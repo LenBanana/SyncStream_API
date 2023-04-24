@@ -6,7 +6,7 @@
         JPEG,
         BMP,
         TIFF,
-        ICO,
+        WEBP,
         MP3,
         WAV,
         OGG,

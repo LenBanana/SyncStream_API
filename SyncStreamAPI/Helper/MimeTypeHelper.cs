@@ -17,6 +17,8 @@ namespace SyncStreamAPI.Helper
         { ".html", "text/html" },
         { ".jpeg", "image/jpeg" },
         { ".jpg", "image/jpeg" },
+        { ".bmp", "image/bmp" },
+        { ".tiff", "image/tiff" },
         { ".json", "application/json" },
         { ".mp3", "audio/mpeg" },
         { ".mpeg", "video/mpeg" },
