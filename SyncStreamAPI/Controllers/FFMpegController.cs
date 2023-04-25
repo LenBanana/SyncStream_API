@@ -116,18 +116,19 @@ namespace SyncStreamAPI.Controllers
                 case MediaType.BMP:
                 case MediaType.TIFF:
                 case MediaType.WEBP:
-                    return ConvertFile(inputFile, mediaType);
+                    return await ConvertFile(inputFile, mediaType, dbUser);
                 default:
                     return StatusCode(StatusCodes.Status405MethodNotAllowed);
             }
         }
 
-        private IActionResult ConvertFile(IFormFile file, MediaType mediaType)
+        private async Task<IActionResult> ConvertFile(IFormFile file, MediaType mediaType, DbUser dbUser)
         {
             IImageEncoder encoder = null;
             string mimeType = "image/png";
             var fileName = file.FileName;
             fileName = Path.ChangeExtension(fileName, $".{mediaType.ToString().ToLower()}");
+            var fileInfo = new FileInfo(fileName);
             switch (mediaType)
             {
                 case MediaType.PNG:
@@ -150,14 +151,19 @@ namespace SyncStreamAPI.Controllers
                     mimeType = "image/tiff";
                     break;
             }
+            var dbFile = new DbFile(Path.GetFileNameWithoutExtension(fileName), fileInfo.Extension, dbUser, temporary: true);
+            dbFile.Created = DateTime.UtcNow.AddDays(-General.DaysToKeepImages).AddMinutes(General.MinutesToKeepFFmpeg);
+            var outputPath = Path.Combine(General.TemporaryFilePath, $"{dbFile.FileKey}{dbFile.FileEnding}");
             using (var image = Image.Load(file.OpenReadStream()))
             {
-                var ms = new MemoryStream();
-                image.Save(ms, encoder);
-                ms.Position = 0;
-                Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
-                return File(ms, mimeType);
+                image.Save(outputPath, encoder);
             }
+            var savedFile = _postgres.Files?.Add(dbFile);
+            await _postgres.SaveChangesAsync();
+            var fileBytes = await System.IO.File.ReadAllBytesAsync(outputPath);
+            Response.Headers.Add("Content-Disposition", $"attachment;filename={dbFile.Name}{dbFile.FileEnding}");
+            await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new DTOModel.FileDto(savedFile.Entity));
+            return File(fileBytes, mimeType);
         }
 
         private async Task<IActionResult> ProcessMedia(IFormFile inputFile, DbUser dbUser, Func<string, string, Task<string>> mediaOperation, string extension, string mimeType)
@@ -175,7 +181,6 @@ namespace SyncStreamAPI.Controllers
                 var outputDbfile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), extension, dbUser, temporary: true);
                 outputDbfile.Created = DateTime.UtcNow.AddDays(-General.DaysToKeepImages).AddMinutes(General.MinutesToKeepFFmpeg);
                 var outputPath = Path.Combine(General.TemporaryFilePath, $"{outputDbfile.FileKey}{extension}");
-
                 var result = await mediaOperation(path, outputPath);
                 FileCheck.CheckOverrideFile(path);
                 if (result != null)
