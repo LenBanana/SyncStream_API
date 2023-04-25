@@ -183,8 +183,9 @@ namespace SyncStreamAPI.Controllers
                 }
 
                 // Add the DbFile object to the database and save changes
-                _postgres.Files?.Add(dbfile);
+                var savedFile = _postgres.Files?.Add(dbfile);
                 await _postgres.SaveChangesAsync();
+                await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new DTOModel.FileDto(savedFile.Entity));
                 return Ok();
             }
             catch (Exception ex)

@@ -124,7 +124,6 @@ namespace SyncStreamAPI.Controllers
 
         private IActionResult ConvertFile(IFormFile file, MediaType mediaType)
         {
-            // Convert the file to the output format
             IImageEncoder encoder = null;
             string mimeType = "image/png";
             var fileName = file.FileName;
@@ -182,8 +181,9 @@ namespace SyncStreamAPI.Controllers
                 if (result != null)
                 {
                     var fileBytes = await System.IO.File.ReadAllBytesAsync(outputPath);
-                    _postgres.Files?.Add(outputDbfile);
+                    var savedFile = _postgres.Files?.Add(outputDbfile);
                     await _postgres.SaveChangesAsync();
+                    await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new DTOModel.FileDto(savedFile.Entity));
                     Response.Headers.Add("Content-Disposition", $"attachment;filename={outputDbfile.Name}{outputDbfile.FileEnding}");
                     return File(fileBytes, mimeType);
                 }
