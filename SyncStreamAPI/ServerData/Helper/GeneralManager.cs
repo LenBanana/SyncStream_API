@@ -1,12 +1,16 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Helper;
+using SyncStreamAPI.Hubs;
+using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.PostgresModels;
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace SyncStreamAPI.ServerData.Helper
 {

@@ -5,7 +5,9 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using SyncStreamAPI.Annotations;
 using SyncStreamAPI.DataContext;
+using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
@@ -27,13 +29,10 @@ namespace SyncStreamAPI.Controllers
     {
         private readonly IHubContext<ServerHub, IServerHub> _hub;
         readonly PostgresContext _postgres;
-        IConfiguration Configuration { get; }
         private readonly IContentTypeProvider _contentTypeProvider;
-        readonly CancellationTokenSource source = new CancellationTokenSource();
 
-        public VideoController(IConfiguration configuration, IHubContext<ServerHub, IServerHub> hub, PostgresContext postgres, IContentTypeProvider contentTypeProvider)
+        public VideoController(IHubContext<ServerHub, IServerHub> hub, PostgresContext postgres, IContentTypeProvider contentTypeProvider)
         {
-            Configuration = configuration;
             _hub = hub;
             _postgres = postgres;
             _contentTypeProvider = contentTypeProvider;
@@ -60,7 +59,7 @@ namespace SyncStreamAPI.Controllers
                     // If the user is not authorized to view the content, return a 403 error and display an error message
                     if (dbUser != null)
                     {
-                        await _hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertTypes.Danger) { Question = "You do not have permissions to view this content", Answer1 = "Ok" });
+                        await _hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertType.Danger) { Question = "You do not have permissions to view this content", Answer1 = "Ok" });
                     }
                     return Unauthorized("You do not have permissions to view this content");
                 }
@@ -72,7 +71,7 @@ namespace SyncStreamAPI.Controllers
                 {
                     // If the file does not exist on disk, return a 404 error with a specific error message
                     var errorMessage = "The requested file could not be found on disk";
-                    await _hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertTypes.Danger) { Question = errorMessage, Answer1 = "Ok" });
+                    await _hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertType.Danger) { Question = errorMessage, Answer1 = "Ok" });
                     return StatusCode(StatusCodes.Status404NotFound, errorMessage);
                 }
 
@@ -108,7 +107,7 @@ namespace SyncStreamAPI.Controllers
                     if (dbUser != null)
                     {
                         var errorMessage = "You do not have permissions to view this content";
-                        await _hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertTypes.Danger) { Question = errorMessage, Answer1 = "Ok" });
+                        await _hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertType.Danger) { Question = errorMessage, Answer1 = "Ok" });
                         return Unauthorized(errorMessage);
                     }
                     return Unauthorized();

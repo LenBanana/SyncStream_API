@@ -1,6 +1,6 @@
 ﻿namespace SyncStreamAPI.Enums
 {
-    public enum AlertTypes
+    public enum AlertType
     {
         Success,
         Info,

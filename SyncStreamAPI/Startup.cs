@@ -34,7 +34,7 @@ namespace SyncStreamAPI
             services.AddHostedService<DataBackgroundService>();
             services.AddSingleton(provider =>
             {
-                DataManager manager = new DataManager(provider);
+                MainManager manager = new MainManager(provider);
                 return manager;
             });
             services.AddDbContext<PostgresContext>(options =>
@@ -85,7 +85,7 @@ namespace SyncStreamAPI
             });
         }
 
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, DataManager manager, IHostApplicationLifetime applicationLifetime, BrowserAutomation? browser)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, MainManager manager, IHostApplicationLifetime applicationLifetime, BrowserAutomation? browser)
         {
             var forwardingOptions = new ForwardedHeadersOptions() { ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.All };
             app.UseForwardedHeaders(forwardingOptions);

@@ -90,7 +90,7 @@ namespace SyncStreamAPI.Hubs
 
             await Clients.Caller.isplayingupdate(MainServer.isplaying);
             await Clients.Caller.timeupdate(MainServer.currenttime);
-            await Clients.All.getrooms(DataManager.GetRooms());
+            await Clients.All.getrooms(MainManager.GetRooms());
             await Clients.Caller.adduserupdate((int)UserUpdate.Success);
             if (MainServer.playlist.Count > 0)
             {
@@ -148,7 +148,7 @@ namespace SyncStreamAPI.Hubs
 
             if (!CheckPrivileges(room))
             {
-                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to change the host in this room", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "You don't have permissions to change the host in this room", Answer1 = "Ok" });
                 return;
             }
             Server MainServer = room.server;
@@ -257,7 +257,7 @@ namespace SyncStreamAPI.Hubs
                 }
             }
             await Clients.Group(UniqueId).userupdate(MainServer.members?.Select(x => x?.ToDTO()).ToList());
-            await Clients.All.getrooms(DataManager.GetRooms());
+            await Clients.All.getrooms(MainManager.GetRooms());
         }
 
         public async Task BanUser(string username, string UniqueId)
@@ -283,7 +283,7 @@ namespace SyncStreamAPI.Hubs
             }
             await Clients.User(member.ConnectionId).adduserupdate((int)UserUpdate.Banned);
             await Clients.Group(UniqueId).userupdate(MainServer.members?.Select(x => x.ToDTO()).ToList());
-            await Clients.All.getrooms(DataManager.GetRooms());
+            await Clients.All.getrooms(MainManager.GetRooms());
         }
     }
 }

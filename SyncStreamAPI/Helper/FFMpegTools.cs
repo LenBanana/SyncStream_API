@@ -1,4 +1,11 @@
-﻿using SyncStreamAPI.Helper;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using SyncStreamAPI.DataContext;
+using SyncStreamAPI.Helper;
+using SyncStreamAPI.Hubs;
+using SyncStreamAPI.Interfaces;
+using SyncStreamAPI.PostgresModels;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -129,6 +136,44 @@ namespace ScreenIT.Helper
             catch (Exception)
             {
                 return false;
+            }
+        }
+
+        public static async Task<ActionResult> ProcessMedia(IFormFile inputFile, DbUser dbUser, Func<string, string, Task<string>> mediaOperation, string extension, string mimeType, PostgresContext postgresContext, IHubContext<ServerHub, IServerHub> serverHub)
+        {
+            try
+            {
+                var fileInfo = new FileInfo(inputFile.FileName);
+                var dbfile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension, dbUser);
+                var path = Path.Combine(General.TemporaryFilePath, $"{dbfile.FileKey}{dbfile.FileEnding}");
+                using (var stream = new FileStream(path, FileMode.Create))
+                {
+                    await inputFile.CopyToAsync(stream);
+                }
+
+                var outputDbfile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), extension, dbUser, temporary: true);
+                outputDbfile.Created = DateTime.UtcNow.AddDays(-General.DaysToKeepImages).AddMinutes(General.MinutesToKeepFFmpeg);
+                var outputPath = Path.Combine(General.TemporaryFilePath, $"{outputDbfile.FileKey}{extension}");
+                var result = await mediaOperation(path, outputPath);
+                FileCheck.CheckOverrideFile(path);
+                if (result != null)
+                {
+                    var fileBytes = await System.IO.File.ReadAllBytesAsync(outputPath);
+                    var savedFile = postgresContext.Files?.Add(outputDbfile);
+                    await postgresContext.SaveChangesAsync();
+                    await serverHub.Clients.Group(dbUser.ApiKey).updateFolders(new SyncStreamAPI.DTOModel.FileDto(savedFile.Entity));
+                    FileContentResult fileResult = new FileContentResult(fileBytes, mimeType);
+                    fileResult.FileDownloadName = $"{outputDbfile.Name}{outputDbfile.FileEnding}";
+                    return fileResult;
+                }
+                else
+                {
+                    return new StatusCodeResult(StatusCodes.Status404NotFound);
+                }
+            }
+            catch (Exception ex)
+            {
+                return new StatusCodeResult(StatusCodes.Status500InternalServerError);
             }
         }
 

@@ -24,14 +24,10 @@ namespace SyncStreamAPI.Controllers
     {
         private readonly IHubContext<ServerHub, IServerHub> _hub;
         readonly PostgresContext _postgres;
-        IConfiguration Configuration { get; }
+        readonly MainManager _manager;
 
-        readonly CancellationTokenSource source = new CancellationTokenSource();
-        readonly DataManager _manager;
-
-        public RtmpController(IConfiguration configuration, IHubContext<ServerHub, IServerHub> hub, PostgresContext postgres, DataManager manager)
+        public RtmpController(IHubContext<ServerHub, IServerHub> hub, PostgresContext postgres, MainManager manager)
         {
-            Configuration = configuration;
             _hub = hub;
             _postgres = postgres;
             _manager = manager;

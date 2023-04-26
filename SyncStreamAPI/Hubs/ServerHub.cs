@@ -26,12 +26,12 @@ namespace SyncStreamAPI.Hubs
     {
         IConfiguration Configuration { get; }
 
-        readonly DataManager _manager;
+        readonly MainManager _manager;
         readonly PostgresContext _postgres;
         readonly GallowGameManager _gallowGameManager;
         readonly BlackjackManager _blackjackManager;
 
-        public ServerHub(IConfiguration configuration, DataManager manager, PostgresContext postgres, GallowGameManager gallowGameManager, BlackjackManager blackjackManager)
+        public ServerHub(IConfiguration configuration, MainManager manager, PostgresContext postgres, GallowGameManager gallowGameManager, BlackjackManager blackjackManager)
         {
             Configuration = configuration;
             _manager = manager;
@@ -43,7 +43,7 @@ namespace SyncStreamAPI.Hubs
 #nullable enable
         public override async Task OnDisconnectedAsync(Exception? ex)
         {
-            var Rooms = DataManager.GetRooms();
+            var Rooms = MainManager.GetRooms();
             int idx = Rooms.FindIndex(x => x.server.members.FirstOrDefault(y => y?.ConnectionId == Context.ConnectionId) != null);
             if (idx > -1)
             {
@@ -139,7 +139,7 @@ namespace SyncStreamAPI.Hubs
 
         private Room? GetRoom(string UniqueId)
         {
-            List<Room> Rooms = DataManager.GetRooms();
+            List<Room> Rooms = MainManager.GetRooms();
             Room? room = Rooms.FirstOrDefault(x => x.uniqueId == UniqueId);
             if (room == null)
             {
@@ -151,7 +151,7 @@ namespace SyncStreamAPI.Hubs
 
         public async Task GetRooms()
         {
-            await Clients.Caller.getrooms(DataManager.GetRooms());
+            await Clients.Caller.getrooms(MainManager.GetRooms());
         }
 
         public async Task AddVideo(DreckVideo key, string UniqueId)
@@ -164,7 +164,7 @@ namespace SyncStreamAPI.Hubs
 
             if (!CheckPrivileges(room))
             {
-                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to add a video to this room", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "You don't have permissions to add a video to this room", Answer1 = "Ok" });
                 return;
             }
             var vidEnded = (room.server.currentVideo.url.Length == 0 || room.server.currentVideo.ended == true);
@@ -233,7 +233,7 @@ namespace SyncStreamAPI.Hubs
                 }
                 else if (playerType == PlayerType.Nothing)
                 {
-                    await Clients.Caller.dialog(new Dialog(AlertTypes.Warning) { Header = "Denied", Question = "Given input is not allowed", Answer1 = "Ok" });
+                    await Clients.Caller.dialog(new Dialog(AlertType.Warning) { Header = "Denied", Question = "Given input is not allowed", Answer1 = "Ok" });
                     return;
                 }
                 room.server.playlist.Add(key);
@@ -244,7 +244,7 @@ namespace SyncStreamAPI.Hubs
                 await Clients.Group(UniqueId).videoupdate(key);
             }
             await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
-            await Clients.All.getrooms(DataManager.GetRooms());
+            await Clients.All.getrooms(MainManager.GetRooms());
         }
 
         public async Task<PlayerType> SendPlayerType(string UniqueId, DreckVideo key, bool sendToUsers = true, PlayerType type = PlayerType.Nothing)
@@ -339,7 +339,7 @@ namespace SyncStreamAPI.Hubs
             catch (Exception ex)
             {
                 Console.WriteLine(ex.ToString());
-                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "There has been an error trying to add the playlist", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "There has been an error trying to add the playlist", Answer1 = "Ok" });
             }
         }
 
@@ -353,7 +353,7 @@ namespace SyncStreamAPI.Hubs
 
             if (!CheckPrivileges(room))
             {
-                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to remove videos from this room", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "You don't have permissions to remove videos from this room", Answer1 = "Ok" });
                 return;
             }
             int idx = room.server.playlist.FindIndex(x => x.url == key);
@@ -361,7 +361,7 @@ namespace SyncStreamAPI.Hubs
             {
                 room.server.playlist.RemoveAt(idx);
                 await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
-                await Clients.All.getrooms(DataManager.GetRooms());
+                await Clients.All.getrooms(MainManager.GetRooms());
             }
         }
 
@@ -375,7 +375,7 @@ namespace SyncStreamAPI.Hubs
 
             if (!CheckPrivileges(room))
             {
-                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to skip videos in this room", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "You don't have permissions to skip videos in this room", Answer1 = "Ok" });
                 return;
             }
             Server MainServer = room.server;
@@ -386,7 +386,7 @@ namespace SyncStreamAPI.Hubs
                 await SendPlayerType(UniqueId, MainServer.currentVideo);
                 await Clients.Group(UniqueId).videoupdate(MainServer.currentVideo);
                 await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
-                await Clients.All.getrooms(DataManager.GetRooms());
+                await Clients.All.getrooms(MainManager.GetRooms());
                 return;
             }
             else if (room.server.playlist.Count == 1)
@@ -398,7 +398,7 @@ namespace SyncStreamAPI.Hubs
                 await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
                 await Clients.Group(UniqueId).sendserver(room.server);
                 await Clients.Group(UniqueId).playertype(PlayerType.Nothing);
-                await Clients.All.getrooms(DataManager.GetRooms());
+                await Clients.All.getrooms(MainManager.GetRooms());
             }
         }
 
@@ -412,7 +412,7 @@ namespace SyncStreamAPI.Hubs
 
             if (!CheckPrivileges(room))
             {
-                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to skip videos in this room", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "You don't have permissions to skip videos in this room", Answer1 = "Ok" });
                 return;
             }
             Server MainServer = room.server;
@@ -426,7 +426,7 @@ namespace SyncStreamAPI.Hubs
                 MainServer.currentVideo = room.server.playlist[0];
                 await Clients.Group(UniqueId).videoupdate(MainServer.currentVideo);
                 await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
-                await Clients.All.getrooms(DataManager.GetRooms());
+                await Clients.All.getrooms(MainManager.GetRooms());
                 return;
             }
         }
@@ -441,7 +441,7 @@ namespace SyncStreamAPI.Hubs
 
             if (!CheckPrivileges(room))
             {
-                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You don't have permissions to move videos in this room", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "You don't have permissions to move videos in this room", Answer1 = "Ok" });
                 return;
             }
             DreckVideo vid = room.server.playlist[fromIndex];
@@ -487,12 +487,12 @@ namespace SyncStreamAPI.Hubs
             //    await Clients.Group(UniqueId).twitchPlaying(isplaying);
             //else
             await Clients.Group(UniqueId).isplayingupdate(isplaying);
-            await Clients.All.getrooms(DataManager.GetRooms());
+            await Clients.All.getrooms(MainManager.GetRooms());
         }
 
         public async Task AddRoom(Room room, string token)
         {
-            var Rooms = DataManager.GetRooms();
+            var Rooms = MainManager.GetRooms();
             int RoomCount = 0;
             while (Rooms?.Any(x => x.uniqueId == room.uniqueId) == true)
             {
@@ -509,7 +509,7 @@ namespace SyncStreamAPI.Hubs
                     if (dbUser != null)
                     {
                         var errorMessage = "You do not have permissions to make a room permanent";
-                        await Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertTypes.Danger) { Question = errorMessage, Answer1 = "Ok" });
+                        await Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertType.Danger) { Question = errorMessage, Answer1 = "Ok" });
                         return;
                     }
                     return;
@@ -518,19 +518,19 @@ namespace SyncStreamAPI.Hubs
                 var roomEntity = await _postgres.Rooms.AddAsync(dbRoom);
                 await _postgres.SaveChangesAsync();
             }
-            await Clients.All.getrooms(DataManager.GetRooms());
+            await Clients.All.getrooms(MainManager.GetRooms());
         }
 
         public async Task ChangeRoom(Room room)
         {
-            var Rooms = DataManager.GetRooms();
+            var Rooms = MainManager.GetRooms();
             var changeRoom = Rooms.FirstOrDefault(x => x.uniqueId == room.uniqueId);
             if (changeRoom != null)
             {
                 changeRoom.name = room.name;
                 changeRoom.password = room.password;
                 changeRoom.deletable = room.deletable;
-                await Clients.All.getrooms(DataManager.GetRooms());
+                await Clients.All.getrooms(MainManager.GetRooms());
             }
         }
 
@@ -552,7 +552,7 @@ namespace SyncStreamAPI.Hubs
                     if (dbUser != null)
                     {
                         var errorMessage = "You do not have permissions to delete this room";
-                        await Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertTypes.Danger) { Question = errorMessage, Answer1 = "Ok" });
+                        await Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertType.Danger) { Question = errorMessage, Answer1 = "Ok" });
                         return;
                     }
                     return;
@@ -560,8 +560,8 @@ namespace SyncStreamAPI.Hubs
                 _postgres.Rooms.Remove(dbRoom);
                 await _postgres.SaveChangesAsync();
             }
-            DataManager.GetRooms().Remove(room);
-            await Clients.All.getrooms(DataManager.GetRooms());
+            MainManager.GetRooms().Remove(room);
+            await Clients.All.getrooms(MainManager.GetRooms());
         }
 
         public async Task Ping(DateTime date)

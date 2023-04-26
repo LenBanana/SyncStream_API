@@ -28,7 +28,7 @@ namespace SyncStreamAPI.Models
         public Member()
         {
             CountDown();
-            DataManager.GetRoomManager().AddToMemberCheck(this);
+            MainManager.GetRoomManager().AddToMemberCheck(this);
         }
 
         public MemberDTO ToDTO() => new MemberDTO(username, ishost);

@@ -4,7 +4,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.Configuration;
+using SyncStreamAPI.Annotations;
 using SyncStreamAPI.DataContext;
+using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
@@ -21,18 +23,11 @@ namespace SyncStreamAPI.Controllers
     [Route("api/version")]
     public class ApplicationVersionController : Controller
     {
-        private readonly IHubContext<ServerHub, IServerHub> _hub;
         readonly PostgresContext _postgres;
-        IConfiguration Configuration { get; }
-        private readonly IContentTypeProvider _contentTypeProvider;
-        readonly CancellationTokenSource source = new CancellationTokenSource();
 
-        public ApplicationVersionController(IConfiguration configuration, IHubContext<ServerHub, IServerHub> hub, PostgresContext postgres, IContentTypeProvider contentTypeProvider)
+        public ApplicationVersionController(PostgresContext postgres)
         {
-            Configuration = configuration;
-            _hub = hub;
             _postgres = postgres;
-            _contentTypeProvider = contentTypeProvider;
         }
 
         [HttpGet("version")]
@@ -53,6 +48,7 @@ namespace SyncStreamAPI.Controllers
         }
 
         [HttpGet("download")]
+        [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.API)]
         public async Task<IActionResult> DownloadUpdate(string apiKey, string appName)
         {
             try
@@ -60,11 +56,6 @@ namespace SyncStreamAPI.Controllers
                 if (_postgres.AppVersions.SingleOrDefault(x => x.Name == appName) == null)
                 {
                     return NotFound();
-                }
-                var dbUser = _postgres.Users.SingleOrDefault(u => u.ApiKey == apiKey);
-                if (dbUser == null || dbUser.userprivileges < UserPrivileges.Administrator)
-                {
-                    return Unauthorized();
                 }
                 var filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, appName);
                 if (!System.IO.File.Exists(filePath))
@@ -87,15 +78,11 @@ namespace SyncStreamAPI.Controllers
         }
 
         [HttpPost("upload")]
+        [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.API)]
         public async Task<IActionResult> UploadUpdate(IFormFile file, string apiKey, string appName, string version = "0.1")
         {
             try
             {
-                var dbUser = _postgres.Users?.Where(x => x.ApiKey == apiKey).FirstOrDefault();
-                if (dbUser == null || dbUser.userprivileges < UserPrivileges.Administrator)
-                {
-                    return StatusCode(StatusCodes.Status403Forbidden);
-                }
                 if (file == null)
                 {
                     return StatusCode(StatusCodes.Status403Forbidden);

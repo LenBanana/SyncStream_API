@@ -7,10 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="AspectInjector" Version="2.8.1" />
     <PackageReference Include="HtmlAgilityPack" Version="1.11.46" />
     <PackageReference Include="Microsoft.AspNet.SignalR" Version="2.4.1" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.NewtonsoftJson" Version="5.0.9" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.9.10" />
+    <PackageReference Include="NAudio" Version="2.1.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="5.0.10" />
     <PackageReference Include="PuppeteerSharp" Version="8.0.0" />

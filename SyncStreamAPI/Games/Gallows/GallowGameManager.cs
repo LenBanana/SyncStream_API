@@ -28,7 +28,7 @@ namespace SyncStreamAPI.Games.Gallows
             var idx = gallowGames.FindIndex(x => x.RoomId == UniqueId);
             if (idx < 0)
             {
-                Room room = DataManager.GetRoom(UniqueId);
+                Room room = MainManager.GetRoom(UniqueId);
                 gallowGames.Add(new GallowLogic(this, UniqueId, room.server.members?.Select(x => x.ToGallowMember()).ToList()));
                 return true;
             }
@@ -52,7 +52,7 @@ namespace SyncStreamAPI.Games.Gallows
 
         public static Server GetGameRoom(string UniqueId)
         {
-            var room = DataManager.GetRoom(UniqueId);
+            var room = MainManager.GetRoom(UniqueId);
             return room == null ? null : room.server;
         }
 

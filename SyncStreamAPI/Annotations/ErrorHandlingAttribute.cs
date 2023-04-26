@@ -1,0 +1,31 @@
+﻿using AspectInjector.Broker;
+using System;
+
+namespace SyncStreamAPI.Annotations
+{
+    [Aspect(Scope.Global)]
+    [Injection(typeof(PrivilegeAttribute))]
+    public class ErrorHandlingAttribute : Attribute
+    {
+        public ErrorHandlingAttribute() { }
+
+        [Advice(Kind.Around, Targets = Target.Method)]
+        public object PrivilegeEnter(
+        [Argument(Source.Name)] string name,
+        [Argument(Source.Arguments)] object[] args,
+        [Argument(Source.Target)] Func<object[], object> target)
+        {
+            try
+            {
+                var result = target(args);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in '{name}'");
+                Console.WriteLine(ex.ToString());
+                throw;
+            }
+        }
+    }
+}

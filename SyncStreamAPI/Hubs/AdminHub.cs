@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using SyncStreamAPI.Annotations;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Models;
@@ -22,10 +23,10 @@ namespace SyncStreamAPI.Hubs
             {
                 if (user.approved <= 0)
                 {
-                    await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Thanks for registering", Question = @$"Please wait until the admin team approves your account", Answer1 = "Ok" });
+                    await Clients.Caller.dialog(new Dialog(AlertType.Info) { Header = "Thanks for registering", Question = @$"Please wait until the admin team approves your account", Answer1 = "Ok" });
                     return;
                 }
-                DataManager.GetRoomManager().AddMember(user.ID, Context.ConnectionId);
+                MainManager.GetRoomManager().AddMember(user.ID, Context.ConnectionId);
                 var token = user.GenerateToken(userInfo);
                 var dbToken = user.RememberTokens.FirstOrDefault(x => x.Token == token.Token);
                 if (dbToken == null)
@@ -56,13 +57,13 @@ namespace SyncStreamAPI.Hubs
                 var userNameRegex = new Regex(userNameRegexString);
                 if (!userNameRegex.IsMatch(requestUser.username))
                 {
-                    await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = $"Username {requestUser.username} not allowed", Answer1 = "Ok" });
+                    await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = $"Username {requestUser.username} not allowed", Answer1 = "Ok" });
                     return;
                 }
                 // Make sure the password hash length is 128 characters (SHA512 length)
                 if (requestUser.password.Length != 128)
                 {
-                    await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Invalid password hash", Answer1 = "Ok" });
+                    await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "Invalid password hash", Answer1 = "Ok" });
                     return;
                 }
 
@@ -75,7 +76,7 @@ namespace SyncStreamAPI.Hubs
             }
             else
             {
-                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Username already exists", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "Username already exists", Answer1 = "Ok" });
             }
         }
 
@@ -102,21 +103,11 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
+        [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
         public async Task GetUsers(string token, int userID)
         {
-            var dbUser = _postgres.Users?.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
-            DbRememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
-            if (Token != null)
-            {
-                if (dbUser != null)
-                {
-                    if (dbUser.userprivileges >= UserPrivileges.Administrator)
-                    {
-                        List<DbUser> users = _postgres.Users.ToList();
-                        await Clients.Caller.getusers(users?.Select(x => x.ToDTO()).ToList());
-                    }
-                }
-            }
+            List<DbUser> users = _postgres.Users.ToList();
+            await Clients.Caller.getusers(users?.Select(x => x.ToDTO()).ToList());
         }
 
         public async Task ChangeUser(DbUser user, string password)
@@ -129,7 +120,7 @@ namespace SyncStreamAPI.Hubs
                 {
                     if (changeUser.username.Length < 2 || changeUser.username.Length > 20)
                     {
-                        await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Username must be between 2 and 20 characters", Answer1 = "Ok" });
+                        await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "Username must be between 2 and 20 characters", Answer1 = "Ok" });
                     }
                     else
                     {
@@ -159,59 +150,44 @@ namespace SyncStreamAPI.Hubs
             }
             else
             {
-                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "You password was not correct", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "You password was not correct", Answer1 = "Ok" });
             }
         }
 
+        [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
         public async Task DeleteUser(string token, int userID, int removeID)
         {
             if (userID == removeID)
             {
-                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Unable to delete own user", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "Unable to delete own user", Answer1 = "Ok" });
                 return;
             }
-            var dbUser = _postgres.Users?.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
-            DbRememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
-            if (Token != null)
+            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens.FirstOrDefault(y => y.Token == token) != null);
+            var removeUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == removeID);
+            if (removeUser != null && dbUser.userprivileges > removeUser.userprivileges)
             {
-                if (dbUser == null)
-                {
-                    return;
-                }
-
-                if (dbUser.userprivileges >= UserPrivileges.Administrator)
-                {
-                    var removeUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == removeID);
-                    if (removeUser != null && dbUser.userprivileges > removeUser.userprivileges)
-                    {
-                        _postgres.Users.Remove(removeUser);
-                        await _postgres.SaveChangesAsync();
-                    }
-                    List<DbUser> users = _postgres.Users.ToList();
-                    await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
-                }
+                _postgres.Users.Remove(removeUser);
+                await _postgres.SaveChangesAsync();
             }
+            List<DbUser> users = _postgres.Users.ToList();
+            await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
         }
 
+        [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
         public async Task GenerateApiKey(string token)
         {
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens.FirstOrDefault(y => y.Token == token) != null);
-            if (dbUser != null)
-            {
-                if (dbUser.userprivileges >= UserPrivileges.Administrator && (dbUser.ApiKey == null || dbUser.ApiKey.Length == 0))
-                {
-                    dbUser.ApiKey = dbUser.GenerateStreamToken().Token;
-                    await _postgres.SaveChangesAsync();
-                    await Clients.Caller.userlogin(dbUser.ToDTO());
-                }
-            }
+            dbUser.ApiKey = dbUser.GenerateStreamToken().Token;
+            await _postgres.SaveChangesAsync();
+            await Clients.Caller.userlogin(dbUser.ToDTO());
         }
 
+        [ErrorHandling]
         public async Task ApproveUser(string token, int userID, int approveID, bool approve)
         {
             if (userID == approveID)
             {
-                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Unable to change approve status of own user", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "Unable to change approve status of own user", Answer1 = "Ok" });
                 return;
             }
             var dbUser = _postgres.Users?.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
@@ -243,7 +219,7 @@ namespace SyncStreamAPI.Hubs
                     }
                     else
                     {
-                        await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Insufficient permissions", Answer1 = "Ok" });
+                        await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "Insufficient permissions", Answer1 = "Ok" });
                     }
 
                     List<DbUser> users = _postgres.Users.ToList();
@@ -251,71 +227,41 @@ namespace SyncStreamAPI.Hubs
                 }
                 else
                 {
-                    await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "Insufficient permissions", Answer1 = "Ok" });
+                    await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "Insufficient permissions", Answer1 = "Ok" });
                 }
             }
         }
 
+        [ErrorHandling]
         public async Task SetUserPrivileges(string token, int userID, int changeID, int privileges)
         {
-            try
+            if (userID == changeID)
             {
-                if (userID == changeID)
-                {
-                    throw new Exception("Unable to change own user");
-                }
-
-                var dbUser = _postgres.Users?.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
-                DbRememberToken Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == token);
-                if (Token != null)
-                {
-                    if (dbUser == null)
-                    {
-                        return;
-                    }
-
-                    if (dbUser.userprivileges >= UserPrivileges.Administrator && (dbUser.userprivileges > (UserPrivileges)privileges || dbUser.userprivileges == UserPrivileges.Elevated))
-                    {
-                        var changeUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == changeID);
-                        if (changeUser != null && dbUser.userprivileges > changeUser.userprivileges)
-                        {
-                            changeUser.userprivileges = (UserPrivileges)privileges;
-                            if (changeUser.userprivileges == UserPrivileges.NotApproved)
-                            {
-                                changeUser.approved = 0;
-                            }
-
-                            if (changeUser.approved == 0 && changeUser.userprivileges > UserPrivileges.NotApproved)
-                            {
-                                changeUser.approved = 1;
-                            }
-
-                            await _postgres.SaveChangesAsync();
-                        }
-                        else
-                        {
-                            throw new UnauthorizedAccessException("Insufficient permissions");
-                        }
-                    }
-                    else
-                    {
-                        throw new UnauthorizedAccessException("Insufficient permissions");
-                    }
-                }
-                else
-                {
-                    throw new Exception("User not found");
-                }
+                throw new Exception("Unable to change own user");
             }
-            catch (UnauthorizedAccessException ex)
+            var dbUsers = _postgres.Users
+                .Include(u => u.RememberTokens)
+                .Where(u => u.ID == userID || u.ID == changeID)
+                .ToList();
+            var dbUser = dbUsers.FirstOrDefault(u => u.ID == userID && u.RememberTokens.Any(x => x.Token == token));
+            var changeUser = dbUsers.FirstOrDefault(u => u.ID == changeID);
+            if (dbUser == null)
             {
-                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
+                throw new Exception("User not found");
             }
-            catch (Exception ex)
+
+            if (changeUser == null)
             {
-                Console.WriteLine(ex.ToString());
-                await Clients.Caller.dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
+                throw new Exception("User to be changed not found");
             }
+
+            if (dbUser.userprivileges < UserPrivileges.Administrator || dbUser.userprivileges <= changeUser.userprivileges)
+            {
+                throw new UnauthorizedAccessException("Insufficient permissions");
+            }
+            changeUser.userprivileges = (UserPrivileges)privileges;
+            changeUser.approved = changeUser.userprivileges == UserPrivileges.NotApproved ? 0 : 1;
+            await _postgres.SaveChangesAsync();
             List<DbUser> users = _postgres.Users.ToList();
             await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
         }
@@ -332,7 +278,7 @@ namespace SyncStreamAPI.Hubs
                 }
                 if (dbUser.approved <= 0)
                 {
-                    await Clients.Caller.dialog(new Dialog(AlertTypes.Info) { Header = "Thanks for registering", Question = @$"Please wait until the admin team approves your account", Answer1 = "Ok" });
+                    await Clients.Caller.dialog(new Dialog(AlertType.Info) { Header = "Thanks for registering", Question = @$"Please wait until the admin team approves your account", Answer1 = "Ok" });
                     return;
                 }
                 dbUser.RememberTokens = dbUser.RememberTokens.GroupBy(x => x.Token)?.Select(x => x.First()).ToList();
@@ -352,7 +298,7 @@ namespace SyncStreamAPI.Hubs
                 DbRememberToken Token = dbUser.RememberTokens.FirstOrDefault(x => x.Token == token);
                 if (Token != null)
                 {
-                    DataManager.GetRoomManager().AddMember(dbUser.ID, Context.ConnectionId);
+                    MainManager.GetRoomManager().AddMember(dbUser.ID, Context.ConnectionId);
                     await Groups.AddToGroupAsync(Context.ConnectionId, Token.Token);
                     await Groups.AddToGroupAsync(Context.ConnectionId, General.LoggedInGroupName);
                     if (dbUser.ApiKey != null)

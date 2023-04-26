@@ -25,7 +25,7 @@ using YoutubeDLSharp;
 
 namespace SyncStreamAPI.ServerData
 {
-    public class DataManager
+    public class MainManager
     {
         public static List<Room> Rooms { get; set; } = new List<Room>();
         public static GeneralManager GeneralManager { get; set; }
@@ -38,9 +38,9 @@ namespace SyncStreamAPI.ServerData
         public static bool checking { get; set; } = false;
         public Dictionary<WebClient, DownloadClientValue> userWebDownloads { get; set; } = new Dictionary<WebClient, DownloadClientValue>();
         public List<DownloadClientValue> userM3U8Conversions { get; set; } = new List<DownloadClientValue>();
-        IServiceProvider _serviceProvider { get; set; }
+        public static IServiceProvider ServiceProvider { get; set; }
         IConfiguration Configuration { get; }
-        public DataManager(IServiceProvider provider)
+        public MainManager(IServiceProvider provider)
         {
             FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official).Wait();
             var path = FFmpeg.ExecutablesPath;
@@ -56,23 +56,32 @@ namespace SyncStreamAPI.ServerData
                 LinuxBash.Bash($"chmod +x /app/yt-dlp");
                 LinuxBash.Bash($"alias yt-dlp='python3 /app/yt-dlp'");
             }
-            _serviceProvider = provider;
-            using (var scope = _serviceProvider.CreateScope())
+            ServiceProvider = provider;
+            using (var scope = ServiceProvider.CreateScope())
             {
                 var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
                 Configuration = config;
             }
-            GeneralManager = new GeneralManager(_serviceProvider, Rooms);
-            RoomManager = new RoomManager(_serviceProvider, Rooms);
+            GeneralManager = new GeneralManager(ServiceProvider, Rooms);
+            RoomManager = new RoomManager(ServiceProvider, Rooms);
             GeneralManager.ReadSettings(Configuration);
             GeneralManager.AddDefaultRooms();
+        }
+
+        public async Task SendDefaultDialog(string group, string message, Enums.AlertType alertType, string header = "")
+        {
+            using (var scope = ServiceProvider.CreateScope())
+            {
+                var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+                await _hub.Clients.Group(group).dialog(new Dialog(alertType) { Header = header.Length > 0 ? header : "Servermessage", Question = message, Answer1 = "Ok" });
+            }
         }
 
         public async Task YtDownload(DownloadClientValue downloadClient, bool audioOnly = false)
         {
             try
             {
-                using (var scope = _serviceProvider.CreateScope())
+                using (var scope = ServiceProvider.CreateScope())
                 {
                     var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
                     var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
@@ -116,7 +125,7 @@ namespace SyncStreamAPI.ServerData
 
         public async void AddDownload(DownloadClientValue downloadClient)
         {
-            using (var scope = _serviceProvider.CreateScope())
+            using (var scope = ServiceProvider.CreateScope())
             {
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
                 var _browser = scope.ServiceProvider.GetRequiredService<BrowserAutomation>();
@@ -147,7 +156,7 @@ namespace SyncStreamAPI.ServerData
                         {
                             if (_browser == null)
                             {
-                                await _hub.Clients.Group(downloadClient.UserId.ToString()).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = $"Not allowed to download anything above 500mb file was {mb}mb", Answer1 = "Ok" });
+                                await SendDefaultDialog(downloadClient.UserId.ToString(), $"Not allowed to download anything above 500mb file was {mb}mb", AlertType.Danger);
                                 return;
                             }
                             var response = await _browser.GetM3U8FromUrl(downloadClient.Url);
@@ -165,7 +174,7 @@ namespace SyncStreamAPI.ServerData
                 {
                     userWebDownloads.Remove(webClient);
                     webClient.Dispose();
-                    await _hub.Clients.Group(downloadClient.UserId.ToString()).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
+                    await _hub.Clients.Group(downloadClient.UserId.ToString()).dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
                     Console.WriteLine(ex.ToString());
                     return;
                 }
@@ -177,7 +186,7 @@ namespace SyncStreamAPI.ServerData
         {
             downloadClient.Stopwatch = Stopwatch.StartNew();
             downloadClient.Running = true;
-            using (var scope = _serviceProvider.CreateScope())
+            using (var scope = ServiceProvider.CreateScope())
             {
                 var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
@@ -214,7 +223,7 @@ namespace SyncStreamAPI.ServerData
 
                     if (!File.Exists(filePath))
                     {
-                        await _hub.Clients.Group(downloadClient.UserId.ToString()).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = "There has been an error trying to save the file", Answer1 = "Ok" });
+                        await _hub.Clients.Group(downloadClient.UserId.ToString()).dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "There has been an error trying to save the file", Answer1 = "Ok" });
                         return;
                     }
                     if (!downloadClient.CancellationToken.IsCancellationRequested)
@@ -228,7 +237,7 @@ namespace SyncStreamAPI.ServerData
                 {
                     var header = ex?.InnerException?.GetType()?.Name;
                     var msg = ex?.Message;
-                    await _hub.Clients.Group(downloadClient.UserId.ToString()).dialog(new Dialog(AlertTypes.Danger) { Header = header, Question = $"{header} \n{msg}", Answer1 = "Ok" });
+                    await _hub.Clients.Group(downloadClient.UserId.ToString()).dialog(new Dialog(AlertType.Danger) { Header = header, Question = $"{header} \n{msg}", Answer1 = "Ok" });
                     Console.WriteLine(ex.ToString());
                 }
                 try
@@ -251,7 +260,7 @@ namespace SyncStreamAPI.ServerData
 
         public async void SendStatusToM3U8Clients()
         {
-            using (var scope = _serviceProvider.CreateScope())
+            using (var scope = ServiceProvider.CreateScope())
             {
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
                 var waitingClients = userM3U8Conversions.Where(x => !x.Running).ToList();
@@ -266,27 +275,25 @@ namespace SyncStreamAPI.ServerData
             }
         }
 
-        public void CancelM3U8Conversion(string downloadId)
+        public async Task CancelM3U8Conversion(int userId, string downloadId)
         {
-            using (var scope = _serviceProvider.CreateScope())
+            using (var scope = ServiceProvider.CreateScope())
             {
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
                 var idx = userM3U8Conversions.FindIndex(x => x.UniqueId == downloadId);
-                if (idx >= 0)
+                if (idx >= 0 && userM3U8Conversions[idx].UserId == userId)
                 {
                     userM3U8Conversions[idx].CancellationToken.Cancel();
                     userM3U8Conversions[idx].StopKeepAlive();
-                    if (idx > 0)
-                    {
-                        userM3U8Conversions.RemoveAt(idx);
-                    }
+                    userM3U8Conversions.RemoveAt(idx);
+                    await _hub.Clients.Group(userId.ToString()).downloadFinished(downloadId);
                 }
             }
         }
 
         public async void StartNextDownload()
         {
-            using (var scope = _serviceProvider.CreateScope())
+            using (var scope = ServiceProvider.CreateScope())
             {
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
                 if (userM3U8Conversions.Count > 0)
@@ -317,7 +324,7 @@ namespace SyncStreamAPI.ServerData
 
         public async void SaveFileToFilesystem(DownloadClientValue client, byte[] file)
         {
-            using (var scope = _serviceProvider.CreateScope())
+            using (var scope = ServiceProvider.CreateScope())
             {
                 var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
@@ -352,7 +359,7 @@ namespace SyncStreamAPI.ServerData
                 }
                 catch (Exception ex)
                 {
-                    await _hub.Clients.Group(client.UserId.ToString()).dialog(new Dialog(AlertTypes.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
+                    await _hub.Clients.Group(client.UserId.ToString()).dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
                     Console.WriteLine(ex.ToString());
                 }
                 await _hub.Clients.Group(client.UserId.ToString()).downloadFinished(client.UniqueId);
@@ -363,7 +370,7 @@ namespace SyncStreamAPI.ServerData
         {
             try
             {
-                using var scope = _serviceProvider.CreateScope();
+                using var scope = ServiceProvider.CreateScope();
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
                 var id = userWebDownloads[sender as WebClient];
                 var perc = Math.Max(0, e.BytesReceived / (double)e.TotalBytesToReceive * 100);

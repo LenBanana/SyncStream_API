@@ -1,4 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using SyncStreamAPI.Annotations;
+using SyncStreamAPI.Enums;
 using SyncStreamAPI.PostgresModels;
 using System;
 using System.Linq;
@@ -8,55 +10,23 @@ namespace SyncStreamAPI.Hubs
 {
     public partial class ServerHub
     {
+        [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
         public async Task GetLiveUsers(string token)
         {
-            try
+            var liveUser = _manager.LiveUsers;
+            if (liveUser.Count > 0)
             {
-                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
-                if (dbUser == null)
-                {
-                    return;
-                }
-
-                if (dbUser.userprivileges >= UserPrivileges.Approved)
-                {
-                    var liveUser = _manager.LiveUsers;
-                    if (liveUser.Count > 0)
-                    {
-                        await Clients.Caller.getliveusers(liveUser.Select(x => x.ToDTO()).ToList());
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error in 'GetLiveUsers'");
-                Console.WriteLine(ex.ToString());
+                await Clients.Caller.getliveusers(liveUser.Select(x => x.ToDTO()).ToList());
             }
         }
 
+        [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
         public async Task GetUsersWatching(string token, string name)
         {
-            try
+            var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.userName == name);
+            if (liveUser != null)
             {
-                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token)).FirstOrDefault();
-                if (dbUser == null)
-                {
-                    return;
-                }
-
-                if (dbUser.userprivileges >= UserPrivileges.Approved)
-                {
-                    var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.userName == name);
-                    if (liveUser != null)
-                    {
-                        await Clients.Caller.getwatchingusers(liveUser.watchMember);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error in 'GetUsersWatching'");
-                Console.WriteLine(ex.ToString());
+                await Clients.Caller.getwatchingusers(liveUser.watchMember);
             }
         }
     }

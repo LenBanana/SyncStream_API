@@ -9,8 +9,8 @@ namespace SyncStreamAPI.Models
         public string Question { get; set; }
         public string Answer1 { get; set; }
         public string Answer2 { get; set; }
-        public AlertTypes AlertType { get; set; }
-        public Dialog(AlertTypes type = AlertTypes.Info)
+        public AlertType AlertType { get; set; }
+        public Dialog(AlertType type = AlertType.Info)
         {
             AlertType = type;
         }
