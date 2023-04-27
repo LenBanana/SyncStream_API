@@ -15,6 +15,7 @@ namespace SyncStreamAPI.Hubs
 {
     public partial class ServerHub
     {
+        [ErrorHandling]
         public async Task LoginRequest(DbUser requestUser, string userInfo)
         {
             var result = new DbUser();
@@ -49,6 +50,7 @@ namespace SyncStreamAPI.Hubs
             await Clients.Caller.userlogin(result.ToDTO());
         }
 
+        [ErrorHandling]
         public async Task RegisterRequest(DbUser requestUser)
         {
             if (_postgres.Users?.Any(x => x.username == requestUser.username) == false)
@@ -80,6 +82,7 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
+        [ErrorHandling]
         public async Task GenerateRememberToken(DbUser requestUser, string userInfo)
         {
             try
@@ -110,6 +113,7 @@ namespace SyncStreamAPI.Hubs
             await Clients.Caller.getusers(users?.Select(x => x.ToDTO()).ToList());
         }
 
+        [ErrorHandling]
         public async Task ChangeUser(DbUser user, string password)
         {
             DbUser changeUser = _postgres.Users.FirstOrDefault(x => x.ID == user.ID && password == x.password);
