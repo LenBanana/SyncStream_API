@@ -4,7 +4,7 @@ using System;
 namespace SyncStreamAPI.Annotations
 {
     [Aspect(Scope.Global)]
-    [Injection(typeof(PrivilegeAttribute))]
+    [Injection(typeof(ErrorHandlingAttribute))]
     public class ErrorHandlingAttribute : Attribute
     {
         public ErrorHandlingAttribute() { }

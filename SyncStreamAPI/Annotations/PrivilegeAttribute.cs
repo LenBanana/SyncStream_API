@@ -73,7 +73,7 @@ namespace SyncStreamAPI.Annotations
                     return false;
                 if (dbUser.userprivileges < attribute.RequiredPrivileges)
                 {
-                    await hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(AlertType.Danger) { Question = "You do not have permissions to perform this action", Answer1 = "Ok" });
+                    await hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(AlertType.Danger) { Question = "You do not have permissions to perform this action", Answer1 = "Ok", Header = "Permission denied" });
                     return false;
                 }
             }
