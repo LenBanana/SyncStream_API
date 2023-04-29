@@ -1,8 +1,11 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Helper;
+using SyncStreamAPI.Hubs;
+using SyncStreamAPI.Interfaces;
 using System;
 using System.IO;
 using System.Linq;
@@ -23,7 +26,7 @@ namespace SyncStreamAPI.ServerData.Background
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            _timer = new Timer(CheckDatabaseAndRemoveFiles, null, TimeSpan.Zero, TimeSpan.FromMinutes(General.CheckIntervalInMinutes));
+            _timer = new Timer(CheckDatabaseAndRemoveFiles, null, TimeSpan.Zero, General.CheckIntervalInMinutes);
             return Task.CompletedTask;
         }
 
@@ -32,8 +35,9 @@ namespace SyncStreamAPI.ServerData.Background
             using (var scope = _serviceScope.CreateScope())
             {
                 var dbContext = scope.ServiceProvider.GetRequiredService<PostgresContext>();
+                var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
                 await dbContext.Database.EnsureCreatedAsync();
-                var thresholdDate = DateTime.UtcNow.AddDays(-General.DaysToKeepImages);
+                var thresholdDate = DateTime.UtcNow.AddDays(-General.DaysToKeepImages.Days);
                 var outdatedImages = await dbContext.Files.Where(e => e.Created < thresholdDate && e.Temporary).ToListAsync();
                 foreach (var image in outdatedImages)
                 {
@@ -41,8 +45,10 @@ namespace SyncStreamAPI.ServerData.Background
                     if (File.Exists(imgPath))
                     {
                         File.Delete(imgPath);
+                        var dbUser = dbContext.Users?.FirstOrDefault(x => x.ID == image.DbUserID);
+                        if (dbUser != null)
+                            await hub.Clients.Group(dbUser.ID.ToString()).updateFolders(new DTOModel.FileDto(image));
                     }
-
                     dbContext.Files.Remove(image);
                 }
                 await dbContext.SaveChangesAsync();

@@ -52,7 +52,7 @@ namespace SyncStreamAPI.Helper
                         break;
                 }
                 var dbFile = new DbFile(System.IO.Path.GetFileNameWithoutExtension(fileName), fileInfo.Extension, dbUser, temporary: true);
-                dbFile.Created = DateTime.UtcNow.AddDays(-General.DaysToKeepImages).AddMinutes(General.MinutesToKeepFFmpeg);
+                dbFile.Created = DateTime.UtcNow.AddDays(-General.DaysToKeepImages.Days).AddMinutes(General.MinutesToKeepFFmpeg.Minutes);
                 var outputPath = System.IO.Path.Combine(General.TemporaryFilePath, $"{dbFile.FileKey}{dbFile.FileEnding}");
                 using (var image = Image.Load(file.OpenReadStream()))
                 {

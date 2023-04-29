@@ -106,7 +106,7 @@ namespace SyncStreamAPI.Hubs
             await Clients.Caller.getDownloads(result);
         }
 
-        [Privilege(RequiredPrivileges = UserPrivileges.Elevated, AuthenticationType = AuthenticationType.Token)]
+        [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
         public async Task GetFolders(string token, int folderId = 1)
         {
             var dbUser = _postgres.Users.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == token));

@@ -7,6 +7,7 @@ using SyncStreamAPI.Annotations;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper;
+using SyncStreamAPI.Helper.FFmpeg;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.PostgresModels;
@@ -52,7 +53,10 @@ namespace SyncStreamAPI.Controllers
             var startTime = TimeSpan.FromMilliseconds(startMilliSeconds);
             var endTime = TimeSpan.FromMilliseconds(endMilliSeconds);
             var fileInfo = new FileInfo(inputFile.FileName);
-            return await FFMpegTools.ProcessMedia(inputFile, dbUser, (inputPath, outputPath) => FFMpegTools.CutMedia(inputPath, outputPath, startTime, endTime), fileInfo.Extension, inputFile.ContentType, _postgres, _hub);
+            var baseFunction = FFmpegFunction.GetDefaultFunction(fileInfo, fileInfo.Extension, dbUser);
+            var cutFunction = new FFmpegCutMedia(baseFunction.inputPath, baseFunction.outputPath, startTime, endTime, null);
+            cutFunction.outputFile = baseFunction.outputFile;
+            return await FFmpegTools.ProcessMedia(inputFile, dbUser, cutFunction, inputFile.ContentType, _postgres, _hub);
         }
 
         [HttpPost("ConvertMedia")]
@@ -68,6 +72,7 @@ namespace SyncStreamAPI.Controllers
             var inputFile = Request.Form.Files[0];
             var fileInfo = new FileInfo(inputFile.FileName);
             var mimeType = MimeTypeHelper.GetMimeType(inputFile);
+            var baseFunction = FFmpegFunction.GetDefaultFunction(fileInfo, $".{mediaType}", dbUser);
             switch (mediaType)
             {
                 case MediaType.MP3:
@@ -76,15 +81,21 @@ namespace SyncStreamAPI.Controllers
                 case MediaType.FLAC:
                 case MediaType.AIFF:
                 case MediaType.M4A:
-                    return await FFMpegTools.ProcessMedia(inputFile, dbUser, (inputPath, outputPath) => FFMpegTools.ConvertAudio(inputPath, outputPath, mediaType.ToString()), $".{mediaType}", mimeType, _postgres, _hub);
+                    var convertAudio = new FFmpegConvertAudio(baseFunction.inputPath, baseFunction.outputPath);
+                    convertAudio.outputFile = baseFunction.outputFile;
+                    return await FFmpegTools.ProcessMedia(inputFile, dbUser, convertAudio, mimeType, _postgres, _hub);
                 case MediaType.MP4:
                 case MediaType.AVI:
                 case MediaType.WMV:
                 case MediaType.MOV:
                 case MediaType.MKV:
-                    return await FFMpegTools.ProcessMedia(inputFile, dbUser, (inputPath, outputPath) => FFMpegTools.ConvertVideo(inputPath, outputPath), $".{mediaType}", mimeType, _postgres, _hub);
+                    var convertVideo = new FFmpegConvertVideo(baseFunction.inputPath, baseFunction.outputPath);
+                    convertVideo.outputFile = baseFunction.outputFile;
+                    return await FFmpegTools.ProcessMedia(inputFile, dbUser, convertVideo, mimeType, _postgres, _hub);
                 case MediaType.GIF:
-                    return await FFMpegTools.ProcessMedia(inputFile, dbUser, (inputPath, outputPath) => FFMpegTools.ConvertToGif(inputPath, outputPath), ".gif", "image/gif", _postgres, _hub);
+                    var convertGIF = new FFmpegConvertGIF(baseFunction.inputPath, baseFunction.outputPath);
+                    convertGIF.outputFile = baseFunction.outputFile;
+                    return await FFmpegTools.ProcessMedia(inputFile, dbUser, convertGIF, "image/gif", _postgres, _hub);
                 case MediaType.PNG:
                 case MediaType.JPEG:
                 case MediaType.BMP:

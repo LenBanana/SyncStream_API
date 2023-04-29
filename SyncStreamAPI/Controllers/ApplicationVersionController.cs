@@ -51,66 +51,50 @@ namespace SyncStreamAPI.Controllers
         [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.API)]
         public async Task<IActionResult> DownloadUpdate(string apiKey, string appName)
         {
-            try
+            if (_postgres.AppVersions.SingleOrDefault(x => x.Name == appName) == null)
             {
-                if (_postgres.AppVersions.SingleOrDefault(x => x.Name == appName) == null)
-                {
-                    return NotFound();
-                }
-                var filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, appName);
-                if (!System.IO.File.Exists(filePath))
-                {
-                    return NotFound();
-                }
-                var memory = new MemoryStream();
-                using (var stream = new FileStream(filePath, FileMode.Open))
-                {
-                    await stream.CopyToAsync(memory);
-                }
-                memory.Position = 0;
-                return File(memory, "application/octet-stream", Path.GetFileName(filePath));
+                return NotFound();
             }
-            catch (Exception ex)
+            var filePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, appName);
+            if (!System.IO.File.Exists(filePath))
             {
-                Console.WriteLine(ex.ToString());
-                return StatusCode(StatusCodes.Status500InternalServerError);
+                return NotFound();
             }
+            var memory = new MemoryStream();
+            using (var stream = new FileStream(filePath, FileMode.Open))
+            {
+                await stream.CopyToAsync(memory);
+            }
+            memory.Position = 0;
+            return File(memory, "application/octet-stream", Path.GetFileName(filePath));
         }
 
         [HttpPost("upload")]
         [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.API)]
         public async Task<IActionResult> UploadUpdate(IFormFile file, string apiKey, string appName, string version = "0.1")
         {
-            try
+            if (file == null)
             {
-                if (file == null)
-                {
-                    return StatusCode(StatusCodes.Status403Forbidden);
-                }
-                var fileInfo = new FileInfo(file.FileName);
-                var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, appName);
-                using (var ms = System.IO.File.OpenWrite(path))
-                {
-                    await file.CopyToAsync(ms);
-                }
-                var ver = _postgres.AppVersions?.SingleOrDefault(x => x.Name == appName);
-                if (ver == null)
-                {
-                    _postgres.AppVersions.Add(new DbApplicationVersion() { LastUpdate = DateTime.Now, Name = appName, Version = version });
-                }
-                else
-                {
-                    ver.Version = version;
-                    ver.LastUpdate = DateTime.Now;
-                }
-                await _postgres.SaveChangesAsync();
-                return Ok(new { SuccessMessage = "Successfully uploaded new version." });
+                return StatusCode(StatusCodes.Status403Forbidden);
             }
-            catch (Exception ex)
+            var fileInfo = new FileInfo(file.FileName);
+            var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, appName);
+            using (var ms = System.IO.File.OpenWrite(path))
             {
-                Console.WriteLine(ex.ToString());
-                return StatusCode(StatusCodes.Status500InternalServerError);
+                await file.CopyToAsync(ms);
             }
+            var ver = _postgres.AppVersions?.SingleOrDefault(x => x.Name == appName);
+            if (ver == null)
+            {
+                _postgres.AppVersions.Add(new DbApplicationVersion() { LastUpdate = DateTime.Now, Name = appName, Version = version });
+            }
+            else
+            {
+                ver.Version = version;
+                ver.LastUpdate = DateTime.Now;
+            }
+            await _postgres.SaveChangesAsync();
+            return Ok(new { SuccessMessage = "Successfully uploaded new version." });
         }
     }
 }

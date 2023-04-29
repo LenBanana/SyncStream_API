@@ -24,9 +24,9 @@ namespace SyncStreamAPI.Helper
         public static int GuestRoomAmount = 6;
         public static int MaxParallelConversions = 6;
 
-        public const int DaysToKeepImages = 14;
-        public const int MinutesToKeepFFmpeg = 10;
-        public const int CheckIntervalInMinutes = 1;
+        public static TimeSpan DaysToKeepImages = TimeSpan.FromDays(14);
+        public static TimeSpan MinutesToKeepFFmpeg = TimeSpan.FromMinutes(10);
+        public static TimeSpan CheckIntervalInMinutes = TimeSpan.FromMinutes(1);
 
         public static int GallowGameLength = 90;
         public static int GallowGameLengthMin = 60;
@@ -43,6 +43,8 @@ namespace SyncStreamAPI.Helper
         //FFMpeg
         public static string DefaultAudioFormat = ".mp3";
         public static string DefaultAudioMimeType = "audio/mpeg";
+        //Task timeout (ms)
+        public static int FFmpegTimeout = 10000;
 
         public static YoutubeDL GetYoutubeDL()
         {

@@ -2,9 +2,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using SyncStreamAPI.DataContext;
+using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper;
+using SyncStreamAPI.Helper.FFmpeg;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
+using SyncStreamAPI.Models.MediaModels;
 using SyncStreamAPI.PostgresModels;
 using System;
 using System.Diagnostics;
@@ -16,87 +19,13 @@ using Xabe.FFmpeg;
 
 namespace ScreenIT.Helper
 {
-    public static class FFMpegTools
+    public static class FFmpegTools
     {
-        public static async Task<string> ConvertToGif(string inputPath, string outputPath)
-        {
-            FileCheck.CheckOverrideFile(outputPath);
-            var outputFolder = Path.GetDirectoryName(outputPath);
-            var tempPalettePath = Path.Combine(outputFolder, "temp_palette.png");
-
-            await GeneratePalette(inputPath, tempPalettePath);
-            await ConvertToGif(inputPath, tempPalettePath, outputPath);
-            await Task.Delay(100);
-            if (File.Exists(tempPalettePath))
-                File.Delete(tempPalettePath);
-
-            return outputPath;
-        }
-
-        private static async Task GeneratePalette(string inputPath, string tempPalettePath)
-        {
-            var args = $"-y -i \"{inputPath}\" -vf \"fps=10,scale=trunc(iw/2)*2:trunc(ih/2)*2:flags=lanczos,palettegen=stats_mode=diff\" -c:v gif \"{tempPalettePath}\"";
-            await ExecuteFFMPEG(args, e => Regex.IsMatch(e.Data, @"video:\d+kB audio:\d+kB subtitle:\d+kB other streams:\d+kB global headers:\d+kB muxing overhead:"));
-        }
-
-        private static async Task ConvertToGif(string inputPath, string tempPalettePath, string outputPath)
-        {
-            var args = $"-i \"{inputPath}\" -i \"{tempPalettePath}\" -lavfi \"fps=10,scale=trunc(iw/2)*2:trunc(ih/2)*2:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse\" -y \"{outputPath}\"";
-            await ExecuteFFMPEG(args, e => Regex.IsMatch(e.Data, @"video:\d+kB audio:\d+kB subtitle:\d+kB other streams:\d+kB global headers:\d+kB muxing overhead:"));
-        }
-
-        public static async Task<string> ConvertVideo(string inputPath, string outputPath)
-        {
-            FileCheck.CheckOverrideFile(outputPath);
-
-            var args = $"-i \"{inputPath}\" -c:v h264 -preset slow -crf 18 -pix_fmt yuv420p -c:a copy \"{outputPath}\"";
-            var result = await ExecuteFFMPEG(args, e => Regex.IsMatch(e.Data, @"^\[libx264 @ [0-9a-f]+\] kb\/s:\d+(\.\d+)?$"));
-            return outputPath;
-        }
-
-        public static async Task<string> ConvertAudio(string inputPath, string outputPath, string targetFormat)
-        {
-            FileCheck.CheckOverrideFile(outputPath);
-
-            var args = $"-i \"{inputPath}\" -c:a {GetAudioCodec(targetFormat)} -b:a 192k \"{outputPath}\"";
-            var result = await ExecuteFFMPEG(args, e => Regex.IsMatch(e.Data, @"video:\d+kB audio:\d+kB subtitle:\d+kB other streams:\d+kB global headers:\d+kB muxing overhead:"));
-            return outputPath;
-        }
-
-        public static async Task<string> ExtractAudio(string inputPath, string outputPath)
-        {
-            FileCheck.CheckOverrideFile(outputPath);
-
-            var args = $"-i \"{inputPath}\" -vn -acodec libmp3lame \"{outputPath}\"";
-            var success = await ExecuteFFMPEG(args, e =>
-            {
-                var errorPattern = @"^Output file #\d+ does not contain any stream$";
-                var pattern = @"video:\d+kB audio:\d+kB subtitle:\d+kB other streams:\d+kB global headers:\d+kB muxing overhead:";
-                return Regex.IsMatch(e.Data, pattern) || Regex.IsMatch(e.Data, errorPattern);
-            });
-
-            return success && File.Exists(outputPath) ? outputPath : null;
-        }
-
-        public static async Task<string> CutMedia(string inputPath, string outputPath, TimeSpan start, TimeSpan end)
-        {
-            try
-            {
-                FileCheck.CheckOverrideFile(outputPath);
-                var args = $"-i \"{inputPath}\" -ss {start} -to {end} -c copy \"{outputPath}\"";
-                var success = await ExecuteFFMPEG(args, e => 
-                (Regex.IsMatch(e.Data, @"video:\d+kB audio:\d+kB subtitle:\d+kB other streams:\d+kB global headers:\d+kB muxing overhead:") 
-                || Regex.IsMatch(e.Data, @"^-to value smaller than -ss; aborting\.$")));
-
-                return success && File.Exists(outputPath) ? outputPath : null;
-            }
-            catch (Exception)
-            {
-                return null;
-            }
-        }
-
-        private static async Task<bool> ExecuteFFMPEG(string args, Func<DataReceivedEventArgs, bool> exitCondition)
+        public static async Task<bool> ExecuteFFMPEG(
+            string args,
+            Func<DataReceivedEventArgs, bool> exitCondition,
+            Func<DataReceivedEventArgs, bool> errorCondition = null,
+            IProgress<double> progress = null)
         {
             try
             {
@@ -113,25 +42,49 @@ namespace ScreenIT.Helper
                         RedirectStandardError = true
                     }
                 };
-                var exitSignal = new ManualResetEvent(false);
+                var tcs = new TaskCompletionSource<bool>();
+                // Set up the timer to trigger after 10 seconds of no output
+                var timer = new Timer(state =>
+                {
+                    tcs.TrySetResult(false);
+                }, null, General.FFmpegTimeout, Timeout.Infinite);
 
                 process.ErrorDataReceived += (sender, e) =>
                 {
                     if (!string.IsNullOrEmpty(e.Data))
                     {
-                        if (exitCondition(e)) exitSignal.Set();
+                        if (errorCondition != null && errorCondition(e))
+                        {
+                            tcs.TrySetResult(false);
+                        }
+                        else if (exitCondition(e))
+                        {
+                            tcs.TrySetResult(true);
+                        }
+                        else if (progress != null)
+                        {
+                            var match = Regex.Match(e.Data, @"frame=\s*(\d+)");
+                            if (match.Success && match.Groups.Count > 1)
+                            {
+                                double frame = double.Parse(match.Groups[1].Value);
+                                progress.Report(frame);
+                            }
+                        }
                         Debug.WriteLine(e.Data);
+                        // Reset the timer if new output is received
+                        timer.Change(General.FFmpegTimeout, Timeout.Infinite);
                     }
                 };
 
                 process.Start();
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
-                await Task.Run(() => exitSignal.WaitOne());
+                var success = await tcs.Task;
+                process.Kill();
                 process.Dispose();
                 process = null;
 
-                return true;
+                return success;
             }
             catch (Exception)
             {
@@ -139,59 +92,103 @@ namespace ScreenIT.Helper
             }
         }
 
-        public static async Task<ActionResult> ProcessMedia(IFormFile inputFile, DbUser dbUser, Func<string, string, Task<string>> mediaOperation, string extension, string mimeType, PostgresContext postgresContext, IHubContext<ServerHub, IServerHub> serverHub)
+        public static async Task<ActionResult> ProcessMedia(
+            IFormFile inputFile,
+            DbUser dbUser,
+            FFmpegFunction function,
+            string mimeType,
+            PostgresContext postgresContext,
+            IHubContext<ServerHub, IServerHub> serverHub)
         {
+            var fileInfo = new FileInfo(inputFile.FileName);
+            var editProcess = new EditorProcess();
+            editProcess.Text = $"Processing - {fileInfo.Name}...";
+            editProcess.AlertType = AlertType.Info;
+            await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
             try
             {
-                var fileInfo = new FileInfo(inputFile.FileName);
-                var dbfile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension, dbUser);
-                var path = Path.Combine(General.TemporaryFilePath, $"{dbfile.FileKey}{dbfile.FileEnding}");
-                using (var stream = new FileStream(path, FileMode.Create))
+                using (var stream = new FileStream(function.inputPath, FileMode.Create))
                 {
                     await inputFile.CopyToAsync(stream);
                 }
-
-                var outputDbfile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), extension, dbUser, temporary: true);
-                outputDbfile.Created = DateTime.UtcNow.AddDays(-General.DaysToKeepImages).AddMinutes(General.MinutesToKeepFFmpeg);
-                var outputPath = Path.Combine(General.TemporaryFilePath, $"{outputDbfile.FileKey}{extension}");
-                var result = await mediaOperation(path, outputPath);
-                FileCheck.CheckOverrideFile(path);
+                var p = new Progress<double>(async d =>
+                {
+                    editProcess.Progress = d;
+                    await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
+                });
+                function.progress = p;
+                string result = await ExecuteFFmpegFunction(function);
                 if (result != null)
                 {
-                    var fileBytes = await System.IO.File.ReadAllBytesAsync(outputPath);
-                    var savedFile = postgresContext.Files?.Add(outputDbfile);
+                    editProcess.AlertType = AlertType.Success;
+                    editProcess.Text = $"Success - {fileInfo.Name}...";
+                    await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
+                    var fileBytes = await File.ReadAllBytesAsync(function.outputPath);
+                    var savedFile = postgresContext.Files?.Add(function.outputFile);
                     await postgresContext.SaveChangesAsync();
                     await serverHub.Clients.Group(dbUser.ApiKey).updateFolders(new SyncStreamAPI.DTOModel.FileDto(savedFile.Entity));
                     FileContentResult fileResult = new FileContentResult(fileBytes, mimeType);
-                    fileResult.FileDownloadName = $"{outputDbfile.Name}{outputDbfile.FileEnding}";
+                    await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
                     return fileResult;
                 }
                 else
                 {
+                    if (File.Exists(function.outputPath))
+                        FileCheck.CheckOverrideFile(function.outputPath);
+                    editProcess.AlertType = AlertType.Danger;
+                    editProcess.Text = $"Failed - {fileInfo.Name}...";
+                    await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
                     return new StatusCodeResult(StatusCodes.Status404NotFound);
                 }
             }
             catch (Exception ex)
             {
+                Console.WriteLine(ex.Message);
                 return new StatusCodeResult(StatusCodes.Status500InternalServerError);
+            }
+            finally
+            {
+                // Wait some time before to give the user time to read the message
+                FileCheck.CheckOverrideFile(function.inputPath);
+                await Task.Delay(2500);
+                await serverHub.Clients.Group(dbUser.ApiKey).finishStatus(editProcess);
             }
         }
 
-        private static string GetAudioCodec(string format)
+        private static async Task<string> ExecuteFFmpegFunction(FFmpegFunction function)
+        {
+            return function switch
+            {
+                FFmpegConvertAudio convertAudio => await convertAudio.ConvertAudio(),
+                FFmpegConvertGIF convertGIF => await convertGIF.ConvertToGif(),
+                FFmpegConvertVideo convertVideo => await convertVideo.ConvertVideo(),
+                FFmpegCutMedia cutMedia => await cutMedia.CutMedia(),
+                FFmpegExtractAudio extractAudio => await extractAudio.ExtractAudio(),
+                _ => null,
+            };
+        }
+
+        public static string GetAudioCodec(string format)
         {
             switch (format.ToLowerInvariant())
             {
                 case "mp3":
+                case ".mp3":
                     return "libmp3lame";
                 case "wav":
+                case ".wav":
                     return "pcm_s16le";
                 case "ogg":
+                case ".ogg":
                     return "libvorbis";
                 case "flac":
+                case ".flac":
                     return "flac";
                 case "aiff":
+                case ".aiff":
                     return "pcm_s16be";
                 case "m4a":
+                case ".m4a":
                     return "aac";
                 default:
                     throw new ArgumentException($"Unsupported audio format: {format}");
