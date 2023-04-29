@@ -44,7 +44,7 @@ namespace SyncStreamAPI.Helper
         public static string DefaultAudioFormat = ".mp3";
         public static string DefaultAudioMimeType = "audio/mpeg";
         //Task timeout (ms)
-        public static int FFmpegTimeout = 10000;
+        public static int FFmpegTimeout = 5000;
 
         public static YoutubeDL GetYoutubeDL()
         {

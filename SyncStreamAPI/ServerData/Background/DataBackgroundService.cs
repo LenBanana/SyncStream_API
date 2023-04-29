@@ -45,13 +45,22 @@ namespace SyncStreamAPI.ServerData.Background
                     if (File.Exists(imgPath))
                     {
                         File.Delete(imgPath);
-                        var dbUser = dbContext.Users?.FirstOrDefault(x => x.ID == image.DbUserID);
-                        if (dbUser != null)
-                            await hub.Clients.Group(dbUser.ID.ToString()).updateFolders(new DTOModel.FileDto(image));
                     }
                     dbContext.Files.Remove(image);
                 }
                 await dbContext.SaveChangesAsync();
+                // Inform the user of the deleted file if connected
+                var imageUpdates = outdatedImages.DistinctBy(image => image.DbUserID).ToList();
+                foreach (var imgUpdate in imageUpdates)
+                {
+                    var dbUser = dbContext.Users?.FirstOrDefault(x => x.ID == imgUpdate.DbUserID);
+                    if (dbUser != null)
+                    {
+                        var dbFolder = dbContext.Folders?.FirstOrDefault(x => x.Id == imgUpdate.DbFileFolderId);
+                        if (dbFolder != null)
+                            await hub.Clients.Group(dbUser.ID.ToString()).getFolders(new DTOModel.FolderDto(dbFolder));
+                    }
+                }
             }
         }
 
