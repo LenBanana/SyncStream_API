@@ -34,7 +34,7 @@ namespace ScreenIT.Helper
                     StartInfo = new ProcessStartInfo()
                     {
                         FileName = General.GetFFmpegPath(),
-                        Arguments = args,
+                        Arguments = "-progress pipe:2 " + args,
                         UseShellExecute = false,
                         CreateNoWindow = true,
                         RedirectStandardInput = true,
@@ -107,24 +107,28 @@ namespace ScreenIT.Helper
             await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
             try
             {
-                using (var stream = new FileStream(function.inputPath, FileMode.Create))
+                using (var stream = new FileStream(function.InputPath, FileMode.Create))
                 {
                     await inputFile.CopyToAsync(stream);
                 }
+                var mediaInfo = new FFmpegMediaInfo(function.InputPath, function.OutputPath);
+                mediaInfo.Start = function.Start;
+                mediaInfo.End = function.End;
+                var totalFrames = await mediaInfo.GetTotalFrames();
                 var p = new Progress<double>(async d =>
                 {
-                    editProcess.Progress = d;
+                    editProcess.Progress = totalFrames.HasValue ? d / totalFrames.Value * 100 : 100;
                     await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
                 });
-                function.progress = p;
+                function.Progress = p;
                 string result = await ExecuteFFmpegFunction(function);
                 if (result != null)
                 {
                     editProcess.AlertType = AlertType.Success;
                     editProcess.Text = $"Success - {fileInfo.Name}...";
                     await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
-                    var fileBytes = await File.ReadAllBytesAsync(function.outputPath);
-                    var savedFile = postgresContext.Files?.Add(function.outputFile);
+                    var fileBytes = await File.ReadAllBytesAsync(function.OutputPath);
+                    var savedFile = postgresContext.Files?.Add(function.OutputFile);
                     await postgresContext.SaveChangesAsync();
                     await serverHub.Clients.Group(dbUser.ApiKey).updateFolders(new SyncStreamAPI.DTOModel.FileDto(savedFile.Entity));
                     FileContentResult fileResult = new FileContentResult(fileBytes, mimeType);
@@ -133,8 +137,8 @@ namespace ScreenIT.Helper
                 }
                 else
                 {
-                    if (File.Exists(function.outputPath))
-                        FileCheck.CheckOverrideFile(function.outputPath);
+                    if (File.Exists(function.OutputPath))
+                        FileCheck.CheckOverrideFile(function.OutputPath);
                     editProcess.AlertType = AlertType.Danger;
                     editProcess.Text = $"Failed - {fileInfo.Name}...";
                     await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
@@ -149,7 +153,7 @@ namespace ScreenIT.Helper
             finally
             {
                 // Wait some time before to give the user time to read the message
-                FileCheck.CheckOverrideFile(function.inputPath);
+                FileCheck.CheckOverrideFile(function.InputPath);
                 await Task.Delay(2500);
                 await serverHub.Clients.Group(dbUser.ApiKey).finishStatus(editProcess);
             }
@@ -190,8 +194,42 @@ namespace ScreenIT.Helper
                 case "m4a":
                 case ".m4a":
                     return "aac";
+                case "mp4":
+                case "mov":
+                case "mkv":
+                case ".mp4":
+                case ".mov":
+                case ".mkv":
+                    return "aac";
+                case "avi":
+                case ".avi":
+                    return "mp3";
+                case "wmv":
+                case ".wmv":
+                    return "wmav2";
                 default:
-                    throw new ArgumentException($"Unsupported audio format: {format}");
+                    return "copy";
+            }
+        }
+
+        public static string GetVideoCodec(string format)
+        {
+            switch (format.ToLowerInvariant())
+            {
+                case "avi":
+                case ".avi":
+                    return "mpeg4";
+                case "wmv":
+                case ".wmv":
+                    return "wmv2";
+                case "flv":
+                case ".flv":
+                    return "flv1";
+                case "webm":
+                case ".webm":
+                    return "libvpx";
+                default:
+                    return "h264";
             }
         }
     }

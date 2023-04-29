@@ -18,15 +18,15 @@ namespace SyncStreamAPI.Helper.FFmpeg
 
         public async Task<string> ConvertAudio()
         {
-            FileCheck.CheckOverrideFile(outputPath);
+            FileCheck.CheckOverrideFile(OutputPath);
 
-            var args = $"-i \"{inputPath}\" -c:a {FFmpegTools.GetAudioCodec(targetFormat)} -b:a 192k \"{outputPath}\"";
+            var args = $"-i \"{InputPath}\" -c:a {FFmpegTools.GetAudioCodec(TargetFormat)} -b:a 192k \"{OutputPath}\"";
             var success = await FFmpegTools.ExecuteFFMPEG(args,
                 exitCondition: e => Regex.IsMatch(e.Data, DefaultConversionRegex),
                 errorCondition: e => Regex.IsMatch(e.Data, DefaultErrorRegex),
-                progress
+                Progress
                 );
-            return success && File.Exists(outputPath) ? outputPath : null;
+            return success && File.Exists(OutputPath) ? OutputPath : null;
         }
     }
 }

@@ -24,15 +24,18 @@ namespace SyncStreamAPI.Helper.FFmpeg
         {
             try
             {
-                FileCheck.CheckOverrideFile(outputPath);
-                var args = $"-i \"{inputPath}\" -ss {start} -to {end} -c copy \"{outputPath}\"";
+                FileCheck.CheckOverrideFile(OutputPath);
+                string formattedStart = $"{(int)Start.TotalHours:D2}:{Start.Minutes:D2}:{Start.Seconds:D2}";
+                string formattedEnd = $"{(int)End.TotalHours:D2}:{End.Minutes:D2}:{End.Seconds:D2}";
+                var args = $"-ss {formattedStart} -to {formattedEnd} -i \"{InputPath}\" -c copy \"{OutputPath}\"";
+
                 var success = await FFmpegTools.ExecuteFFMPEG(args,
                 exitCondition: e => Regex.IsMatch(e.Data, DefaultConversionRegex),
                 errorCondition: e => Regex.IsMatch(e.Data, @"^-to value smaller than -ss; aborting\.$"),
-                progress
+                Progress
                 );
 
-                return success && File.Exists(outputPath) ? outputPath : null;
+                return success && File.Exists(OutputPath) ? OutputPath : null;
             }
             catch (Exception)
             {

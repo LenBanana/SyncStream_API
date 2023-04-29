@@ -18,16 +18,16 @@ namespace SyncStreamAPI.Helper.FFmpeg
 
         public async Task<string> ExtractAudio()
         {
-            FileCheck.CheckOverrideFile(outputPath);
+            FileCheck.CheckOverrideFile(OutputPath);
 
-            var args = $"-i \"{inputPath}\" -vn -acodec libmp3lame \"{outputPath}\"";
+            var args = $"-i \"{InputPath}\" -vn -acodec libmp3lame \"{OutputPath}\"";
             var success = await FFmpegTools.ExecuteFFMPEG(
                 args,
                 exitCondition: e => Regex.IsMatch(e.Data, DefaultConversionRegex),
                 errorCondition: e => Regex.IsMatch(e.Data, @"^Output file #\d+ does not contain any stream$")
                 );
 
-            return success && File.Exists(outputPath) ? outputPath : null;
+            return success && File.Exists(OutputPath) ? OutputPath : null;
         }
     }
 }

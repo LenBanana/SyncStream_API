@@ -18,19 +18,19 @@ namespace SyncStreamAPI.Helper.FFmpeg
 
         public async Task<string> ConvertToGif()
         {
-            FileCheck.CheckOverrideFile(outputPath);
-            var outputFolder = Path.GetDirectoryName(outputPath);
+            FileCheck.CheckOverrideFile(OutputPath);
+            var outputFolder = Path.GetDirectoryName(OutputPath);
             var tempPalettePath = Path.Combine(outputFolder, "temp_palette.png");
             var success = false;
-            success = await GeneratePalette(inputPath, tempPalettePath);
+            success = await GeneratePalette(InputPath, tempPalettePath);
             if (!success)
                 return null;
-            success = await ConvertToGif(inputPath, tempPalettePath, outputPath);
+            success = await ConvertToGif(InputPath, tempPalettePath, OutputPath);
             await Task.Delay(100);
             if (File.Exists(tempPalettePath))
                 File.Delete(tempPalettePath);
 
-            return success && File.Exists(outputPath) ? outputPath : null;
+            return success && File.Exists(OutputPath) ? OutputPath : null;
         }
 
         private async Task<bool> GeneratePalette(string inputPath, string tempPalettePath)

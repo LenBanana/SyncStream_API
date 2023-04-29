@@ -54,8 +54,8 @@ namespace SyncStreamAPI.Controllers
             var endTime = TimeSpan.FromMilliseconds(endMilliSeconds);
             var fileInfo = new FileInfo(inputFile.FileName);
             var baseFunction = FFmpegFunction.GetDefaultFunction(fileInfo, fileInfo.Extension, dbUser);
-            var cutFunction = new FFmpegCutMedia(baseFunction.inputPath, baseFunction.outputPath, startTime, endTime, null);
-            cutFunction.outputFile = baseFunction.outputFile;
+            var cutFunction = new FFmpegCutMedia(baseFunction.InputPath, baseFunction.OutputPath, startTime, endTime, null);
+            cutFunction.OutputFile = baseFunction.OutputFile;
             return await FFmpegTools.ProcessMedia(inputFile, dbUser, cutFunction, inputFile.ContentType, _postgres, _hub);
         }
 
@@ -81,20 +81,20 @@ namespace SyncStreamAPI.Controllers
                 case MediaType.FLAC:
                 case MediaType.AIFF:
                 case MediaType.M4A:
-                    var convertAudio = new FFmpegConvertAudio(baseFunction.inputPath, baseFunction.outputPath);
-                    convertAudio.outputFile = baseFunction.outputFile;
+                    var convertAudio = new FFmpegConvertAudio(baseFunction.InputPath, baseFunction.OutputPath);
+                    convertAudio.OutputFile = baseFunction.OutputFile;
                     return await FFmpegTools.ProcessMedia(inputFile, dbUser, convertAudio, mimeType, _postgres, _hub);
                 case MediaType.MP4:
                 case MediaType.AVI:
                 case MediaType.WMV:
                 case MediaType.MOV:
                 case MediaType.MKV:
-                    var convertVideo = new FFmpegConvertVideo(baseFunction.inputPath, baseFunction.outputPath);
-                    convertVideo.outputFile = baseFunction.outputFile;
+                    var convertVideo = new FFmpegConvertVideo(baseFunction.InputPath, baseFunction.OutputPath);
+                    convertVideo.OutputFile = baseFunction.OutputFile;
                     return await FFmpegTools.ProcessMedia(inputFile, dbUser, convertVideo, mimeType, _postgres, _hub);
                 case MediaType.GIF:
-                    var convertGIF = new FFmpegConvertGIF(baseFunction.inputPath, baseFunction.outputPath);
-                    convertGIF.outputFile = baseFunction.outputFile;
+                    var convertGIF = new FFmpegConvertGIF(baseFunction.InputPath, baseFunction.OutputPath);
+                    convertGIF.OutputFile = baseFunction.OutputFile;
                     return await FFmpegTools.ProcessMedia(inputFile, dbUser, convertGIF, "image/gif", _postgres, _hub);
                 case MediaType.PNG:
                 case MediaType.JPEG:
