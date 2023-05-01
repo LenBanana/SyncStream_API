@@ -12,7 +12,7 @@ namespace SyncStreamAPI.Models
         public string usercolor { get; set; }
         public ChatMessage()
         {
-            time = DateTime.Now;
+            time = DateTime.UtcNow;
         }
     }
 

@@ -120,7 +120,7 @@ namespace SyncStreamAPI.Hubs
                     await Groups.RemoveFromGroupAsync(Context.ConnectionId, UniqueId);
                     return;
                 }
-                MainServer.members[idx].uptime = DateTime.Now.ToString("MM.dd.yyyy HH:mm:ss");
+                MainServer.members[idx].uptime = DateTime.UtcNow.ToString("MM.dd.yyyy HH:mm:ss");
                 if (MainServer.members.Count == 1)
                 {
                     if (!MainServer.members[idx].ishost)
@@ -164,11 +164,11 @@ namespace SyncStreamAPI.Hubs
 
                 if (idxHost != -1)
                 {
-                    MainServer.members[idxHost].uptime = DateTime.Now.ToString("MM.dd.yyyy HH:mm:ss");
+                    MainServer.members[idxHost].uptime = DateTime.UtcNow.ToString("MM.dd.yyyy HH:mm:ss");
                     MainServer.members[idxHost].ishost = false;
                     await Clients.Client(MainServer.members[idxHost].ConnectionId).hostupdate(false);
                 }
-                MainServer.members[idxMember].uptime = DateTime.Now.ToString("MM.dd.yyyy HH:mm:ss");
+                MainServer.members[idxMember].uptime = DateTime.UtcNow.ToString("MM.dd.yyyy HH:mm:ss");
                 MainServer.members[idxMember].ishost = true;
                 await Clients.Client(MainServer.members[idxMember].ConnectionId).hostupdate(true);
                 await Clients.Group(UniqueId).userupdate(MainServer.members?.Select(x => x.ToDTO()).ToList());

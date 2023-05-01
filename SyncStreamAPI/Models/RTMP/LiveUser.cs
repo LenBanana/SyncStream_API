@@ -8,7 +8,7 @@ namespace SyncStreamAPI.Models.RTMP
         public string id { get; set; }
         public string userName { get; set; }
         public List<UserDTO> watchMember { get; set; } = new List<UserDTO>();
-        public DateTime created { get; set; } = DateTime.Now;
+        public DateTime created { get; set; } = DateTime.UtcNow;
         public LiveUserDTO ToDTO()
         {
             return new LiveUserDTO(this);

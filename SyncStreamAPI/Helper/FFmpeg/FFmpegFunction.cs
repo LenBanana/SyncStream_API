@@ -39,7 +39,6 @@ namespace SyncStreamAPI.Helper.FFmpeg
             var dbfile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension, dbUser);
             var path = Path.Combine(General.TemporaryFilePath, $"{dbfile.FileKey}{dbfile.FileEnding}");
             var outputDbfile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), extension, dbUser, temporary: true);
-            outputDbfile.Created = DateTime.UtcNow.AddDays(-General.DaysToKeepImages.Days).AddMinutes(General.MinutesToKeepFFmpeg.Minutes);
             var outputPath = Path.Combine(General.TemporaryFilePath, $"{outputDbfile.FileKey}{extension}");
             var function = new FFmpegFunction(path, outputPath);
             function.InputFile = dbfile;

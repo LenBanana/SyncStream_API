@@ -288,7 +288,7 @@ namespace SyncStreamAPI.Hubs
                 dbUser.RememberTokens = dbUser.RememberTokens.GroupBy(x => x.Token)?.Select(x => x.First()).ToList();
                 foreach (var t in dbUser.RememberTokens.ToList())
                 {
-                    if ((DateTime.Now - t.Created).TotalDays > 30)
+                    if ((DateTime.UtcNow - t.Created).TotalDays > 30)
                     {
                         dbUser.RememberTokens.Remove(t);
                         _postgres.RememberTokens.Remove(t);
@@ -308,7 +308,7 @@ namespace SyncStreamAPI.Hubs
                     if (dbUser.ApiKey != null)
                         await Groups.AddToGroupAsync(Context.ConnectionId, dbUser.ApiKey);
                     await Clients.Caller.userlogin(dbUser.ToDTO());
-                    Token.Created = DateTime.Now;
+                    Token.Created = DateTime.UtcNow;
                 }
                 else
                 {

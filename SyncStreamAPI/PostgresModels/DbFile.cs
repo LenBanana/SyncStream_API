@@ -13,9 +13,10 @@ namespace SyncStreamAPI.PostgresModels
         [NotNull]
         public string FileKey { get; set; }
         public DateTime Created { get; set; }
+        public DateTime? DateToBeDeleted { get; set; }
         public int DbFileFolderId { get; set; }
         public bool Temporary { get; set; }
-        public DbFile(string name, string fileEnding, DbUser user, bool temporary = false)
+        public DbFile(string name, string fileEnding, DbUser user, bool temporary = false, DateTime? dateToBeDeleted = null)
         {
             ID = 0;
             DbFileFolderId = 1;
@@ -23,14 +24,17 @@ namespace SyncStreamAPI.PostgresModels
             Name = name;
             FileEnding = fileEnding;
             FileKey = user?.GenerateToken(Guid.NewGuid().ToString() + name).Token;
-            Created = DateTime.Now;
+            Created = DateTime.UtcNow;
             Temporary = temporary;
+            DateToBeDeleted = dateToBeDeleted;
+            if (Temporary && DateToBeDeleted == null)
+                DateToBeDeleted = DateTime.UtcNow.AddDays(General.DaysToKeepTemporaryFiles.Days);
         }
 
         public DbFile()
         {
             ID = 0;
-            Created = DateTime.Now;
+            Created = DateTime.UtcNow;
         }
 
         public string GetPath()

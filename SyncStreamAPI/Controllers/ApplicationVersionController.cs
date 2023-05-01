@@ -86,12 +86,12 @@ namespace SyncStreamAPI.Controllers
             var ver = _postgres.AppVersions?.SingleOrDefault(x => x.Name == appName);
             if (ver == null)
             {
-                _postgres.AppVersions.Add(new DbApplicationVersion() { LastUpdate = DateTime.Now, Name = appName, Version = version });
+                _postgres.AppVersions.Add(new DbApplicationVersion() { LastUpdate = DateTime.UtcNow, Name = appName, Version = version });
             }
             else
             {
                 ver.Version = version;
-                ver.LastUpdate = DateTime.Now;
+                ver.LastUpdate = DateTime.UtcNow;
             }
             await _postgres.SaveChangesAsync();
             return Ok(new { SuccessMessage = "Successfully uploaded new version." });

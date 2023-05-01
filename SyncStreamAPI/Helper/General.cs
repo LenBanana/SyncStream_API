@@ -24,7 +24,7 @@ namespace SyncStreamAPI.Helper
         public static int GuestRoomAmount = 6;
         public static int MaxParallelConversions = 6;
 
-        public static TimeSpan DaysToKeepImages = TimeSpan.FromDays(14);
+        public static TimeSpan DaysToKeepTemporaryFiles = TimeSpan.FromDays(14);
         public static TimeSpan MinutesToKeepFFmpeg = TimeSpan.FromMinutes(10);
         public static TimeSpan CheckIntervalInMinutes = TimeSpan.FromMinutes(1);
 

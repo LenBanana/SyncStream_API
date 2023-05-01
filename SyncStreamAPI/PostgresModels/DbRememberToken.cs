@@ -9,7 +9,7 @@ namespace SyncStreamAPI.PostgresModels
         public DateTime Created { get; set; }
         public DbRememberToken()
         {
-            Created = DateTime.Now;
+            Created = DateTime.UtcNow;
         }
     }
 }

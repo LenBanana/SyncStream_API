@@ -24,10 +24,14 @@ namespace SyncStreamAPI.ServerData.Background
             _serviceScope = serviceScopeFactory;
         }
 
-        public Task StartAsync(CancellationToken cancellationToken)
+        public async Task StartAsync(CancellationToken cancellationToken)
         {
+            using (var scope = _serviceScope.CreateScope())
+            {
+                var dbContext = scope.ServiceProvider.GetRequiredService<PostgresContext>();
+                await dbContext.Database.EnsureCreatedAsync();
+            }
             _timer = new Timer(CheckDatabaseAndRemoveFiles, null, TimeSpan.Zero, General.CheckIntervalInMinutes);
-            return Task.CompletedTask;
         }
 
         private async void CheckDatabaseAndRemoveFiles(object state)
@@ -35,10 +39,8 @@ namespace SyncStreamAPI.ServerData.Background
             using (var scope = _serviceScope.CreateScope())
             {
                 var dbContext = scope.ServiceProvider.GetRequiredService<PostgresContext>();
-                var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                await dbContext.Database.EnsureCreatedAsync();
-                var thresholdDate = DateTime.UtcNow.AddDays(-General.DaysToKeepImages.Days);
-                var outdatedImages = await dbContext.Files.Where(e => e.Created < thresholdDate && e.Temporary).ToListAsync();
+                var thresholdDate = DateTime.UtcNow.AddDays(-General.DaysToKeepTemporaryFiles.Days);
+                var outdatedImages = dbContext.Files.Where(e => e.DateToBeDeleted < thresholdDate && e.Temporary);
                 foreach (var image in outdatedImages)
                 {
                     var imgPath = image.GetPath();
@@ -58,7 +60,10 @@ namespace SyncStreamAPI.ServerData.Background
                     {
                         var dbFolder = dbContext.Folders?.FirstOrDefault(x => x.Id == imgUpdate.DbFileFolderId);
                         if (dbFolder != null)
+                        {
+                            var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
                             await hub.Clients.Group(dbUser.ID.ToString()).getFolders(new DTOModel.FolderDto(dbFolder));
+                        }
                     }
                 }
             }
