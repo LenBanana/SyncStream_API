@@ -95,7 +95,7 @@ namespace ScreenIT.Helper
         public static async Task<ActionResult> ProcessMedia(
             IFormFile inputFile,
             DbUser dbUser,
-            FFmpegFunction function,
+            IFFmpegFunction function,
             string mimeType,
             PostgresContext postgresContext,
             IHubContext<ServerHub, IServerHub> serverHub)
