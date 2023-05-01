@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Helper.FFmpeg
 {
-    public class FFmpegExtractAudio : FFmpegFunction
+    public class FFmpegExtractAudio : FFmpegFunction, IFFmpegFunction
     {
         public FFmpegExtractAudio(string inputPath, string outputPath) : base(inputPath, outputPath)
         {
@@ -16,7 +16,7 @@ namespace SyncStreamAPI.Helper.FFmpeg
         {
         }
 
-        public async Task<string> ExtractAudio()
+        public new async Task<string> Execute()
         {
             FileCheck.CheckOverrideFile(OutputPath);
 

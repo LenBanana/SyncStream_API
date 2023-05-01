@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Helper.FFmpeg
 {
-    public class FFmpegConvertGIF : FFmpegFunction
+    public class FFmpegConvertGIF : FFmpegFunction, IFFmpegFunction
     {
         public FFmpegConvertGIF(string inputPath, string outputPath) : base(inputPath, outputPath)
         {
@@ -16,7 +16,7 @@ namespace SyncStreamAPI.Helper.FFmpeg
         {
         }
 
-        public async Task<string> ConvertToGif()
+        public new async Task<string> Execute()
         {
             FileCheck.CheckOverrideFile(OutputPath);
             var outputFolder = Path.GetDirectoryName(OutputPath);

@@ -1,13 +1,22 @@
 ﻿using SyncStreamAPI.PostgresModels;
 using System;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Helper.FFmpeg
 {
-    public class FFmpegFunction
+    public class FFmpegFunction : IFFmpegFunction
     {
         public string DefaultConversionRegex = @"video:\d+kB audio:\d+kB subtitle:\d+kB other streams:\d+kB global headers:\d+kB muxing overhead:";
         public string DefaultErrorRegex = @"^Conversion failed!$";
+        public DbFile InputFile { get; set; }
+        public DbFile OutputFile { get; set; }
+        public string TargetFormat => OutputFile.FileEnding;
+        public string InputPath { get; set; }
+        public string OutputPath { get; set; }
+        public TimeSpan Start { get; set; }
+        public TimeSpan End { get; set; }
+        public IProgress<double> Progress { get; set; } = null;
 
         public FFmpegFunction(string inputPath, string outputPath)
         {
@@ -25,15 +34,6 @@ namespace SyncStreamAPI.Helper.FFmpeg
             this.End = end;
         }
 
-        public DbFile InputFile { get; set; }
-        public DbFile OutputFile { get; set; }
-        public string TargetFormat => OutputFile.FileEnding;
-        public string InputPath { get; set; }
-        public string OutputPath { get; set; }
-        public TimeSpan Start { get; set; }
-        public TimeSpan End { get; set; }
-        public IProgress<double> Progress { get; set; } = null;
-
         public static FFmpegFunction GetDefaultFunction(FileInfo fileInfo, string extension, DbUser dbUser)
         {
             var dbfile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension, dbUser);
@@ -45,6 +45,11 @@ namespace SyncStreamAPI.Helper.FFmpeg
             function.InputFile = dbfile;
             function.OutputFile = outputDbfile;
             return function;
+        }
+
+        public Task<string> Execute()
+        {
+            throw new NotImplementedException();
         }
     }
 }

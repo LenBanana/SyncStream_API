@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Helper.FFmpeg
 {
-    public class FFmpegConvertVideo : FFmpegFunction
+    public class FFmpegConvertVideo : FFmpegFunction, IFFmpegFunction
     {
         public FFmpegConvertVideo(string inputPath, string outputPath) : base(inputPath, outputPath)
         {
@@ -16,7 +16,7 @@ namespace SyncStreamAPI.Helper.FFmpeg
         {
         }
 
-        public async Task<string> ConvertVideo()
+        public new async Task<string> Execute()
         {
             FileCheck.CheckOverrideFile(OutputPath);
             var outputExtension = Path.GetExtension(OutputPath).ToLower();

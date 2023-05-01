@@ -70,7 +70,7 @@ namespace ScreenIT.Helper
                                 progress.Report(frame);
                             }
                         }
-                        Debug.WriteLine(e.Data);
+                        Console.WriteLine(e.Data);
                         // Reset the timer if new output is received
                         timer.Change(General.FFmpegTimeout, Timeout.Infinite);
                     }
@@ -121,7 +121,7 @@ namespace ScreenIT.Helper
                     await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
                 });
                 function.Progress = p;
-                string result = await ExecuteFFmpegFunction(function);
+                string result = await function.Execute();
                 if (result != null)
                 {
                     editProcess.AlertType = AlertType.Success;
@@ -157,19 +157,6 @@ namespace ScreenIT.Helper
                 await Task.Delay(2500);
                 await serverHub.Clients.Group(dbUser.ApiKey).finishStatus(editProcess);
             }
-        }
-
-        private static async Task<string> ExecuteFFmpegFunction(FFmpegFunction function)
-        {
-            return function switch
-            {
-                FFmpegConvertAudio convertAudio => await convertAudio.ConvertAudio(),
-                FFmpegConvertGIF convertGIF => await convertGIF.ConvertToGif(),
-                FFmpegConvertVideo convertVideo => await convertVideo.ConvertVideo(),
-                FFmpegCutMedia cutMedia => await cutMedia.CutMedia(),
-                FFmpegExtractAudio extractAudio => await extractAudio.ExtractAudio(),
-                _ => null,
-            };
         }
 
         public static string GetAudioCodec(string format)

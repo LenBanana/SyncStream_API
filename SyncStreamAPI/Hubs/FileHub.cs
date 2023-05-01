@@ -112,10 +112,10 @@ namespace SyncStreamAPI.Hubs
             var dbUser = _postgres.Users.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == token));
             var shareFolders = _postgres.FolderShare?.Where(x => x.DbUserID == dbUser.ID);
             var folder = _postgres.Folders?.Where(x => x.DbUserID == null || x.DbUserID == dbUser.ID || shareFolders.FirstOrDefault(y => y.DbFolderID == x.Id) != null || shareFolders.FirstOrDefault(y => y.DbFolderID == x.ParentId) != null).OrderBy(x => x.Name).ToList();
-            var defaultFolder = folder.FirstOrDefault(x => x.Id == folderId);
-            if (defaultFolder != null)
+            var resultFolder = folder.FirstOrDefault(x => x.Id == folderId);
+            if (resultFolder != null)
             {
-                var folderResult = new FolderDto(defaultFolder);
+                var folderResult = new FolderDto(resultFolder);
                 await Clients.Group(token).getFolders(folderResult);
             }
         }

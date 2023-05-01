@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Helper.FFmpeg
 {
-    public class FFmpegCutMedia : FFmpegFunction
+    public class FFmpegCutMedia : FFmpegFunction, IFFmpegFunction
     {
         public FFmpegCutMedia(string inputPath, string outputPath) : base(inputPath, outputPath)
         {
@@ -20,7 +20,7 @@ namespace SyncStreamAPI.Helper.FFmpeg
         {
         }
 
-        public async Task<string> CutMedia()
+        public new async Task<string> Execute()
         {
             try
             {
