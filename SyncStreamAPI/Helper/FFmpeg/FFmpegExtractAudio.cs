@@ -24,7 +24,7 @@ namespace SyncStreamAPI.Helper.FFmpeg
             var success = await FFmpegTools.ExecuteFFMPEG(
                 args,
                 exitCondition: e => Regex.IsMatch(e.Data, DefaultConversionRegex),
-                errorCondition: e => Regex.IsMatch(e.Data, @"^Output file #\d+ does not contain any stream$")
+                errorCondition: e => Regex.IsMatch(e.Data, DefaultErrorRegex) || Regex.IsMatch(e.Data, @"^Output file #\d+ does not contain any stream$")
                 );
 
             return success && File.Exists(OutputPath) ? OutputPath : null;

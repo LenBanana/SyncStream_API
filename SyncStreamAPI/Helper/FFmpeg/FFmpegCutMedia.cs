@@ -31,7 +31,7 @@ namespace SyncStreamAPI.Helper.FFmpeg
 
                 var success = await FFmpegTools.ExecuteFFMPEG(args,
                 exitCondition: e => Regex.IsMatch(e.Data, DefaultConversionRegex),
-                errorCondition: e => Regex.IsMatch(e.Data, @"^-to value smaller than -ss; aborting\.$"),
+                errorCondition: e => Regex.IsMatch(e.Data, DefaultErrorRegex) || Regex.IsMatch(e.Data, @"^-to value smaller than -ss; aborting\.$"),
                 Progress
                 );
 
