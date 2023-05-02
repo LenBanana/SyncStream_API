@@ -351,5 +351,19 @@ namespace SyncStreamAPI.Hubs
                 }
             }
         }
+
+        [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
+        public async Task MakeFilePermanent(string token, int id)
+        {
+            var dbUser = await _postgres.Users.Include(x => x.RememberTokens).FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
+            var file = _postgres.Files.ToList().FirstOrDefault(x => x.ID == id);
+            if (file != null && file.Temporary && (file.DbUserID == dbUser.ID || dbUser.userprivileges >= UserPrivileges.Elevated))
+            {
+                file.Temporary = false;
+                file.DateToBeDeleted = null;
+                await _postgres.SaveChangesAsync();
+                await GetFolderFiles(token, file.DbFileFolderId);
+            }
+        }
     }
 }
