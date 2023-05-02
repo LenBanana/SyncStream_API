@@ -103,8 +103,10 @@ namespace ScreenIT.Helper
             IHubContext<ServerHub, IServerHub> serverHub)
         {
             var fileInfo = new FileInfo(inputFile.FileName);
+            var outputInfo = new FileInfo(function.OutputPath);
+            var outputFileName = outputInfo.Name;
             var editProcess = new EditorProcess();
-            editProcess.Text = $"Processing - {fileInfo.Name}...";
+            editProcess.Text = $"Processing - {outputFileName}...";
             editProcess.AlertType = AlertType.Info;
             await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
             try
@@ -127,7 +129,7 @@ namespace ScreenIT.Helper
                 if (result != null)
                 {
                     editProcess.AlertType = AlertType.Success;
-                    editProcess.Text = $"Success - {fileInfo.Name}...";
+                    editProcess.Text = $"Success - {outputFileName}...";
                     await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
                     var fileBytes = await File.ReadAllBytesAsync(function.OutputPath);
                     function.OutputFile.DateToBeDeleted = DateTime.UtcNow.AddMinutes(General.MinutesToKeepFFmpeg.Minutes);
@@ -143,7 +145,7 @@ namespace ScreenIT.Helper
                     if (File.Exists(function.OutputPath))
                         FileCheck.CheckOverrideFile(function.OutputPath);
                     editProcess.AlertType = AlertType.Danger;
-                    editProcess.Text = $"Failed - {fileInfo.Name}...";
+                    editProcess.Text = $"Failed - {outputFileName}...";
                     await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
                     return new StatusCodeResult(StatusCodes.Status404NotFound);
                 }

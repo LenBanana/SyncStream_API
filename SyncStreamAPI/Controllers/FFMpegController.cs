@@ -72,7 +72,7 @@ namespace SyncStreamAPI.Controllers
             var inputFile = Request.Form.Files[0];
             var fileInfo = new FileInfo(inputFile.FileName);
             var mimeType = MimeTypeHelper.GetMimeType(inputFile);
-            var baseFunction = FFmpegFunction.GetDefaultFunction(fileInfo, $".{mediaType}", dbUser);
+            var baseFunction = FFmpegFunction.GetDefaultFunction(fileInfo, $".{mediaType.ToString().ToLower()}", dbUser);
             switch (mediaType)
             {
                 case MediaType.MP3:
