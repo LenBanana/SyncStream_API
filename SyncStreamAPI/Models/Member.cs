@@ -29,7 +29,7 @@ namespace SyncStreamAPI.Models
 
         public Member()
         {
-            timer = new Timer(General.SecondsToKickMember.Seconds);
+            timer = new Timer(General.SecondsToKickMember.TotalMilliseconds);
             timer.Elapsed += Timer_Elapsed;
             timer.Start();
             MainManager.GetRoomManager().AddToMemberCheck(this);
@@ -47,6 +47,8 @@ namespace SyncStreamAPI.Models
         public void InvokeKick()
         {
             Kicked?.Invoke(this);
+            timer.Stop();
+            timer.Dispose();
         }
 
         public List<string> GetMessages(string User)

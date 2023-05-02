@@ -1,4 +1,5 @@
-﻿using SyncStreamAPI.Enums;
+﻿using SyncStreamAPI.Annotations;
+using SyncStreamAPI.Enums;
 using SyncStreamAPI.Enums.Games;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.GameModels.Chess;
@@ -12,7 +13,7 @@ namespace SyncStreamAPI.Hubs
 {
     public partial class ServerHub
     {
-
+        [ErrorHandling]
         public async Task AddUser(string username, string UniqueId, string password)
         {
             var ip = Context.ConnectionId;
@@ -98,6 +99,7 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
+        [ErrorHandling]
         public async Task UpdateUser(string username, string UniqueId)
         {
             Room room = GetRoom(UniqueId);
@@ -138,6 +140,7 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
+        [ErrorHandling]
         public async Task ChangeHost(string usernameMember, string UniqueId)
         {
             Room room = GetRoom(UniqueId);
@@ -175,6 +178,7 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
+        [ErrorHandling]
         public async Task RemoveUser(string UniqueId)
         {
             Room room = GetRoom(UniqueId);
@@ -260,6 +264,7 @@ namespace SyncStreamAPI.Hubs
             await Clients.All.getrooms(MainManager.GetRooms());
         }
 
+        [ErrorHandling]
         public async Task BanUser(string username, string UniqueId)
         {
             Room room = GetRoom(UniqueId);
