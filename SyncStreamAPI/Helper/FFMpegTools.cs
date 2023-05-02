@@ -131,7 +131,7 @@ namespace ScreenIT.Helper
                     function.OutputFile.DateToBeDeleted = DateTime.UtcNow.AddMinutes(General.MinutesToKeepFFmpeg.Minutes);
                     var savedFile = postgresContext.Files?.Add(function.OutputFile);
                     await postgresContext.SaveChangesAsync();
-                    await serverHub.Clients.Group(dbUser.ApiKey).updateFolders(new SyncStreamAPI.DTOModel.FileDto(savedFile.Entity));
+                    await serverHub.Clients.Group(dbUser.ApiKey).updateFolders(new SyncStreamAPI.DTOModel.FileDto(function.OutputFile));
                     FileContentResult fileResult = new FileContentResult(fileBytes, mimeType);
                     await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
                     return fileResult;

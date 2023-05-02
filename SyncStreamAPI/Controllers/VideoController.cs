@@ -173,8 +173,8 @@ namespace SyncStreamAPI.Controllers
 
                 // Create a new DbFile object and save the file to disk
                 var fileInfo = new FileInfo(file.FileName);
-                var dbfile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension, dbUser);
-                var path = Path.Combine(General.FilePath, $"{dbfile.FileKey}{dbfile.FileEnding}");
+                var dbFile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension, dbUser);
+                var path = Path.Combine(General.FilePath, $"{dbFile.FileKey}{dbFile.FileEnding}");
                 Directory.CreateDirectory(General.FilePath);
                 using (var fileStream = System.IO.File.Create(path))
                 {
@@ -182,9 +182,9 @@ namespace SyncStreamAPI.Controllers
                 }
 
                 // Add the DbFile object to the database and save changes
-                var savedFile = _postgres.Files?.Add(dbfile);
+                var savedFile = _postgres.Files?.Add(dbFile);
                 await _postgres.SaveChangesAsync();
-                await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new DTOModel.FileDto(savedFile.Entity));
+                await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new DTOModel.FileDto(dbFile));
                 return Ok();
             }
             catch (Exception ex)
@@ -232,9 +232,9 @@ namespace SyncStreamAPI.Controllers
                 // Save new DbFile object to database
                 var savedFile = _postgres.Files?.Add(dbfile);
                 await _postgres.SaveChangesAsync();
-                await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new DTOModel.FileDto(savedFile.Entity));
+                await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new DTOModel.FileDto(dbfile));
                 // Return Ok response code
-                return Ok(new { fileKey = savedFile.Entity.Name, fileId = savedFile.Entity.FileKey });
+                return Ok(new { fileKey = dbfile.Name, fileId = dbfile.FileKey });
             }
             catch (Exception ex)
             {

@@ -60,7 +60,7 @@ namespace SyncStreamAPI.Helper
                 var savedFile = postgresContext.Files?.Add(dbFile);
                 await postgresContext.SaveChangesAsync();
                 var fileBytes = await System.IO.File.ReadAllBytesAsync(outputPath);
-                await serverHub.Clients.Group(dbUser.ApiKey).updateFolders(new DTOModel.FileDto(savedFile.Entity));
+                await serverHub.Clients.Group(dbUser.ApiKey).updateFolders(new DTOModel.FileDto(dbFile));
                 FileContentResult result = new FileContentResult(fileBytes, mimeType);
                 result.FileDownloadName = $"{dbFile.Name}{dbFile.FileEnding}";
                 return result;
