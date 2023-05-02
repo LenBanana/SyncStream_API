@@ -103,8 +103,7 @@ namespace ScreenIT.Helper
             IHubContext<ServerHub, IServerHub> serverHub)
         {
             var fileInfo = new FileInfo(inputFile.FileName);
-            var outputInfo = new FileInfo(function.OutputPath);
-            var outputFileName = outputInfo.Name;
+            var outputFileName = function.OutputFile.Name;
             var editProcess = new EditorProcess();
             editProcess.Text = $"Processing - {outputFileName}...";
             editProcess.AlertType = AlertType.Info;

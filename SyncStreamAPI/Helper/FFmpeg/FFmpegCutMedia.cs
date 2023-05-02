@@ -1,4 +1,5 @@
 ﻿using ScreenIT.Helper;
+using SyncStreamAPI.PostgresModels;
 using System;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -8,16 +9,20 @@ namespace SyncStreamAPI.Helper.FFmpeg
 {
     public class FFmpegCutMedia : FFmpegFunction, IFFmpegFunction
     {
-        public FFmpegCutMedia(string inputPath, string outputPath) : base(inputPath, outputPath)
+        public FFmpegCutMedia(string inputPath, string outputPath, DbFile inputFile = null, DbFile outputFile = null) : base(inputPath, outputPath)
         {
+            this.InputFile = inputFile;
+            this.OutputFile = outputFile;
         }
 
         public FFmpegCutMedia(string inputPath, string outputPath, IProgress<double> progress) : base(inputPath, outputPath, progress)
         {
         }
 
-        public FFmpegCutMedia(string inputPath, string outputPath, TimeSpan start, TimeSpan end, IProgress<double> progress) : base(inputPath, outputPath, start, end, progress)
+        public FFmpegCutMedia(string inputPath, string outputPath, TimeSpan start, TimeSpan end, IProgress<double> progress, DbFile inputFile = null, DbFile outputFile = null) : base(inputPath, outputPath, start, end, progress)
         {
+            this.InputFile = inputFile;
+            this.OutputFile = outputFile;
         }
 
         public new async Task<string> Execute()

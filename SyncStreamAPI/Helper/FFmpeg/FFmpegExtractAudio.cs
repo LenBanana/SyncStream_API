@@ -1,4 +1,5 @@
 ﻿using ScreenIT.Helper;
+using SyncStreamAPI.PostgresModels;
 using System;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -8,8 +9,10 @@ namespace SyncStreamAPI.Helper.FFmpeg
 {
     public class FFmpegExtractAudio : FFmpegFunction, IFFmpegFunction
     {
-        public FFmpegExtractAudio(string inputPath, string outputPath) : base(inputPath, outputPath)
+        public FFmpegExtractAudio(string inputPath, string outputPath, DbFile inputFile = null, DbFile outputFile = null) : base(inputPath, outputPath)
         {
+            this.InputFile = inputFile;
+            this.OutputFile = outputFile;
         }
 
         public FFmpegExtractAudio(string inputPath, string outputPath, IProgress<double> progress) : base(inputPath, outputPath, progress)
