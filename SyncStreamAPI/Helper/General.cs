@@ -27,6 +27,7 @@ namespace SyncStreamAPI.Helper
         public static TimeSpan DaysToKeepTemporaryFiles = TimeSpan.FromDays(14);
         public static TimeSpan MinutesToKeepFFmpeg = TimeSpan.FromMinutes(10);
         public static TimeSpan CheckIntervalInMinutes = TimeSpan.FromMinutes(1);
+        public static TimeSpan SecondsToKickMember = TimeSpan.FromSeconds(10);
 
         public static int GallowGameLength = 90;
         public static int GallowGameLengthMin = 60;

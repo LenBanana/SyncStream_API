@@ -1,5 +1,6 @@
 ﻿using SyncStreamAPI.DTOModel;
 using SyncStreamAPI.Games.Blackjack;
+using SyncStreamAPI.Helper;
 using SyncStreamAPI.Models.GameModels.Members;
 using SyncStreamAPI.ServerData;
 using System;
@@ -28,7 +29,7 @@ namespace SyncStreamAPI.Models
 
         public Member()
         {
-            timer = new Timer(10000);
+            timer = new Timer(General.SecondsToKickMember.Seconds);
             timer.Elapsed += Timer_Elapsed;
             timer.Start();
             MainManager.GetRoomManager().AddToMemberCheck(this);

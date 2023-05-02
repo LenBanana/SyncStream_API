@@ -40,7 +40,7 @@ namespace SyncStreamAPI.ServerData.Background
             {
                 var dbContext = scope.ServiceProvider.GetRequiredService<PostgresContext>();
                 var thresholdDate = DateTime.UtcNow.AddDays(-General.DaysToKeepTemporaryFiles.Days);
-                var outdatedImages = dbContext.Files.Where(e => e.DateToBeDeleted < thresholdDate && e.Temporary);
+                var outdatedImages = await dbContext.Files.Where(e => e.DateToBeDeleted < thresholdDate && e.Temporary).ToListAsync();
                 foreach (var image in outdatedImages)
                 {
                     var imgPath = image.GetPath();
