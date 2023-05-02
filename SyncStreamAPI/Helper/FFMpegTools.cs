@@ -128,6 +128,7 @@ namespace ScreenIT.Helper
                     editProcess.Text = $"Success - {fileInfo.Name}...";
                     await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
                     var fileBytes = await File.ReadAllBytesAsync(function.OutputPath);
+                    function.OutputFile.DateToBeDeleted = DateTime.UtcNow.AddMinutes(General.MinutesToKeepFFmpeg.Minutes);
                     var savedFile = postgresContext.Files?.Add(function.OutputFile);
                     await postgresContext.SaveChangesAsync();
                     await serverHub.Clients.Group(dbUser.ApiKey).updateFolders(new SyncStreamAPI.DTOModel.FileDto(savedFile.Entity));
