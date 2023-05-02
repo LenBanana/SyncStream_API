@@ -58,11 +58,13 @@ namespace SyncStreamAPI.ServerData.Background
                     var dbUser = dbContext.Users?.FirstOrDefault(x => x.ID == imgUpdate.DbUserID);
                     if (dbUser != null)
                     {
-                        var dbFolder = dbContext.Folders?.FirstOrDefault(x => x.Id == imgUpdate.DbFileFolderId);
-                        if (dbFolder != null)
+                        var shareFolders = dbContext.FolderShare?.Where(x => x.DbUserID == dbUser.ID);
+                        var dbFolder = dbContext.Folders?.Where(x => x.DbUserID == null || x.DbUserID == dbUser.ID || shareFolders.FirstOrDefault(y => y.DbFolderID == x.Id) != null || shareFolders.FirstOrDefault(y => y.DbFolderID == x.ParentId) != null).OrderBy(x => x.Name).ToList();
+                        var resultFolder = dbFolder.FirstOrDefault(x => x.Id == imgUpdate.DbFileFolderId);
+                        if (resultFolder != null)
                         {
                             var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                            await hub.Clients.Group(dbUser.ID.ToString()).getFolders(new DTOModel.FolderDto(dbFolder));
+                            await hub.Clients.Group(dbUser.ID.ToString()).getFolders(new DTOModel.FolderDto(resultFolder));
                         }
                     }
                 }
