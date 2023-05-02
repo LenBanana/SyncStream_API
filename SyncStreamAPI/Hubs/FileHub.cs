@@ -359,7 +359,6 @@ namespace SyncStreamAPI.Hubs
             var file = _postgres.Files.ToList().FirstOrDefault(x => x.ID == id);
             if (file != null && file.Temporary && (file.DbUserID == dbUser.ID || dbUser.userprivileges >= UserPrivileges.Elevated))
             {
-                file.Temporary = false;
                 file.DateToBeDeleted = null;
                 await _postgres.SaveChangesAsync();
                 await GetFolderFiles(token, file.DbFileFolderId);
