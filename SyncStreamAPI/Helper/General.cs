@@ -16,36 +16,36 @@ namespace SyncStreamAPI.Helper
 {
     public class General
     {
-        public static Random random = new Random();
-        public static string SystemMessageName = "Dreckbot";
-        public static string FilePath = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? System.IO.Directory.GetCurrentDirectory() + "/VideoFiles" : System.IO.Directory.GetCurrentDirectory() + "\\VideoFiles";
-        public static string TemporaryFilePath = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? System.IO.Directory.GetCurrentDirectory() + "/Temp" : System.IO.Directory.GetCurrentDirectory() + "\\Temp";
-        public const string YtDLPUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp";
-        public static int GuestRoomAmount = 6;
-        public static int MaxParallelConversions = 6;
+        public static Random random { get; } = new Random();
+        public static string SystemMessageName { get; } = "Dreckbot";
+        public static string FilePath { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? System.IO.Directory.GetCurrentDirectory() + "/VideoFiles" : System.IO.Directory.GetCurrentDirectory() + "\\VideoFiles";
+        public static string TemporaryFilePath { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? System.IO.Directory.GetCurrentDirectory() + "/Temp" : System.IO.Directory.GetCurrentDirectory() + "\\Temp";
+        public static string YtDLPUrl { get; } = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp";
+        public static int GuestRoomAmount { get; } = 6;
+        public static int MaxParallelConversions { get; set; } = 6;
 
-        public static TimeSpan DaysToKeepTemporaryFiles = TimeSpan.FromDays(14);
-        public static TimeSpan MinutesToKeepFFmpeg = TimeSpan.FromMinutes(10);
-        public static TimeSpan CheckIntervalInMinutes = TimeSpan.FromMinutes(1);
-        public static TimeSpan SecondsToKickMember = TimeSpan.FromSeconds(10);
+        public static TimeSpan DaysToKeepTemporaryFiles { get; } = TimeSpan.FromDays(14);
+        public static TimeSpan MinutesToKeepFFmpeg { get; } = TimeSpan.FromMinutes(10);
+        public static TimeSpan CheckIntervalInMinutes { get; } = TimeSpan.FromMinutes(1);
+        public static TimeSpan SecondsToKickMember { get; } = TimeSpan.FromSeconds(10);
 
-        public static int GallowGameLength = 90;
-        public static int GallowGameLengthMin = 60;
-        public static int GallowGameLengthMax = 300;
-        public static int GallowGuessPoints = 10;
-        public static int GallowDrawBasePoints = 5;
-        public static int GallowWordLengthMultiplierPlayer = 8;
-        public static int GallowWordLengthMultiplierHost = 12;
+        public static int GallowGameLength { get; } = 90;
+        public static int GallowGameLengthMin { get; } = 60;
+        public static int GallowGameLengthMax { get; } = 300;
+        public static int GallowGuessPoints { get; } = 10;
+        public static int GallowDrawBasePoints { get; } = 5;
+        public static int GallowWordLengthMultiplierPlayer { get; } = 8;
+        public static int GallowWordLengthMultiplierHost { get; } = 12;
 
-        public static int BlackjackShoeSize = 6;
-        public const string LoggedInGroupName = "approved";
-        public const string BottedInGroupName = "dreckbots";
+        public static int BlackjackShoeSize { get; } = 6;
+        public static string LoggedInGroupName { get; } = "approved";
+        public static string BottedInGroupName { get; } = "dreckbots";
 
         //FFMpeg
-        public static string DefaultAudioFormat = ".mp3";
-        public static string DefaultAudioMimeType = "audio/mpeg";
+        public static string DefaultAudioFormat { get; } = ".mp3";
+        public static string DefaultAudioMimeType { get; } = "audio/mpeg";
         //Task timeout (ms)
-        public static int FFmpegTimeout = 5000;
+        public static int FFmpegTimeout { get; } = 5000;
 
         public static YoutubeDL GetYoutubeDL()
         {
