@@ -85,6 +85,7 @@ namespace SyncStreamAPI.Controllers
                     convertAudio.OutputFile = baseFunction.OutputFile;
                     return await FFmpegTools.ProcessMedia(inputFile, dbUser, convertAudio, mimeType, _postgres, _hub);
                 case MediaType.MP4:
+                case MediaType.WEBM:
                 case MediaType.AVI:
                 case MediaType.WMV:
                 case MediaType.MOV:
@@ -97,6 +98,7 @@ namespace SyncStreamAPI.Controllers
                     convertGIF.OutputFile = baseFunction.OutputFile;
                     return await FFmpegTools.ProcessMedia(inputFile, dbUser, convertGIF, "image/gif", _postgres, _hub);
                 case MediaType.PNG:
+                case MediaType.PDF:
                 case MediaType.JPEG:
                 case MediaType.BMP:
                 case MediaType.TIFF:

@@ -27,21 +27,22 @@ namespace ScreenIT.Helper
             Func<DataReceivedEventArgs, bool> errorCondition = null,
             IProgress<double> progress = null)
         {
+            var success = false;
+            var process = new Process
+            {
+                StartInfo = new ProcessStartInfo()
+                {
+                    FileName = General.GetFFmpegPath(),
+                    Arguments = "-progress pipe:2 " + args,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardInput = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                }
+            };
             try
             {
-                var process = new Process
-                {
-                    StartInfo = new ProcessStartInfo()
-                    {
-                        FileName = General.GetFFmpegPath(),
-                        Arguments = "-progress pipe:2 " + args,
-                        UseShellExecute = false,
-                        CreateNoWindow = true,
-                        RedirectStandardInput = true,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true
-                    }
-                };
                 var tcs = new TaskCompletionSource<bool>();
                 // Set up the timer to trigger after 10 seconds of no output
                 var timer = new Timer(state =>
@@ -70,26 +71,27 @@ namespace ScreenIT.Helper
                                 progress.Report(frame);
                             }
                         }
+#if DEBUG
+                        Debug.WriteLine(e.Data);
+#endif
                         Console.WriteLine(e.Data);
                         // Reset the timer if new output is received
                         timer.Change(General.FFmpegTimeout, Timeout.Infinite);
                     }
                 };
-
                 process.Start();
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
-                var success = await tcs.Task;
-                process.Kill();
-                process.Dispose();
-                process = null;
-
-                return success;
+                success = await tcs.Task;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                return false;
+                Console.WriteLine(ex.Message);
             }
+            process.Kill();
+            process.Dispose();
+            process = null;
+            return success;
         }
 
         public static async Task<ActionResult> ProcessMedia(
@@ -162,38 +164,27 @@ namespace ScreenIT.Helper
 
         public static string GetAudioCodec(string format)
         {
-            switch (format.ToLowerInvariant())
+            var mediaType = ParseMediaType(format);
+            switch (mediaType)
             {
-                case "mp3":
-                case ".mp3":
+                case MediaType.MP3:
                     return "libmp3lame";
-                case "wav":
-                case ".wav":
+                case MediaType.WAV:
                     return "pcm_s16le";
-                case "ogg":
-                case ".ogg":
+                case MediaType.OGG:
                     return "libvorbis";
-                case "flac":
-                case ".flac":
+                case MediaType.FLAC:
                     return "flac";
-                case "aiff":
-                case ".aiff":
+                case MediaType.AIFF:
                     return "pcm_s16be";
-                case "m4a":
-                case ".m4a":
+                case MediaType.M4A:
+                case MediaType.MP4:
+                case MediaType.MOV:
+                case MediaType.MKV:
                     return "aac";
-                case "mp4":
-                case "mov":
-                case "mkv":
-                case ".mp4":
-                case ".mov":
-                case ".mkv":
-                    return "aac";
-                case "avi":
-                case ".avi":
+                case MediaType.AVI:
                     return "mp3";
-                case "wmv":
-                case ".wmv":
+                case MediaType.WMV:
                     return "wmav2";
                 default:
                     return "copy";
@@ -202,23 +193,26 @@ namespace ScreenIT.Helper
 
         public static string GetVideoCodec(string format)
         {
-            switch (format.ToLowerInvariant())
+            var mediaType = ParseMediaType(format);
+            switch (mediaType)
             {
-                case "avi":
-                case ".avi":
+                case MediaType.AVI:
                     return "mpeg4";
-                case "wmv":
-                case ".wmv":
+                case MediaType.WMV:
                     return "wmv2";
-                case "flv":
-                case ".flv":
+                case MediaType.FLV:
                     return "flv1";
-                case "webm":
-                case ".webm":
+                case MediaType.WEBM:
                     return "libvpx";
                 default:
                     return "h264";
             }
+        }
+
+        public static MediaType ParseMediaType(string format)
+        {
+            format = format.TrimStart('.');
+            return Enum.TryParse<MediaType>(format, true, out var mediaType) ? mediaType : MediaType.PNG;
         }
     }
 }
