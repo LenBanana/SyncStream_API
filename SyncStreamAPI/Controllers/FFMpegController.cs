@@ -84,6 +84,7 @@ namespace SyncStreamAPI.Controllers
                     return await FFmpegTools.ProcessMedia(inputFile, dbUser, convertAudio, mimeType, _postgres, _hub);
                 case MediaType.MP4:
                 case MediaType.WEBM:
+                case MediaType.FLV:
                 case MediaType.AVI:
                 case MediaType.WMV:
                 case MediaType.MOV:

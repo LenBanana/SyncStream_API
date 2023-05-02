@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using SyncStreamAPI.Annotations;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper;
@@ -77,50 +78,47 @@ namespace SyncStreamAPI.ServerData
             }
         }
 
+        [ErrorHandling]
         public async Task YtDownload(DownloadClientValue downloadClient, bool audioOnly = false)
         {
-            try
+            using (var scope = ServiceProvider.CreateScope())
             {
-                using (var scope = ServiceProvider.CreateScope())
+                var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
+                var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+                var userId = downloadClient.UserId.ToString();
+                await _hub.Clients.Group(userId).downloadListen(downloadClient.UniqueId);
+
+                var dbUser = _postgres.Users
+                    .Include(x => x.RememberTokens)
+                    .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == downloadClient.Token) == true);
+
+                var fileExtension = audioOnly ? ".mp3" : ".mp4";
+                var dbFile = new DbFile(downloadClient.FileName, fileExtension, dbUser);
+                var filePath = dbFile.GetPath();
+
+                var ytdl = General.GetYoutubeDL();
+                ytdl.OutputFolder = General.FilePath;
+                ytdl.RestrictFilenames = true;
+                ytdl.OutputFileTemplate = $"{dbFile.FileKey}{fileExtension}";
+
+                var progress = new Progress<DownloadProgress>(async p => await YtDLPHelper.UpdateDownloadProgress(downloadClient, _hub, p));
+
+                downloadClient.Stopwatch = Stopwatch.StartNew();
+                RunResult<string> runResult = await YtDLPHelper.DownloadMedia(ytdl, downloadClient, audioOnly, progress);
+
+                await _hub.Clients.Group(userId).downloadFinished(downloadClient.UniqueId);
+
+                if (runResult?.Success == true)
                 {
-                    var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
-                    var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                    var userId = downloadClient.UserId.ToString();
-                    await _hub.Clients.Group(userId).downloadListen(downloadClient.UniqueId);
-
-                    var dbUser = _postgres.Users
-                        .Include(x => x.RememberTokens)
-                        .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == downloadClient.Token) == true);
-
-                    var fileExtension = audioOnly ? ".mp3" : ".mp4";
-                    var dbFile = new DbFile(downloadClient.FileName, fileExtension, dbUser);
-                    var filePath = dbFile.GetPath();
-
-                    var ytdl = General.GetYoutubeDL();
-                    ytdl.OutputFolder = General.FilePath;
-                    ytdl.RestrictFilenames = true;
-                    ytdl.OutputFileTemplate = $"{dbFile.FileKey}{fileExtension}";
-
-                    var progress = new Progress<DownloadProgress>(async p => await YtDLPHelper.UpdateDownloadProgress(downloadClient, _hub, p));
-
-                    downloadClient.Stopwatch = Stopwatch.StartNew();
-                    RunResult<string> runResult = await YtDLPHelper.DownloadMedia(ytdl, downloadClient, audioOnly, progress);
-
-                    await _hub.Clients.Group(userId).downloadFinished(downloadClient.UniqueId);
-
-                    if (runResult?.Success == true)
-                    {
-                        dbUser.Files.Add(dbFile);
-                        await _postgres.SaveChangesAsync();
-                        Console.WriteLine($"User {downloadClient.UserId} saved {downloadClient.FileName} to DB");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Error downloading {downloadClient.Url}: {runResult?.ErrorOutput.FirstOrDefault()}");
-                    }
+                    dbUser.Files.Add(dbFile);
+                    await _postgres.SaveChangesAsync();
+                    Console.WriteLine($"User {downloadClient.UserId} saved {downloadClient.FileName} to DB");
+                }
+                else
+                {
+                    Console.WriteLine($"Error downloading {downloadClient.Url}: {runResult?.ErrorOutput.FirstOrDefault()}");
                 }
             }
-            catch (Exception ex) { Console.WriteLine(ex.ToString()); }
         }
 
         public async void AddDownload(DownloadClientValue downloadClient)

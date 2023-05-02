@@ -20,18 +20,18 @@ namespace SyncStreamAPI.Helper.FFmpeg
 
         public FFmpegFunction(string inputPath, string outputPath)
         {
-            this.InputPath = inputPath;
-            this.OutputPath = outputPath;
+            InputPath = inputPath;
+            OutputPath = outputPath;
         }
         public FFmpegFunction(string inputPath, string outputPath, IProgress<double> progress) : this(inputPath, outputPath)
         {
-            this.Progress = progress;
+            Progress = progress;
         }
 
         public FFmpegFunction(string inputPath, string outputPath, TimeSpan start, TimeSpan end, IProgress<double> progress) : this(inputPath, outputPath, progress)
         {
-            this.Start = start;
-            this.End = end;
+            Start = start;
+            End = end;
         }
 
         public static FFmpegFunction GetDefaultFunction(FileInfo fileInfo, string extension, DbUser dbUser)

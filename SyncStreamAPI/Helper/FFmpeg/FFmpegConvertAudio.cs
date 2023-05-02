@@ -11,8 +11,8 @@ namespace SyncStreamAPI.Helper.FFmpeg
     {
         public FFmpegConvertAudio(string inputPath, string outputPath, DbFile inputFile = null, DbFile outputFile = null) : base(inputPath, outputPath)
         {
-            this.InputFile = inputFile;
-            this.OutputFile = outputFile;
+            InputFile = inputFile;
+            OutputFile = outputFile;
         }
 
         public FFmpegConvertAudio(string inputPath, string outputPath, IProgress<double> progress) : base(inputPath, outputPath, progress)

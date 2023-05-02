@@ -1,7 +1,5 @@
 ﻿using NAudio.Wave;
-using NAudio.Wave.SampleProviders;
 using System.IO;
-using Microsoft.AspNetCore.Http;
 
 namespace SyncStreamAPI.Helper
 {
@@ -12,7 +10,7 @@ namespace SyncStreamAPI.Helper
             using (var reader = new AudioFileReader(inputFilePath))
             {
                 var sampleProvider = reader.ToSampleProvider();
-                var samplesPerSecond = (int)sampleProvider.WaveFormat.SampleRate;
+                var samplesPerSecond = sampleProvider.WaveFormat.SampleRate;
                 var channelCount = sampleProvider.WaveFormat.Channels;
                 var durationInSeconds = reader.TotalTime.TotalSeconds;
                 var samplesPerFrame = samplesPerSecond / 30;

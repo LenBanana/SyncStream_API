@@ -1,8 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
-using SyncStreamAPI.Annotations;
+﻿using SyncStreamAPI.Annotations;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.PostgresModels;
-using System;
 using System.Linq;
 using System.Threading.Tasks;
 

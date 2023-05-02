@@ -2,7 +2,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
-using ScreenIT.Helper;
 using SyncStreamAPI.Annotations;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Enums;
@@ -10,10 +9,8 @@ using SyncStreamAPI.Helper;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.PostgresModels;
-using System;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 
 
 namespace SyncStreamAPI.Controllers

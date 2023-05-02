@@ -6,7 +6,6 @@ using SyncStreamAPI.ServerData;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Threading.Tasks;
 using System.Timers;
 
 namespace SyncStreamAPI.Models
@@ -22,7 +21,7 @@ namespace SyncStreamAPI.Models
         public bool ishost { get; set; }
         public Dictionary<string, List<string>> PrivateMessages { get; set; } = new Dictionary<string, List<string>>();
 
-        private Timer timer;
+        private readonly Timer timer;
 
         public delegate void KickEvent(Member e);
         public event KickEvent Kicked;
