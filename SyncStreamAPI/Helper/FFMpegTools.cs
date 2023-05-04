@@ -186,6 +186,9 @@ namespace ScreenIT.Helper
                     return "mp3";
                 case MediaType.WMV:
                     return "wmav2";
+                case MediaType.FLV:
+                case MediaType.WEBM:
+                    return "vorbis";
                 default:
                     return "copy";
             }

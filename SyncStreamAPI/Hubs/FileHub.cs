@@ -169,7 +169,7 @@ namespace SyncStreamAPI.Hubs
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-        public async void DownloadYtVideo(string token, string url, string quality = "1080", bool audioOnly = false)
+        public async Task DownloadYtVideo(string token, string url, string quality = "1080", bool audioOnly = false)
         {
             var dbUser = await _postgres.Users.Include(x => x.RememberTokens).FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
             if (url.Contains("playlist?list="))
