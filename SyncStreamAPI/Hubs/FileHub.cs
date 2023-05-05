@@ -177,17 +177,7 @@ namespace SyncStreamAPI.Hubs
                 var ytdl = General.GetYoutubeDL();
                 var playlistInfo = await ytdl.RunVideoDataFetch(url);
                 var vids = playlistInfo.Data.Entries.Select(x => new DownloadClientValue(dbUser.ID, x.Title, token, x.Url, quality)).ToList();
-                foreach (var vid in vids)
-                {
-                    _manager.userM3U8Conversions.Add(vid);
-                    await _manager.YtDownload(vid, audioOnly);
-                    if (vid.CancellationToken.IsCancellationRequested)
-                    {
-                        break;
-                    }
-
-                    _manager.userM3U8Conversions.Remove(vid);
-                }
+                _manager.YtPlaylistDownload(vids, audioOnly);
                 return;
             }
             var fileName = await General.ResolveURL(url, Configuration);

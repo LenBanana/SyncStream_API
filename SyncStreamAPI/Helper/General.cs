@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
 using YoutubeDLSharp;
@@ -46,7 +47,8 @@ namespace SyncStreamAPI.Helper
         public static string DefaultAudioMimeType { get; } = "audio/mpeg";
         //Task timeout (ms)
         public static int FFmpegTimeout { get; } = 5000;
-
+        private static Regex ytRegEx = new Regex(@"https?://(?:www\.|m\.)?youtube\.com/(?:watch\?(?=.*v=\w+)(?:\S+)?|playlist\?(?=.*list=\w+)(?:\S+)?|v/|embed/|attribution_link\?a=\w+&u=/watch\?v=\w+)|youtu\.be/(\w+)(?:\S+)?");
+        public static bool IsYt(string url) => ytRegEx.IsMatch(url);
         public static YoutubeDL GetYoutubeDL()
         {
             var ytdl = new YoutubeDL();
@@ -60,7 +62,7 @@ namespace SyncStreamAPI.Helper
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 return "/app/ffmpeg";
             else
-                return System.IO.Directory.GetCurrentDirectory() + "\\ffmpeg.exe";
+                return "ffmpeg.exe";
         }
 
         public static string GetYtDlpPath()
@@ -68,7 +70,7 @@ namespace SyncStreamAPI.Helper
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 return "/app/yt-dlp";
             else
-                return System.IO.Directory.GetCurrentDirectory() + "\\yt-dlp.exe";
+                return "yt-dlp.exe";
         }
 
         public static string GetGallowWord(Language language)

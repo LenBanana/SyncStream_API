@@ -79,6 +79,21 @@ namespace SyncStreamAPI.ServerData
         }
 
         [ErrorHandling]
+        public async void YtPlaylistDownload(List<DownloadClientValue> vids, bool audioOnly = false)
+        {
+            foreach (var vid in vids)
+            {
+                userM3U8Conversions.Add(vid);
+                await YtDownload(vid, audioOnly);
+                if (vid.CancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                userM3U8Conversions.Remove(vid);
+            }
+        }
+
+        [ErrorHandling]
         public async Task YtDownload(DownloadClientValue downloadClient, bool audioOnly = false)
         {
             using (var scope = ServiceProvider.CreateScope())

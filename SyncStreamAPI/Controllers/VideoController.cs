@@ -114,9 +114,9 @@ namespace SyncStreamAPI.Controllers
                 RunResult<VideoData> data = await ytdl.RunVideoDataFetch(url);
 
                 // If the video data was fetched successfully, return a list of available video quality options
-                if (data != null)
+                if (data != null && data.Data != null)
                 {
-                    var qualityOptions = data.Data.Formats
+                    var qualityOptions = data.Data?.Formats
                         .Where(x => x.Height >= 360 && x.Height <= 2160)
                         .Select(x => x.Height)
                         .Distinct()
