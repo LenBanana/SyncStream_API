@@ -96,6 +96,7 @@ namespace SyncStreamAPI.ServerData
         [ErrorHandling]
         public async Task YtDownload(DownloadClientValue downloadClient, bool audioOnly = false)
         {
+
             using (var scope = ServiceProvider.CreateScope())
             {
                 var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
@@ -119,17 +120,23 @@ namespace SyncStreamAPI.ServerData
                 var progress = new Progress<DownloadProgress>(async p => await YtDLPHelper.UpdateDownloadProgress(downloadClient, _hub, p));
 
                 downloadClient.Stopwatch = Stopwatch.StartNew();
-                RunResult<string> runResult = await YtDLPHelper.DownloadMedia(ytdl, downloadClient, audioOnly, progress);
-
+                RunResult<string> runResult = null;
+                try
+                {
+                    runResult = await YtDLPHelper.DownloadMedia(ytdl, downloadClient, audioOnly, progress);
+                }
+                catch (TaskCanceledException ex)
+                {
+                    await SendDefaultDialog(userId, "Cancelling download of playlist", AlertType.Success, "YouTube");
+                }
                 await _hub.Clients.Group(userId).downloadFinished(downloadClient.UniqueId);
-
-                if (runResult?.Success == true)
+                if (runResult != null && runResult?.Success == true)
                 {
                     dbUser.Files.Add(dbFile);
                     await _postgres.SaveChangesAsync();
                     Console.WriteLine($"User {downloadClient.UserId} saved {downloadClient.FileName} to DB");
                 }
-                else
+                else if (!downloadClient.CancellationToken.IsCancellationRequested)
                 {
                     Console.WriteLine($"Error downloading {downloadClient.Url}: {runResult?.ErrorOutput.FirstOrDefault()}");
                 }
@@ -294,7 +301,7 @@ namespace SyncStreamAPI.ServerData
             {
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
                 var idx = userM3U8Conversions.FindIndex(x => x.UniqueId == downloadId);
-                if (idx >= 0 && userM3U8Conversions[idx].UserId == userId)
+                if (idx >= 0 && userM3U8Conversions[idx].UserId == userId && !userM3U8Conversions[idx].CancellationToken.IsCancellationRequested)
                 {
                     userM3U8Conversions[idx].CancellationToken.Cancel();
                     userM3U8Conversions[idx].StopKeepAlive();
