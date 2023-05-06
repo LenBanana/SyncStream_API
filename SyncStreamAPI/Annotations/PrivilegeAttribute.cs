@@ -24,6 +24,7 @@ namespace SyncStreamAPI.Annotations
     {
         public UserPrivileges RequiredPrivileges { get; set; }
         public AuthenticationType AuthenticationType { get; set; }
+        public int TokenPosition { get; set; } = 0;
         public PrivilegeAttribute() { }
 
         [Advice(Kind.Around, Targets = Target.Method)]
@@ -36,12 +37,12 @@ namespace SyncStreamAPI.Annotations
             try
             {
                 var attribute = (PrivilegeAttribute)method.GetCustomAttribute(typeof(PrivilegeAttribute));
-                if (args == null || args.Length == 0 || args[0] is not string)
+                if (args == null || args.Length <= attribute.TokenPosition || args[attribute.TokenPosition] is not string)
                 {
                     Console.WriteLine("First argument has to be of type 'string'");
                     return new StatusCodeResult(StatusCodes.Status400BadRequest);
                 }
-                var firstArg = args[0];
+                var firstArg = args[attribute.TokenPosition];
                 if (HasPrivileges(attribute, (string)firstArg).Result)
                 {
                     var result = target(args);

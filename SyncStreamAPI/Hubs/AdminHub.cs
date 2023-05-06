@@ -23,6 +23,41 @@ namespace SyncStreamAPI.Hubs
             await Clients.Caller.getPrivilegeInfo(privilegeInfos);
         }
 
+        [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
+        public async Task GetUsers(string token, int userID)
+        {
+            List<DbUser> users = _postgres.Users.ToList();
+            await Clients.Caller.getusers(users?.Select(x => x.ToDTO()).ToList());
+        }
+
+        [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
+        public async Task DeleteUser(string token, int userID, int removeID)
+        {
+            if (userID == removeID)
+            {
+                await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "Unable to delete own user", Answer1 = "Ok" });
+                return;
+            }
+            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens.FirstOrDefault(y => y.Token == token) != null);
+            var removeUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == removeID);
+            if (removeUser != null && dbUser.userprivileges > removeUser.userprivileges)
+            {
+                _postgres.Users.Remove(removeUser);
+                await _postgres.SaveChangesAsync();
+            }
+            List<DbUser> users = _postgres.Users.ToList();
+            await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
+        }
+
+        [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
+        public async Task GenerateApiKey(string token)
+        {
+            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens.FirstOrDefault(y => y.Token == token) != null);
+            dbUser.ApiKey = dbUser.GenerateStreamToken().Token;
+            await _postgres.SaveChangesAsync();
+            await Clients.Caller.userlogin(dbUser.ToDTO());
+        }
+
         [ErrorHandling]
         public async Task LoginRequest(DbUser requestUser, string userInfo)
         {
@@ -114,13 +149,6 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
-        [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-        public async Task GetUsers(string token, int userID)
-        {
-            List<DbUser> users = _postgres.Users.ToList();
-            await Clients.Caller.getusers(users?.Select(x => x.ToDTO()).ToList());
-        }
-
         [ErrorHandling]
         public async Task ChangeUser(DbUser user, string password)
         {
@@ -164,34 +192,6 @@ namespace SyncStreamAPI.Hubs
             {
                 await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "You password was not correct", Answer1 = "Ok" });
             }
-        }
-
-        [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-        public async Task DeleteUser(string token, int userID, int removeID)
-        {
-            if (userID == removeID)
-            {
-                await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "Unable to delete own user", Answer1 = "Ok" });
-                return;
-            }
-            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens.FirstOrDefault(y => y.Token == token) != null);
-            var removeUser = _postgres.Users.ToList().FirstOrDefault(x => x.ID == removeID);
-            if (removeUser != null && dbUser.userprivileges > removeUser.userprivileges)
-            {
-                _postgres.Users.Remove(removeUser);
-                await _postgres.SaveChangesAsync();
-            }
-            List<DbUser> users = _postgres.Users.ToList();
-            await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
-        }
-
-        [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-        public async Task GenerateApiKey(string token)
-        {
-            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens.FirstOrDefault(y => y.Token == token) != null);
-            dbUser.ApiKey = dbUser.GenerateStreamToken().Token;
-            await _postgres.SaveChangesAsync();
-            await Clients.Caller.userlogin(dbUser.ToDTO());
         }
 
         [ErrorHandling]

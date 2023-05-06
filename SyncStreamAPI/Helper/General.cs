@@ -22,6 +22,7 @@ namespace SyncStreamAPI.Helper
         public static string FilePath { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? System.IO.Directory.GetCurrentDirectory() + "/VideoFiles" : System.IO.Directory.GetCurrentDirectory() + "\\VideoFiles";
         public static string TemporaryFilePath { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? System.IO.Directory.GetCurrentDirectory() + "/Temp" : System.IO.Directory.GetCurrentDirectory() + "\\Temp";
         public static string YtDLPUrl { get; } = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp";
+        public static string XmlMethodDescriptions = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? System.IO.Directory.GetCurrentDirectory() + "/PrivilegeMethodDescriptions.xml" : System.IO.Directory.GetCurrentDirectory() + "\\PrivilegeMethodDescriptions.xml";
         public static int GuestRoomAmount { get; } = 6;
         public static int MaxParallelConversions { get; set; } = 6;
 

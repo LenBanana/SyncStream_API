@@ -352,3 +352,4 @@ healthchecksdb
 /SyncStreamAPI/Dockerfile
 /SyncStreamAPI/yt-dlp.exe
 /SyncStreamAPI/Temp
+/SyncStreamAPI/PrivilegeMethodDescriptions.xml

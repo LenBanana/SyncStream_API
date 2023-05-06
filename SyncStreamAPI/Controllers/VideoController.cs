@@ -4,7 +4,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
+using SyncStreamAPI.Annotations;
 using SyncStreamAPI.DataContext;
+using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
@@ -35,6 +37,7 @@ namespace SyncStreamAPI.Controllers
         }
 
         [HttpGet("[action]")]
+        [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token, TokenPosition = 1)]
         public async Task<IActionResult> fileByToken(string fileKey, string token)
         {
             try
@@ -50,7 +53,7 @@ namespace SyncStreamAPI.Controllers
 
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
                 // Check if the user is authenticated and has the necessary privileges
-                if (!dbFile.Temporary && (dbUser == null || dbUser.userprivileges < UserPrivileges.Approved))
+                if (!dbFile.Temporary && (dbUser == null))
                 {
                     // If the user is not authorized to view the content, return a 403 error and display an error message
                     if (dbUser != null)
@@ -90,6 +93,7 @@ namespace SyncStreamAPI.Controllers
         }
 
         [HttpGet("[action]")]
+        [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token, TokenPosition = 1)]
         public async Task<IActionResult> getYoutubeQuality(string url, string token)
         {
             try
@@ -97,7 +101,7 @@ namespace SyncStreamAPI.Controllers
                 // Check if the user is authenticated and has the necessary privileges
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
                 var tokenObj = dbUser?.RememberTokens.SingleOrDefault(x => x.Token == token);
-                if (tokenObj == null || dbUser == null || dbUser.userprivileges < UserPrivileges.Approved)
+                if (tokenObj == null || dbUser == null)
                 {
                     // If the user is not authorized to view the content, return a 403 error and display an error message
                     if (dbUser != null)
@@ -142,6 +146,7 @@ namespace SyncStreamAPI.Controllers
         [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = int.MaxValue)]
         [DisableRequestSizeLimit]
         [HttpPost("[action]")]
+        [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
         public async Task<IActionResult> addFile(string token)
         {
             try
@@ -156,7 +161,7 @@ namespace SyncStreamAPI.Controllers
                 var file = Request.Form.Files[0];
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
                 var Token = dbUser?.RememberTokens.SingleOrDefault(x => x.Token == token);
-                if (Token == null || dbUser == null || dbUser.userprivileges < UserPrivileges.Administrator)
+                if (Token == null || dbUser == null)
                 {
                     return Unauthorized();
                 }
@@ -193,6 +198,7 @@ namespace SyncStreamAPI.Controllers
         [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = int.MaxValue)]
         [DisableRequestSizeLimit]
         [HttpPost("[action]")]
+        [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.API)]
         public async Task<IActionResult> uploadTemporaryImageFile(string apiKey)
         {
             try
@@ -205,7 +211,7 @@ namespace SyncStreamAPI.Controllers
 
                 // Validate API key against DbUsers API key
                 var dbUser = _postgres.Users.SingleOrDefault(u => u.ApiKey == apiKey);
-                if (dbUser == null || dbUser.userprivileges < UserPrivileges.Administrator)
+                if (dbUser == null)
                 {
                     return Unauthorized();
                 }
