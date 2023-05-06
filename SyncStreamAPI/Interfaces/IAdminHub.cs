@@ -6,6 +6,7 @@ namespace SyncStreamAPI.Interfaces
 {
     public partial interface IServerHub
     {
+        Task getPrivilegeInfo(List<PrivilegeInfo> info);
         Task userlogin(UserDTO user);
 
         Task userRegister(UserDTO user);

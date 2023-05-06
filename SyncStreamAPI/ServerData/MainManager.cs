@@ -36,9 +36,8 @@ namespace SyncStreamAPI.ServerData
         public static Room GetRoom(string UniqueId) => RoomManager.GetRoom(UniqueId);
         public static List<Room> GetRooms() => RoomManager.GetRooms();
         public List<LiveUser> LiveUsers { get; set; } = new List<LiveUser>();
-        public static bool checking { get; set; } = false;
         public Dictionary<WebClient, DownloadClientValue> userWebDownloads { get; set; } = new Dictionary<WebClient, DownloadClientValue>();
-        public List<DownloadClientValue> userM3U8Conversions { get; set; } = new List<DownloadClientValue>();
+        public List<DownloadClientValue> userDownloads { get; set; } = new List<DownloadClientValue>();
         public static IServiceProvider ServiceProvider { get; set; }
         IConfiguration Configuration { get; }
         public MainManager(IServiceProvider provider)
@@ -83,13 +82,13 @@ namespace SyncStreamAPI.ServerData
         {
             foreach (var vid in vids)
             {
-                userM3U8Conversions.Add(vid);
+                userDownloads.Add(vid);
                 await YtDownload(vid, audioOnly);
                 if (vid.CancellationToken.IsCancellationRequested)
                 {
                     break;
                 }
-                userM3U8Conversions.Remove(vid);
+                userDownloads.Remove(vid);
             }
         }
 
@@ -117,7 +116,12 @@ namespace SyncStreamAPI.ServerData
                 ytdl.RestrictFilenames = true;
                 ytdl.OutputFileTemplate = $"{dbFile.FileKey}{fileExtension}";
 
-                var progress = new Progress<DownloadProgress>(async p => await YtDLPHelper.UpdateDownloadProgress(downloadClient, _hub, p));
+                var progress = new Progress<DownloadProgress>(async p =>
+                {
+                    if (downloadClient.CancellationToken.IsCancellationRequested)
+                        return;
+                    await YtDLPHelper.UpdateDownloadProgress(downloadClient, _hub, p);
+                });
 
                 downloadClient.Stopwatch = Stopwatch.StartNew();
                 RunResult<string> runResult = null;
@@ -151,9 +155,9 @@ namespace SyncStreamAPI.ServerData
                 var _browser = scope.ServiceProvider.GetRequiredService<BrowserAutomation>();
                 if (downloadClient.Url.Contains("m3u8"))
                 {
-                    userM3U8Conversions.Add(downloadClient);
+                    userDownloads.Add(downloadClient);
                     SendStatusToM3U8Clients();
-                    if (userM3U8Conversions.Count > General.MaxParallelConversions)
+                    if (userDownloads.Count > General.MaxParallelConversions)
                     {
                         return;
                     }
@@ -224,6 +228,8 @@ namespace SyncStreamAPI.ServerData
                     var conversion = (await FFmpeg.Conversions.FromSnippet.SaveM3U8Stream(new Uri(downloadClient.Url), filePath)).UseMultiThread(true).SetOverwriteOutput(true);
                     conversion.OnProgress += async (sender, args) =>
                     {
+                        if (downloadClient.CancellationToken.IsCancellationRequested)
+                            return;
                         try
                         {
                             var text = $"{args.Duration}/{args.TotalLength} - {StopwatchCalc.CalculateRemainingTime(downloadClient.Stopwatch, args.Percent)} remaining";
@@ -269,9 +275,9 @@ namespace SyncStreamAPI.ServerData
                 }
                 catch { }
                 await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
-                if (userM3U8Conversions.Contains(downloadClient))
+                if (userDownloads.Contains(downloadClient))
                 {
-                    userM3U8Conversions.Remove(downloadClient);
+                    userDownloads.Remove(downloadClient);
                 }
 
                 StartNextDownload();
@@ -283,7 +289,7 @@ namespace SyncStreamAPI.ServerData
             using (var scope = ServiceProvider.CreateScope())
             {
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                var waitingClients = userM3U8Conversions.Where(x => !x.Running).ToList();
+                var waitingClients = userDownloads.Where(x => !x.Running).ToList();
                 for (int i = 0; i < waitingClients.Count; i++)
                 {
                     if (!waitingClients[i].CancellationToken.IsCancellationRequested)
@@ -300,13 +306,13 @@ namespace SyncStreamAPI.ServerData
             using (var scope = ServiceProvider.CreateScope())
             {
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                var idx = userM3U8Conversions.FindIndex(x => x.UniqueId == downloadId);
-                if (idx >= 0 && userM3U8Conversions[idx].UserId == userId && !userM3U8Conversions[idx].CancellationToken.IsCancellationRequested)
+                var idx = userDownloads.FindIndex(x => x.UniqueId == downloadId);
+                if (idx >= 0 && userDownloads[idx].UserId == userId && !userDownloads[idx].CancellationToken.IsCancellationRequested)
                 {
-                    userM3U8Conversions[idx].CancellationToken.Cancel();
-                    userM3U8Conversions[idx].StopKeepAlive();
-                    userM3U8Conversions.RemoveAt(idx);
+                    userDownloads[idx].CancellationToken.Cancel();
+                    userDownloads[idx].StopKeepAlive();
                     await _hub.Clients.Group(userId.ToString()).downloadFinished(downloadId);
+                    userDownloads.RemoveAt(idx);
                 }
             }
         }
@@ -316,12 +322,12 @@ namespace SyncStreamAPI.ServerData
             using (var scope = ServiceProvider.CreateScope())
             {
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                if (userM3U8Conversions.Count > 0)
+                if (userDownloads.Count > 0)
                 {
                     SendStatusToM3U8Clients();
-                    if (userM3U8Conversions.Where(x => x.Running).Count() < General.MaxParallelConversions)
+                    if (userDownloads.Where(x => x.Running).Count() < General.MaxParallelConversions)
                     {
-                        var nextDownload = userM3U8Conversions.FirstOrDefault(x => !x.Running);
+                        var nextDownload = userDownloads.FirstOrDefault(x => !x.Running);
                         if (nextDownload != null)
                         {
                             var clientResult = new DownloadInfo("Your download is starting, please wait...", nextDownload.FileName, nextDownload.UniqueId);

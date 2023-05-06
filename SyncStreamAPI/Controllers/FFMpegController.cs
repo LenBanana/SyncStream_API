@@ -62,12 +62,11 @@ namespace SyncStreamAPI.Controllers
         [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.API)]
         public async Task<IActionResult> ConvertMedia(string apiKey, MediaType mediaType)
         {
-            var dbUser = _postgres.Users.First(u => u.ApiKey == apiKey);
-            // Check if the request is valid and contains a file
             if (Request.ContentLength <= 0 || Request.Form == null || !Request.Form.Files.Any())
             {
-                return Unauthorized();
+                return BadRequest();
             }
+            var dbUser = _postgres.Users.First(u => u.ApiKey == apiKey);
             var inputFile = Request.Form.Files[0];
             var fileInfo = new FileInfo(inputFile.FileName);
             var mimeType = MimeTypeHelper.GetMimeType(inputFile);

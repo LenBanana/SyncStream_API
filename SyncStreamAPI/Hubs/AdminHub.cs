@@ -8,6 +8,7 @@ using SyncStreamAPI.ServerData;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
@@ -15,6 +16,13 @@ namespace SyncStreamAPI.Hubs
 {
     public partial class ServerHub
     {
+        [Privilege(RequiredPrivileges = UserPrivileges.Elevated, AuthenticationType = AuthenticationType.Token)]
+        public async Task GetPermissions(string token)
+        {
+            var privilegeInfos = PrivilegeInfo.GetPrivilegedMethodsInfo();
+            await Clients.Caller.getPrivilegeInfo(privilegeInfos);
+        }
+
         [ErrorHandling]
         public async Task LoginRequest(DbUser requestUser, string userInfo)
         {

@@ -18,13 +18,6 @@ namespace SyncStreamAPI.Hubs
     {
 
         [Privilege(RequiredPrivileges = UserPrivileges.Elevated, AuthenticationType = AuthenticationType.Token)]
-        public async Task GetAllDownloads(string token)
-        {
-            var result = _postgres.Files?.Select(x => new FileDto(x)).OrderBy(x => x.Name).ToList();
-            await Clients.Caller.getDownloads(result);
-        }
-
-        [Privilege(RequiredPrivileges = UserPrivileges.Elevated, AuthenticationType = AuthenticationType.Token)]
         public async Task ReloadDownloadConfig(string token)
         {
             GeneralManager.ReadSettings(Configuration);
@@ -32,19 +25,25 @@ namespace SyncStreamAPI.Hubs
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Elevated, AuthenticationType = AuthenticationType.Token)]
+        public async Task GetAllDownloads(string token)
+        {
+            var result = _postgres.Files?.Select(x => new FileDto(x)).OrderBy(x => x.Name).ToList();
+            await Clients.Caller.getDownloads(result);
+        }
+
+        [Privilege(RequiredPrivileges = UserPrivileges.Elevated, AuthenticationType = AuthenticationType.Token)]
+        public async Task GetStorageInfo(string token)
+        {
+            var folders = new List<string> { General.FilePath, General.TemporaryFilePath };
+            var storageInfo = folders.Select(f => new FileStorageInfo(f)).ToList();
+            storageInfo.ForEach(f => f.CalculateStorageInfo());
+            await Clients.Caller.getStorageInfo(storageInfo);
+        }
+
+        [Privilege(RequiredPrivileges = UserPrivileges.Elevated, AuthenticationType = AuthenticationType.Token)]
         public async Task CleanUpFiles(string token, bool delete = false)
         {
-            List<string> files = new List<string>();
-            if (Directory.Exists(General.FilePath))
-            {
-                files = Directory.GetFiles(General.FilePath).ToList();
-            }
-
-            if (Directory.Exists(General.TemporaryFilePath))
-            {
-                files.AddRange(Directory.GetFiles(General.TemporaryFilePath));
-            }
-
+            var files = GetDefaultFiles();
             if (files.Count() > 0)
             {
                 var dbFiles = _postgres.Files.ToList();
@@ -76,6 +75,21 @@ namespace SyncStreamAPI.Hubs
                     }
                 }
             }
+        }
+
+        private List<string> GetDefaultFiles()
+        {
+            List<string> files = new List<string>();
+            if (Directory.Exists(General.FilePath))
+            {
+                files = Directory.GetFiles(General.FilePath).ToList();
+            }
+
+            if (Directory.Exists(General.TemporaryFilePath))
+            {
+                files.AddRange(Directory.GetFiles(General.TemporaryFilePath));
+            }
+            return files;
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
@@ -182,9 +196,9 @@ namespace SyncStreamAPI.Hubs
             }
             var fileName = await General.ResolveURL(url, Configuration);
             var conv = new DownloadClientValue(dbUser.ID, fileName, token, url, quality);
-            _manager.userM3U8Conversions.Add(conv);
+            _manager.userDownloads.Add(conv);
             await _manager.YtDownload(conv, audioOnly);
-            _manager.userM3U8Conversions.Remove(conv);
+            _manager.userDownloads.Remove(conv);
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
