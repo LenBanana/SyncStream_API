@@ -31,26 +31,21 @@ namespace SyncStreamAPI.Models
             Assembly assembly = Assembly.GetCallingAssembly();
 
             // Get all types in the assembly that have the PrivilegeAttribute applied to them
-            var typesWithAttribute = assembly.GetTypes()
-                                             .Where(t => Attribute.IsDefined(t, typeof(PrivilegeAttribute)));
+            var methodsWithAttribute = assembly.GetTypes()
+                      .SelectMany(t => t.GetMethods())
+                      .Where(m => m.GetCustomAttributes(typeof(PrivilegeAttribute), false).Length > 0)
+                      .ToArray();
 
-            // Loop through each type and get its methods that have the PrivilegeAttribute applied to them
-            foreach (var type in typesWithAttribute)
+            // Loop through each method and get basic information about it
+            foreach (var method in methodsWithAttribute)
             {
-                var methodsWithAttribute = type.GetMethods()
-                                               .Where(m => Attribute.IsDefined(m, typeof(PrivilegeAttribute)));
-
-                // Loop through each method and get basic information about it
-                foreach (var method in methodsWithAttribute)
-                {
-                    var attribute = method.GetCustomAttribute<PrivilegeAttribute>();
-                    string methodName = method.Name;
-                    string typeName = type.Name;
-                    UserPrivileges requiredPrivileges = attribute.RequiredPrivileges;
-                    AuthenticationType authenticationType = attribute.AuthenticationType;
-                    PrivilegeInfo methodInfo = new PrivilegeInfo(methodName, typeName, requiredPrivileges, authenticationType);
-                    result.Add(methodInfo);
-                }
+                var attribute = method.GetCustomAttribute<PrivilegeAttribute>();
+                string methodName = method.Name;
+                string typeName = method.ReturnType.FullName;
+                UserPrivileges requiredPrivileges = attribute.RequiredPrivileges;
+                AuthenticationType authenticationType = attribute.AuthenticationType;
+                PrivilegeInfo methodInfo = new PrivilegeInfo(methodName, typeName, requiredPrivileges, authenticationType);
+                result.Add(methodInfo);
             }
 
             return result;
