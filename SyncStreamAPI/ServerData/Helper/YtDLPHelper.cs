@@ -29,11 +29,11 @@ namespace SyncStreamAPI.ServerData.Helper
             catch (Exception ex) { Console.WriteLine(ex.ToString()); }
         }
 
-        public static async Task<RunResult<string>> DownloadMedia(YoutubeDL ytdl, DownloadClientValue downloadClient, bool audioOnly, IProgress<DownloadProgress> progress, CancellationToken? cancellationToken = null)
+        public static async Task<RunResult<string>> DownloadMedia(YoutubeDL ytdl, DownloadClientValue downloadClient, bool audioOnly, IProgress<DownloadProgress> progress)
         {
             return audioOnly
-                ? await ytdl.RunAudioDownload(downloadClient.Url, AudioConversionFormat.Mp3, progress: progress, ct: cancellationToken.HasValue ? cancellationToken.Value : downloadClient.CancellationToken.Token, overrideOptions: new OptionSet() { AudioMultistreams = false })
-                : await ytdl.RunVideoDownload(downloadClient.Url, format: $"bestvideo[height<={downloadClient.Quality}]+bestaudio/best", progress: progress, ct: cancellationToken.HasValue ? cancellationToken.Value : downloadClient.CancellationToken.Token, recodeFormat: VideoRecodeFormat.Mp4, mergeFormat: DownloadMergeFormat.Mp4);
+                ? await ytdl.RunAudioDownload(downloadClient.Url, AudioConversionFormat.Mp3, progress: progress, ct: downloadClient.CancellationToken.Token, overrideOptions: new OptionSet() { AudioMultistreams = false })
+                : await ytdl.RunVideoDownload(downloadClient.Url, format: $"bestvideo[height<={downloadClient.Quality}]+bestaudio/best", progress: progress, ct: downloadClient.CancellationToken.Token, recodeFormat: VideoRecodeFormat.Mp4, mergeFormat: DownloadMergeFormat.Mp4);
         }
     }
 }

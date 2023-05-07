@@ -1,7 +1,9 @@
-﻿using Microsoft.AspNetCore.SignalR;
+﻿using iText.Layout.Splitting;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using ScreenIT.Helper;
 using SyncStreamAPI.Annotations;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Enums;
@@ -39,6 +41,7 @@ namespace SyncStreamAPI.ServerData
         public List<LiveUser> LiveUsers { get; set; } = new List<LiveUser>();
         public Dictionary<WebClient, DownloadClientValue> userWebDownloads { get; set; } = new Dictionary<WebClient, DownloadClientValue>();
         public List<DownloadClientValue> userDownloads { get; set; } = new List<DownloadClientValue>();
+        public List<DownloadClientValue> userYtDownloads { get; set; } = new List<DownloadClientValue>();
         public static IServiceProvider ServiceProvider { get; set; }
         IConfiguration Configuration { get; }
         public MainManager(IServiceProvider provider)
@@ -79,58 +82,35 @@ namespace SyncStreamAPI.ServerData
         }
 
         [ErrorHandling]
-        public async void YtPlaylistDownload(List<DownloadClientValue> vids, bool audioOnly = false)
+        public void YtPlaylistDownload(List<DownloadClientValue> vids)
         {
-            var downloadTasks = new List<Task>();
-            var semaphore = new SemaphoreSlim(General.MaxParallelYtDownloads);
-            var tokens = vids.Select(v => v.CancellationToken.Token).ToArray();
-            var cts = CancellationTokenSource.CreateLinkedTokenSource(tokens);
-
             foreach (var vid in vids)
             {
-                await semaphore.WaitAsync();
-
-                downloadTasks.Add(Task.Run(async () =>
-                {
-                    try
-                    {
-                        if (cts.IsCancellationRequested)
-                        {
-                            return;
-                        }
-                        await YtDownload(vid, audioOnly, cts.Token);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        // Ignore cancellation exceptions
-                    }
-                    finally
-                    {
-                        semaphore.Release();
-                    }
-                }));
-            }
-
-            try
-            {
-                await Task.WhenAll(downloadTasks);
-            }
-            catch (OperationCanceledException)
-            {
-                // Ignore cancellation exceptions
+                YtDownload(vid);
             }
         }
 
         [ErrorHandling]
-        public async void AddYtDownload(DownloadClientValue downloadClient, bool audioOnly = false)
+        public async void YtDownload(DownloadClientValue downloadClient)
         {
-            await YtDownload(downloadClient, audioOnly);
+            userYtDownloads.Add(downloadClient);
+            if (userYtDownloads.Count > General.MaxParallelYtDownloads)
+            {
+                return;
+            }
+            await RunYtDownload(downloadClient);
+            using (var scope = ServiceProvider.CreateScope())
+            {
+                var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+                await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
+                userYtDownloads.Remove(downloadClient);
+                if (!downloadClient.CancellationToken.IsCancellationRequested)
+                    StartNextYtDownload();
+            }
         }
 
-        [ErrorHandling]
-        private async Task YtDownload(DownloadClientValue downloadClient, bool audioOnly = false, CancellationToken? cancellationToken = null)
+        private async Task RunYtDownload(DownloadClientValue downloadClient)
         {
-            userDownloads.Add(downloadClient);
             using (var scope = ServiceProvider.CreateScope())
             {
                 var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
@@ -139,45 +119,47 @@ namespace SyncStreamAPI.ServerData
                 var dbUser = _postgres.Users
                     .Include(x => x.RememberTokens)
                     .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == downloadClient.Token) == true);
-                var fileExtension = audioOnly ? ".mp3" : ".mp4";
+                var fileExtension = downloadClient.AudioOnly ? ".mp3" : ".mp4";
                 var dbFile = new DbFile(downloadClient.FileName, fileExtension, dbUser);
                 var filePath = dbFile.GetPath();
                 var ytdl = General.GetYoutubeDL();
                 ytdl.OutputFolder = General.FilePath;
                 ytdl.RestrictFilenames = true;
                 ytdl.OutputFileTemplate = $"{dbFile.FileKey}{fileExtension}";
-
-                var progress = new Progress<DownloadProgress>(async p =>
+                Timer _progressTimer = null;
+                var progress = new Progress<DownloadProgress>(p =>
                 {
                     if (downloadClient.CancellationToken.IsCancellationRequested)
                         return;
-                    await YtDLPHelper.UpdateDownloadProgress(downloadClient, _hub, p);
+                    _progressTimer ??= new Timer(async _ =>
+                    {
+                        await YtDLPHelper.UpdateDownloadProgress(downloadClient, _hub, p);
+                        _progressTimer?.Dispose();
+                        _progressTimer = null;
+                    }, null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
                 });
                 downloadClient.Stopwatch = Stopwatch.StartNew();
                 RunResult<string> runResult = null;
                 await _hub.Clients.Group(userId).downloadListen(downloadClient.UniqueId);
                 try
                 {
-                    runResult = await YtDLPHelper.DownloadMedia(ytdl, downloadClient, audioOnly, progress, cancellationToken);
+                    runResult = await YtDLPHelper.DownloadMedia(ytdl, downloadClient, downloadClient.AudioOnly, progress);
                     if (runResult != null && runResult?.Success == true)
                     {
                         dbUser.Files.Add(dbFile);
                         await _postgres.SaveChangesAsync();
                         Console.WriteLine($"User {downloadClient.UserId} saved {downloadClient.FileName} to DB");
                     }
-                    else if (!downloadClient.CancellationToken.IsCancellationRequested)
+                    else
                     {
                         Console.WriteLine($"Error downloading {downloadClient.Url}: {runResult?.ErrorOutput.FirstOrDefault()}");
+                        FileCheck.CheckOverrideFile(dbFile.GetPath());
                     }
                 }
                 catch (TaskCanceledException ex)
                 {
                     Console.WriteLine("Download cancelled by user");
-                }
-                finally
-                {
-                    await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
-                    userDownloads.Remove(downloadClient);
+                    FileCheck.CheckOverrideFile(dbFile.GetPath());
                 }
             }
         }
@@ -194,9 +176,10 @@ namespace SyncStreamAPI.ServerData
                     SendStatusToM3U8Clients();
                     if (userDownloads.Count > General.MaxParallelConversions)
                     {
+                        downloadClient.KeepUrlAlive();
                         return;
                     }
-
+                    downloadClient.StopKeepAlive();
                     RunM3U8Conversion(downloadClient);
                     return;
                 }
@@ -347,6 +330,12 @@ namespace SyncStreamAPI.ServerData
                     userDownloads[idx].StopKeepAlive();
                     userDownloads[idx].CancellationToken.Cancel();
                 }
+                var ytIdx = userYtDownloads.FindIndex(x => x.UniqueId == downloadId);
+                if (ytIdx >= 0 && userYtDownloads[ytIdx].UserId == userId && !userYtDownloads[ytIdx].CancellationToken.IsCancellationRequested)
+                {
+                    userYtDownloads[ytIdx].StopKeepAlive();
+                    userYtDownloads[ytIdx].CancellationToken.Cancel();
+                }
             }
         }
 
@@ -366,6 +355,28 @@ namespace SyncStreamAPI.ServerData
                             var clientResult = new DownloadInfo("Your download is starting, please wait...", nextDownload.FileName, nextDownload.UniqueId);
                             await _hub.Clients.Group(nextDownload.UserId.ToString()).downloadProgress(clientResult);
                             RunM3U8Conversion(nextDownload);
+                        }
+                    }
+                }
+            }
+        }
+
+        public async void StartNextYtDownload()
+        {
+            using (var scope = ServiceProvider.CreateScope())
+            {
+                var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+                if (userYtDownloads.Count > 0)
+                {
+                    while (userYtDownloads.Where(x => x.Running).Count() < General.MaxParallelYtDownloads)
+                    {
+                        var nextDownload = userYtDownloads.FirstOrDefault(x => !x.Running);
+                        if (nextDownload != null)
+                        {
+                            nextDownload.Running = true;
+                            var clientResult = new DownloadInfo("Your download is starting, please wait...", nextDownload.FileName, nextDownload.UniqueId);
+                            await _hub.Clients.Group(nextDownload.UserId.ToString()).downloadProgress(clientResult);
+                            _ = RunYtDownload(nextDownload);
                         }
                     }
                 }

@@ -17,6 +17,7 @@ namespace SyncStreamAPI.Models
         public string Token { get; set; }
         public string UniqueId { get; set; }
         public bool Running { get; set; }
+        public bool AudioOnly { get; set; }
         public Stopwatch Stopwatch { get; set; }
         public CancellationTokenSource CancellationToken { get; set; }
 
@@ -32,9 +33,8 @@ namespace SyncStreamAPI.Models
             Running = false;
             UniqueId = Guid.NewGuid().ToString();
             CancellationToken = new CancellationTokenSource();
-            KeepUrlAlive();
         }
-        public DownloadClientValue(int userId, string fileName, string token, string url, string quality)
+        public DownloadClientValue(int userId, string fileName, string token, string url, string quality, bool audioOnly = false)
         {
             UserId = userId;
             Preset = ConversionPreset.Faster;
@@ -43,11 +43,11 @@ namespace SyncStreamAPI.Models
             FileName = fileName;
             Url = url;
             Running = false;
+            AudioOnly = audioOnly;
             UniqueId = Guid.NewGuid().ToString();
             CancellationToken = new CancellationTokenSource();
-            KeepUrlAlive();
         }
-        async void KeepUrlAlive()
+        public async void KeepUrlAlive()
         {
             if (Stopwatch == null && !stopKeepAlive)
             {

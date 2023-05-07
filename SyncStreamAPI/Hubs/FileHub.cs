@@ -190,13 +190,13 @@ namespace SyncStreamAPI.Hubs
             {
                 var ytdl = General.GetYoutubeDL();
                 var playlistInfo = await ytdl.RunVideoDataFetch(url);
-                var vids = playlistInfo.Data.Entries.Select(x => new DownloadClientValue(dbUser.ID, x.Title, token, x.Url, quality)).ToList();
-                _manager.YtPlaylistDownload(vids, audioOnly);
+                var vids = playlistInfo.Data.Entries.Select(x => new DownloadClientValue(dbUser.ID, x.Title, token, x.Url, quality, audioOnly)).ToList();
+                _manager.YtPlaylistDownload(vids);
                 return;
             }
             var fileName = await General.ResolveURL(url, Configuration);
-            var conv = new DownloadClientValue(dbUser.ID, fileName, token, url, quality);
-            _manager.AddYtDownload(conv, audioOnly);
+            var conv = new DownloadClientValue(dbUser.ID, fileName, token, url, quality, audioOnly);
+            _manager.YtDownload(conv);
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
