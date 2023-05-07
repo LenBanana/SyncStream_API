@@ -19,6 +19,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using Xabe.FFmpeg;
 using Xabe.FFmpeg.Downloader;
@@ -80,23 +81,54 @@ namespace SyncStreamAPI.ServerData
         [ErrorHandling]
         public async void YtPlaylistDownload(List<DownloadClientValue> vids, bool audioOnly = false)
         {
+            var downloadTasks = new List<Task>();
+            var semaphore = new SemaphoreSlim(General.MaxParallelYtDownloads);
+            var tokens = vids.Select(v => v.CancellationToken.Token).ToArray();
+            var cts = CancellationTokenSource.CreateLinkedTokenSource(tokens);
+
             foreach (var vid in vids)
             {
-                await YtDownload(vid, audioOnly);
-                if (vid.CancellationToken.IsCancellationRequested)
+                await semaphore.WaitAsync();
+
+                downloadTasks.Add(Task.Run(async () =>
                 {
-                    break;
-                }
+                    try
+                    {
+                        if (cts.IsCancellationRequested)
+                        {
+                            return;
+                        }
+                        await YtDownload(vid, audioOnly, cts.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Ignore cancellation exceptions
+                    }
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                }));
+            }
+
+            try
+            {
+                await Task.WhenAll(downloadTasks);
+            }
+            catch (OperationCanceledException)
+            {
+                // Ignore cancellation exceptions
             }
         }
 
+        [ErrorHandling]
         public async void AddYtDownload(DownloadClientValue downloadClient, bool audioOnly = false)
         {
             await YtDownload(downloadClient, audioOnly);
         }
 
         [ErrorHandling]
-        private async Task YtDownload(DownloadClientValue downloadClient, bool audioOnly = false)
+        private async Task YtDownload(DownloadClientValue downloadClient, bool audioOnly = false, CancellationToken? cancellationToken = null)
         {
             userDownloads.Add(downloadClient);
             using (var scope = ServiceProvider.CreateScope())
@@ -126,7 +158,7 @@ namespace SyncStreamAPI.ServerData
                 await _hub.Clients.Group(userId).downloadListen(downloadClient.UniqueId);
                 try
                 {
-                    runResult = await YtDLPHelper.DownloadMedia(ytdl, downloadClient, audioOnly, progress);
+                    runResult = await YtDLPHelper.DownloadMedia(ytdl, downloadClient, audioOnly, progress, cancellationToken);
                     if (runResult != null && runResult?.Success == true)
                     {
                         dbUser.Files.Add(dbFile);

@@ -25,6 +25,7 @@ namespace SyncStreamAPI.Helper
         public static string XmlMethodDescriptions = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? System.IO.Directory.GetCurrentDirectory() + "/PrivilegeMethodDescriptions.xml" : System.IO.Directory.GetCurrentDirectory() + "\\PrivilegeMethodDescriptions.xml";
         public static int GuestRoomAmount { get; } = 6;
         public static int MaxParallelConversions { get; set; } = 6;
+        public static int MaxParallelYtDownloads { get; set; } = 4;
 
         public static TimeSpan DaysToKeepTemporaryFiles { get; } = TimeSpan.FromDays(14);
         public static TimeSpan MinutesToKeepFFmpeg { get; } = TimeSpan.FromMinutes(10);

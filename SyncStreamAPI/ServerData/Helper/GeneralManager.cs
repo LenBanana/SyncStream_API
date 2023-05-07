@@ -23,6 +23,8 @@ namespace SyncStreamAPI.ServerData.Helper
         {
             var section = config.GetSection("MaxParallelConversions");
             General.MaxParallelConversions = Convert.ToInt32(section.Value);
+            section = config.GetSection("MaxParallelYtDownloads");
+            General.MaxParallelYtDownloads = Convert.ToInt32(section.Value);
         }
 
         public async void AddDefaultRooms()
