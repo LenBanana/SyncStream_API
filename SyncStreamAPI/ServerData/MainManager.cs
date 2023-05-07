@@ -82,69 +82,76 @@ namespace SyncStreamAPI.ServerData
         {
             foreach (var vid in vids)
             {
-                userDownloads.Add(vid);
                 await YtDownload(vid, audioOnly);
                 if (vid.CancellationToken.IsCancellationRequested)
                 {
                     break;
                 }
-                userDownloads.Remove(vid);
             }
         }
 
-        [ErrorHandling]
-        public async Task YtDownload(DownloadClientValue downloadClient, bool audioOnly = false)
+        public async void AddYtDownload(DownloadClientValue downloadClient, bool audioOnly = false)
         {
+            await YtDownload(downloadClient, audioOnly);
+        }
 
-            using (var scope = ServiceProvider.CreateScope())
+        [ErrorHandling]
+        private async Task YtDownload(DownloadClientValue downloadClient, bool audioOnly = false)
+        {
+            userDownloads.Add(downloadClient);
+            try
             {
-                var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
-                var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                var userId = downloadClient.UserId.ToString();
-                await _hub.Clients.Group(userId).downloadListen(downloadClient.UniqueId);
-
-                var dbUser = _postgres.Users
-                    .Include(x => x.RememberTokens)
-                    .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == downloadClient.Token) == true);
-
-                var fileExtension = audioOnly ? ".mp3" : ".mp4";
-                var dbFile = new DbFile(downloadClient.FileName, fileExtension, dbUser);
-                var filePath = dbFile.GetPath();
-
-                var ytdl = General.GetYoutubeDL();
-                ytdl.OutputFolder = General.FilePath;
-                ytdl.RestrictFilenames = true;
-                ytdl.OutputFileTemplate = $"{dbFile.FileKey}{fileExtension}";
-
-                var progress = new Progress<DownloadProgress>(async p =>
+                using (var scope = ServiceProvider.CreateScope())
                 {
-                    if (downloadClient.CancellationToken.IsCancellationRequested)
-                        return;
-                    await YtDLPHelper.UpdateDownloadProgress(downloadClient, _hub, p);
-                });
+                    var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
+                    var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+                    var userId = downloadClient.UserId.ToString();
+                    await _hub.Clients.Group(userId).downloadListen(downloadClient.UniqueId);
 
-                downloadClient.Stopwatch = Stopwatch.StartNew();
-                RunResult<string> runResult = null;
-                try
-                {
-                    runResult = await YtDLPHelper.DownloadMedia(ytdl, downloadClient, audioOnly, progress);
-                }
-                catch (TaskCanceledException ex)
-                {
-                    await SendDefaultDialog(userId, "Cancelling download of playlist", AlertType.Success, "YouTube");
-                }
-                await _hub.Clients.Group(userId).downloadFinished(downloadClient.UniqueId);
-                if (runResult != null && runResult?.Success == true)
-                {
-                    dbUser.Files.Add(dbFile);
-                    await _postgres.SaveChangesAsync();
-                    Console.WriteLine($"User {downloadClient.UserId} saved {downloadClient.FileName} to DB");
-                }
-                else if (!downloadClient.CancellationToken.IsCancellationRequested)
-                {
-                    Console.WriteLine($"Error downloading {downloadClient.Url}: {runResult?.ErrorOutput.FirstOrDefault()}");
+                    var dbUser = _postgres.Users
+                        .Include(x => x.RememberTokens)
+                        .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == downloadClient.Token) == true);
+
+                    var fileExtension = audioOnly ? ".mp3" : ".mp4";
+                    var dbFile = new DbFile(downloadClient.FileName, fileExtension, dbUser);
+                    var filePath = dbFile.GetPath();
+
+                    var ytdl = General.GetYoutubeDL();
+                    ytdl.OutputFolder = General.FilePath;
+                    ytdl.RestrictFilenames = true;
+                    ytdl.OutputFileTemplate = $"{dbFile.FileKey}{fileExtension}";
+
+                    var progress = new Progress<DownloadProgress>(async p =>
+                    {
+                        if (downloadClient.CancellationToken.IsCancellationRequested)
+                            return;
+                        await YtDLPHelper.UpdateDownloadProgress(downloadClient, _hub, p);
+                    });
+
+                    downloadClient.Stopwatch = Stopwatch.StartNew();
+                    RunResult<string> runResult = null;
+                    try
+                    {
+                        runResult = await YtDLPHelper.DownloadMedia(ytdl, downloadClient, audioOnly, progress);
+                    }
+                    catch (TaskCanceledException ex)
+                    {
+                        await SendDefaultDialog(userId, "Cancelling download of playlist", AlertType.Success, "YouTube");
+                    }
+                    await _hub.Clients.Group(userId).downloadFinished(downloadClient.UniqueId);
+                    if (runResult != null && runResult?.Success == true)
+                    {
+                        dbUser.Files.Add(dbFile);
+                        await _postgres.SaveChangesAsync();
+                        Console.WriteLine($"User {downloadClient.UserId} saved {downloadClient.FileName} to DB");
+                    }
+                    else if (!downloadClient.CancellationToken.IsCancellationRequested)
+                    {
+                        Console.WriteLine($"Error downloading {downloadClient.Url}: {runResult?.ErrorOutput.FirstOrDefault()}");
+                    }
                 }
             }
+            finally { userDownloads.Remove(downloadClient); }
         }
 
         public async void AddDownload(DownloadClientValue downloadClient)
@@ -309,8 +316,8 @@ namespace SyncStreamAPI.ServerData
                 var idx = userDownloads.FindIndex(x => x.UniqueId == downloadId);
                 if (idx >= 0 && userDownloads[idx].UserId == userId && !userDownloads[idx].CancellationToken.IsCancellationRequested)
                 {
-                    userDownloads[idx].CancellationToken.Cancel();
                     userDownloads[idx].StopKeepAlive();
+                    userDownloads[idx].CancellationToken.Cancel();
                     await _hub.Clients.Group(userId.ToString()).downloadFinished(downloadId);
                     userDownloads.RemoveAt(idx);
                 }

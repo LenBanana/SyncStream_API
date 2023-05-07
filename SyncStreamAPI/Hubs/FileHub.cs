@@ -196,9 +196,7 @@ namespace SyncStreamAPI.Hubs
             }
             var fileName = await General.ResolveURL(url, Configuration);
             var conv = new DownloadClientValue(dbUser.ID, fileName, token, url, quality);
-            _manager.userDownloads.Add(conv);
-            await _manager.YtDownload(conv, audioOnly);
-            _manager.userDownloads.Remove(conv);
+            _manager.AddYtDownload(conv, audioOnly);
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
