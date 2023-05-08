@@ -103,18 +103,18 @@ namespace SyncStreamAPI.ServerData
                 return;
             }
             await RunYtDownload(downloadClient);
+            if (downloadClient.CancellationToken.IsCancellationRequested && userYtPlaylistDownload.ContainsKey(tokenSource))
+            {
+                var downloads = userYtPlaylistDownload[tokenSource];
+                userYtDownloads.Where(x => downloads.FindIndex(y => y.UniqueId == x.UniqueId) != -1).ToList().ForEach(x => x.CancellationToken.Cancel());
+            }
             using (var scope = ServiceProvider.CreateScope())
             {
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
                 await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
-                if (downloadClient.CancellationToken.IsCancellationRequested && userYtPlaylistDownload.ContainsKey(tokenSource))
-                {
-                    var downloads = userYtPlaylistDownload[tokenSource];
-                    userYtDownloads.Where(x => downloads.FindIndex(y => y.UniqueId == x.UniqueId) != -1).ToList().ForEach(x => x.CancellationToken.Cancel());
-                }
-                userYtDownloads.Remove(downloadClient);
-                StartNextYtDownload();
             }
+            userYtDownloads.Remove(downloadClient);
+            StartNextYtDownload();
         }
 
         private async Task RunYtDownload(DownloadClientValue downloadClient)
@@ -137,10 +137,10 @@ namespace SyncStreamAPI.ServerData
                 Timer _progressTimer = null;
                 var progress = new Progress<DownloadProgress>(p =>
                 {
-                    if (downloadClient.CancellationToken.IsCancellationRequested)
-                        return;
                     _progressTimer ??= new Timer(async _ =>
                     {
+                        if (downloadClient.CancellationToken.IsCancellationRequested)
+                            return;
                         await YtDLPHelper.UpdateDownloadProgress(downloadClient, _hub, p);
                         _progressTimer?.Dispose();
                         _progressTimer = null;
