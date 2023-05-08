@@ -75,7 +75,7 @@ namespace SyncStreamAPI.Controllers
                 var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.id == rtmpData.token);
                 if (liveUser != null)
                 {
-                    _manager.LiveUsers.Remove(liveUser);
+                    _manager.LiveUsers.TryTake(out liveUser);
                     var liveUsers = _manager.LiveUsers;
                     await _hub.Clients.Groups(General.LoggedInGroupName).getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
                     await _hub.Clients.Groups(General.BottedInGroupName).getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());

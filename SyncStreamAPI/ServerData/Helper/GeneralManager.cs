@@ -6,6 +6,7 @@ using SyncStreamAPI.Helper;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.PostgresModels;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 namespace SyncStreamAPI.ServerData.Helper
@@ -13,8 +14,8 @@ namespace SyncStreamAPI.ServerData.Helper
     public class GeneralManager
     {
         IServiceProvider _serviceProvider { get; set; }
-        public List<Room> Rooms { get; set; } = new List<Room>();
-        public GeneralManager(IServiceProvider serviceProvider, List<Room> rooms)
+        public BlockingCollection<Room> Rooms { get; set; } = new BlockingCollection<Room>();
+        public GeneralManager(IServiceProvider serviceProvider, BlockingCollection<Room> rooms)
         {
             _serviceProvider = serviceProvider;
             Rooms = rooms;

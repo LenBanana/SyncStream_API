@@ -4,6 +4,7 @@ using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -13,8 +14,8 @@ namespace SyncStreamAPI.ServerData.Helper
     public class RoomManager
     {
         IServiceProvider _serviceProvider { get; set; }
-        public List<Room> Rooms { get; set; } = new List<Room>();
-        public RoomManager(IServiceProvider serviceProvider, List<Room> rooms)
+        public BlockingCollection<Room> Rooms { get; set; } = new BlockingCollection<Room>();
+        public RoomManager(IServiceProvider serviceProvider, BlockingCollection<Room> rooms)
         {
             _serviceProvider = serviceProvider;
             Rooms = rooms;
@@ -23,7 +24,7 @@ namespace SyncStreamAPI.ServerData.Helper
         {
             return Rooms.FirstOrDefault(x => x.uniqueId == UniqueId);
         }
-        public List<Room> GetRooms()
+        public BlockingCollection<Room> GetRooms()
         {
             return Rooms;
         }
@@ -44,10 +45,9 @@ namespace SyncStreamAPI.ServerData.Helper
             {
                 try
                 {
-                    int idx = Rooms.FindIndex(x => x.uniqueId == e.RoomId);
-                    if (idx > -1)
-                    {
-                        Room room = Rooms[idx];
+                    var room = Rooms.FirstOrDefault(x => x.uniqueId == e.RoomId);
+                    if (room != null)
+                    {                        
                         e.Kicked -= Member_Kicked;
                         if (!room.server.members.Contains(e))
                         {

@@ -14,6 +14,7 @@ using SyncStreamAPI.Models.GameModels.Chess;
 using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -44,10 +45,9 @@ namespace SyncStreamAPI.Hubs
         public override async Task OnDisconnectedAsync(Exception? ex)
         {
             var Rooms = MainManager.GetRooms();
-            int idx = Rooms.FindIndex(x => x.server.members.FirstOrDefault(y => y?.ConnectionId == Context.ConnectionId) != null);
-            if (idx > -1)
+            var room = Rooms.FirstOrDefault(x => x.server.members.FirstOrDefault(y => y?.ConnectionId == Context.ConnectionId) != null);
+            if (room != null)
             {
-                Room room = Rooms[idx];
                 Member? e = room.server.members.FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
                 e?.InvokeKick();
 
@@ -80,12 +80,12 @@ namespace SyncStreamAPI.Hubs
                         if (bjMember.waitingForBet)
                         {
                             bjMember.waitingForBet = false;
-                            _blackjackManager.AskForBet(blackjack, idx + 1);
+                            _blackjackManager.AskForBet(blackjack, gameMemberIdx + 1);
                         }
                         else if (bjMember.waitingForPull)
                         {
                             bjMember.waitingForPull = false;
-                            _blackjackManager.AskForPull(blackjack, idx + 1);
+                            _blackjackManager.AskForPull(blackjack, gameMemberIdx + 1);
                             await _blackjackManager.SendAllUsers(blackjack);
                         }
                         else
@@ -139,7 +139,7 @@ namespace SyncStreamAPI.Hubs
 
         private Room? GetRoom(string UniqueId)
         {
-            List<Room> Rooms = MainManager.GetRooms();
+            BlockingCollection<Room> Rooms = MainManager.GetRooms();
             Room? room = Rooms.FirstOrDefault(x => x.uniqueId == UniqueId);
             if (room == null)
             {
@@ -560,7 +560,7 @@ namespace SyncStreamAPI.Hubs
                 _postgres.Rooms.Remove(dbRoom);
                 await _postgres.SaveChangesAsync();
             }
-            MainManager.GetRooms().Remove(room);
+            MainManager.GetRooms().TryTake(out room);
             await Clients.All.getrooms(MainManager.GetRooms());
         }
 

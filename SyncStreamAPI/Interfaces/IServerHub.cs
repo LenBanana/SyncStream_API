@@ -16,7 +16,7 @@ namespace SyncStreamAPI.Interfaces
 
         Task playlistupdate(List<DreckVideo> videos);
 
-        Task getrooms(List<Room> rooms);
+        Task getrooms(IEnumerable<Room> rooms);
 
         Task isplayingupdate(bool isplaying);
 

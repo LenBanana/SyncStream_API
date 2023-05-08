@@ -15,6 +15,7 @@ using SyncStreamAPI.Models.RTMP;
 using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData.Helper;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -31,18 +32,18 @@ namespace SyncStreamAPI.ServerData
 {
     public class MainManager
     {
-        public static List<Room> Rooms { get; set; } = new List<Room>();
+        public static BlockingCollection<Room> Rooms { get; set; } = new BlockingCollection<Room>();
         public static GeneralManager GeneralManager { get; set; }
         public static RoomManager RoomManager { get; set; }
         public static GeneralManager GetGeneralManager() => GeneralManager;
         public static RoomManager GetRoomManager() => RoomManager;
         public static Room GetRoom(string UniqueId) => RoomManager.GetRoom(UniqueId);
-        public static List<Room> GetRooms() => RoomManager.GetRooms();
-        public List<LiveUser> LiveUsers { get; set; } = new List<LiveUser>();
+        public static BlockingCollection<Room> GetRooms() => RoomManager.GetRooms();
+        public BlockingCollection<LiveUser> LiveUsers { get; set; } = new BlockingCollection<LiveUser>();
         public Dictionary<WebClient, DownloadClientValue> userWebDownloads { get; set; } = new Dictionary<WebClient, DownloadClientValue>();
-        public Dictionary<CancellationTokenSource, List<DownloadClientValue>> userYtPlaylistDownload { get; set; } = new Dictionary<CancellationTokenSource, List<DownloadClientValue>>();
-        public List<DownloadClientValue> userDownloads { get; set; } = new List<DownloadClientValue>();
-        public List<DownloadClientValue> userYtDownloads { get; set; } = new List<DownloadClientValue>();
+        public Dictionary<CancellationTokenSource, BlockingCollection<DownloadClientValue>> userYtPlaylistDownload { get; set; } = new Dictionary<CancellationTokenSource, BlockingCollection<DownloadClientValue>>();
+        public BlockingCollection<DownloadClientValue> userDownloads { get; set; } = new BlockingCollection<DownloadClientValue>();
+        public BlockingCollection<DownloadClientValue> userYtDownloads { get; set; } = new BlockingCollection<DownloadClientValue>();
         public static IServiceProvider ServiceProvider { get; set; }
         IConfiguration Configuration { get; }
         public MainManager(IServiceProvider provider)
@@ -87,7 +88,9 @@ namespace SyncStreamAPI.ServerData
         {
             var tokens = vids.Select(x => x.CancellationToken.Token).ToArray();
             var linkedTokens = CancellationTokenSource.CreateLinkedTokenSource(tokens);
-            userYtPlaylistDownload.Add(linkedTokens, vids);
+            var blockingCollection = new BlockingCollection<DownloadClientValue>();
+            vids.ForEach(v => blockingCollection.Add(v));
+            userYtPlaylistDownload.Add(linkedTokens, blockingCollection);
             foreach (var vid in vids)
             {
                 _ = YtDownload(vid, linkedTokens);
@@ -106,14 +109,14 @@ namespace SyncStreamAPI.ServerData
             if (downloadClient.CancellationToken.IsCancellationRequested && userYtPlaylistDownload.ContainsKey(tokenSource))
             {
                 var downloads = userYtPlaylistDownload[tokenSource];
-                userYtDownloads.Where(x => downloads.FindIndex(y => y.UniqueId == x.UniqueId) != -1).ToList().ForEach(x => x.CancellationToken.Cancel());
+                userYtDownloads.Where(x => downloads.FirstOrDefault(y => y.UniqueId == x.UniqueId) != null).ToList().ForEach(x => x.CancellationToken.Cancel());
             }
             using (var scope = ServiceProvider.CreateScope())
             {
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
                 await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
             }
-            userYtDownloads.Remove(downloadClient);
+            userYtDownloads.TryTake(out downloadClient);
             await StartNextYtDownload();
         }
 
@@ -303,7 +306,7 @@ namespace SyncStreamAPI.ServerData
                 await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
                 if (userDownloads.Contains(downloadClient))
                 {
-                    userDownloads.Remove(downloadClient);
+                    userDownloads.TryTake(out downloadClient);
                 }
 
                 await StartNextDownload();
@@ -332,17 +335,17 @@ namespace SyncStreamAPI.ServerData
             using (var scope = ServiceProvider.CreateScope())
             {
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                var idx = userDownloads.FindIndex(x => x.UniqueId == downloadId);
-                if (idx >= 0 && userDownloads[idx].UserId == userId && !userDownloads[idx].CancellationToken.IsCancellationRequested)
+                var downloadClient = userDownloads.FirstOrDefault(x => x.UniqueId == downloadId);
+                if (downloadClient != null && downloadClient.UserId == userId && !downloadClient.CancellationToken.IsCancellationRequested)
                 {
-                    userDownloads[idx].StopKeepAlive();
-                    userDownloads[idx].CancellationToken.Cancel();
+                    downloadClient.StopKeepAlive();
+                    downloadClient.CancellationToken.Cancel();
                 }
-                var ytIdx = userYtDownloads.FindIndex(x => x.UniqueId == downloadId);
-                if (ytIdx >= 0 && userYtDownloads[ytIdx].UserId == userId && !userYtDownloads[ytIdx].CancellationToken.IsCancellationRequested)
+                var downloadYtClient = userYtDownloads.FirstOrDefault(x => x.UniqueId == downloadId);
+                if (downloadYtClient != null && downloadYtClient.UserId == userId && !downloadYtClient.CancellationToken.IsCancellationRequested)
                 {
-                    userYtDownloads[ytIdx].StopKeepAlive();
-                    userYtDownloads[ytIdx].CancellationToken.Cancel();
+                    downloadYtClient.StopKeepAlive();
+                    downloadYtClient.CancellationToken.Cancel();
                 }
             }
         }
@@ -378,7 +381,7 @@ namespace SyncStreamAPI.ServerData
                 if (userYtDownloads.Count > 0)
                 {
                     var cancelledDownloads = userYtDownloads.Where(x => x.CancellationToken.IsCancellationRequested).ToList();
-                    cancelledDownloads.ForEach(x => userYtDownloads.Remove(x));
+                    cancelledDownloads.ForEach(x => userYtDownloads.TryTake(out x));
                     while (userYtDownloads.Where(x => x.Running).Count() < General.MaxParallelYtDownloads && !userYtDownloads.All(x => x.Running))
                     {
                         var nextDownload = userYtDownloads.FirstOrDefault(x => !x.Running && !x.CancellationToken.IsCancellationRequested);
