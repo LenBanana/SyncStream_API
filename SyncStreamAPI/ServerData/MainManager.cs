@@ -90,12 +90,12 @@ namespace SyncStreamAPI.ServerData
             userYtPlaylistDownload.Add(linkedTokens, vids);
             foreach (var vid in vids)
             {
-                YtDownload(vid, linkedTokens);
+                _ = YtDownload(vid, linkedTokens);
             }
         }
 
         [ErrorHandling]
-        public async void YtDownload(DownloadClientValue downloadClient, CancellationTokenSource tokenSource = null)
+        public async Task YtDownload(DownloadClientValue downloadClient, CancellationTokenSource tokenSource = null)
         {
             userYtDownloads.Add(downloadClient);
             if (userYtDownloads.Count > General.MaxParallelYtDownloads)
@@ -114,7 +114,7 @@ namespace SyncStreamAPI.ServerData
                 await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
             }
             userYtDownloads.Remove(downloadClient);
-            StartNextYtDownload();
+            await StartNextYtDownload();
         }
 
         private async Task RunYtDownload(DownloadClientValue downloadClient)
@@ -188,7 +188,7 @@ namespace SyncStreamAPI.ServerData
                         return;
                     }
                     downloadClient.StopKeepAlive();
-                    RunM3U8Conversion(downloadClient);
+                    _ = RunM3U8Conversion(downloadClient);
                     return;
                 }
                 var webClient = new WebClient();
@@ -232,7 +232,7 @@ namespace SyncStreamAPI.ServerData
             return;
         }
 
-        public async void RunM3U8Conversion(DownloadClientValue downloadClient)
+        public async Task RunM3U8Conversion(DownloadClientValue downloadClient)
         {
             downloadClient.Stopwatch = Stopwatch.StartNew();
             downloadClient.Running = true;
@@ -306,7 +306,7 @@ namespace SyncStreamAPI.ServerData
                     userDownloads.Remove(downloadClient);
                 }
 
-                StartNextDownload();
+                await StartNextDownload();
             }
         }
 
@@ -347,7 +347,7 @@ namespace SyncStreamAPI.ServerData
             }
         }
 
-        public async void StartNextDownload()
+        public async Task StartNextDownload()
         {
             using (var scope = ServiceProvider.CreateScope())
             {
@@ -363,14 +363,14 @@ namespace SyncStreamAPI.ServerData
                         {
                             var clientResult = new DownloadInfo("Your download is starting, please wait...", nextDownload.FileName, nextDownload.UniqueId);
                             await _hub.Clients.Group(nextDownload.UserId.ToString()).downloadProgress(clientResult);
-                            RunM3U8Conversion(nextDownload);
+                            _ = RunM3U8Conversion(nextDownload);
                         }
                     }
                 }
             }
         }
 
-        public async void StartNextYtDownload()
+        public async Task StartNextYtDownload()
         {
             using (var scope = ServiceProvider.CreateScope())
             {
@@ -379,8 +379,7 @@ namespace SyncStreamAPI.ServerData
                 {
                     var cancelledDownloads = userYtDownloads.Where(x => x.CancellationToken.IsCancellationRequested).ToList();
                     cancelledDownloads.ForEach(x => userYtDownloads.Remove(x));
-                    var runningDls = userYtDownloads.Where(x => x.Running).Count();
-                    while (runningDls > 0 && runningDls < General.MaxParallelYtDownloads && !userYtDownloads.All(x => x.Running))
+                    while (userYtDownloads.Where(x => x.Running).Count() < General.MaxParallelYtDownloads && !userYtDownloads.All(x => x.Running))
                     {
                         var nextDownload = userYtDownloads.FirstOrDefault(x => !x.Running && !x.CancellationToken.IsCancellationRequested);
                         if (nextDownload != null)
