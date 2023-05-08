@@ -40,6 +40,7 @@ namespace SyncStreamAPI.ServerData
         public static List<Room> GetRooms() => RoomManager.GetRooms();
         public List<LiveUser> LiveUsers { get; set; } = new List<LiveUser>();
         public Dictionary<WebClient, DownloadClientValue> userWebDownloads { get; set; } = new Dictionary<WebClient, DownloadClientValue>();
+        public Dictionary<CancellationTokenSource, List<DownloadClientValue>> userYtPlaylistDownload { get; set; } = new Dictionary<CancellationTokenSource, List<DownloadClientValue>>();
         public List<DownloadClientValue> userDownloads { get; set; } = new List<DownloadClientValue>();
         public List<DownloadClientValue> userYtDownloads { get; set; } = new List<DownloadClientValue>();
         public static IServiceProvider ServiceProvider { get; set; }
@@ -84,14 +85,17 @@ namespace SyncStreamAPI.ServerData
         [ErrorHandling]
         public void YtPlaylistDownload(List<DownloadClientValue> vids)
         {
+            var tokens = vids.Select(x => x.CancellationToken.Token).ToArray();
+            var linkedTokens = CancellationTokenSource.CreateLinkedTokenSource(tokens);
+            userYtPlaylistDownload.Add(linkedTokens, vids);
             foreach (var vid in vids)
             {
-                YtDownload(vid);
+                YtDownload(vid, linkedTokens);
             }
         }
 
         [ErrorHandling]
-        public async void YtDownload(DownloadClientValue downloadClient)
+        public async void YtDownload(DownloadClientValue downloadClient, CancellationTokenSource tokenSource = null)
         {
             userYtDownloads.Add(downloadClient);
             if (userYtDownloads.Count > General.MaxParallelYtDownloads)
@@ -103,9 +107,13 @@ namespace SyncStreamAPI.ServerData
             {
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
                 await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
+                if (downloadClient.CancellationToken.IsCancellationRequested && userYtPlaylistDownload.ContainsKey(tokenSource))
+                {
+                    var downloads = userYtPlaylistDownload[tokenSource];
+                    userYtDownloads.Where(x => downloads.FindIndex(y => y.UniqueId == x.UniqueId) != -1).ToList().ForEach(x => x.CancellationToken.Cancel());
+                }
                 userYtDownloads.Remove(downloadClient);
-                if (!downloadClient.CancellationToken.IsCancellationRequested)
-                    StartNextYtDownload();
+                StartNextYtDownload();
             }
         }
 
@@ -347,7 +355,8 @@ namespace SyncStreamAPI.ServerData
                 if (userDownloads.Count > 0)
                 {
                     SendStatusToM3U8Clients();
-                    if (userDownloads.Where(x => x.Running).Count() < General.MaxParallelConversions)
+                    var runningDls = userDownloads.Where(x => x.Running).Count();
+                    while (runningDls > 0 && runningDls < General.MaxParallelYtDownloads && !userDownloads.All(x => x.Running))
                     {
                         var nextDownload = userDownloads.FirstOrDefault(x => !x.Running);
                         if (nextDownload != null)
@@ -368,9 +377,12 @@ namespace SyncStreamAPI.ServerData
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
                 if (userYtDownloads.Count > 0)
                 {
-                    while (userYtDownloads.Where(x => x.Running).Count() < General.MaxParallelYtDownloads)
+                    var cancelledDownloads = userYtDownloads.Where(x => x.CancellationToken.IsCancellationRequested).ToList();
+                    cancelledDownloads.ForEach(x => userYtDownloads.Remove(x));
+                    var runningDls = userYtDownloads.Where(x => x.Running).Count();
+                    while (runningDls > 0 && runningDls < General.MaxParallelYtDownloads && !userYtDownloads.All(x => x.Running))
                     {
-                        var nextDownload = userYtDownloads.FirstOrDefault(x => !x.Running);
+                        var nextDownload = userYtDownloads.FirstOrDefault(x => !x.Running && !x.CancellationToken.IsCancellationRequested);
                         if (nextDownload != null)
                         {
                             nextDownload.Running = true;
