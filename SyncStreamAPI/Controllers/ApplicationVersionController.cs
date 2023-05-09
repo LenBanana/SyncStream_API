@@ -64,7 +64,7 @@ namespace SyncStreamAPI.Controllers
         }
 
         [HttpPost("upload")]
-        [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.API)]
+        [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.API, TokenPosition = 1)]
         public async Task<IActionResult> UploadUpdate(IFormFile file, string apiKey, string appName, string version = "0.1")
         {
             if (file == null)
