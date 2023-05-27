@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -51,6 +52,7 @@ namespace SyncStreamAPI.Helper
         public static int FFmpegTimeout { get; } = 5000;
         private static Regex ytRegEx = new Regex(@"https?://(?:www\.|m\.)?youtube\.com/(?:watch\?(?=.*v=\w+)(?:\S+)?|playlist\?(?=.*list=\w+)(?:\S+)?|v/|embed/|attribution_link\?a=\w+&u=/watch\?v=\w+)|youtu\.be/(\w+)(?:\S+)?");
         public static bool IsYt(string url) => ytRegEx.IsMatch(url);
+        public static HttpClient HttpClient { get; } = new HttpClient();
         public static YoutubeDL GetYoutubeDL()
         {
             var ytdl = new YoutubeDL();
@@ -236,25 +238,22 @@ namespace SyncStreamAPI.Helper
             try
             {
                 string title = "";
-                using (WebClient client = new WebClient())
+                string source = "";
+                int i = 0;
+                while ((title.Length == 0 || title.ToLower().Trim() == "youtube") && i < maxTries)
                 {
-                    string source = "";
-                    int i = 0;
-                    while ((title.Length == 0 || title.ToLower().Trim() == "youtube") && i < maxTries)
-                    {
-                        source = client.DownloadString(url);
-                        title = System.Text.RegularExpressions.Regex.Match(source, @"\<title\b[^>]*\>\s*(?<Title>[\s\S]*?)\</title\>",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase).Groups["Title"].Value;
-                        await Task.Delay(50);
-                        i++;
-                    }
-                    if (title.Length == 0)
-                    {
-                        title = "External source";
-                    }
-
-                    return (title, source);
+                    source = await HttpClient.GetStringAsync(url);
+                    title = System.Text.RegularExpressions.Regex.Match(source, @"\<title\b[^>]*\>\s*(?<Title>[\s\S]*?)\</title\>",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase).Groups["Title"].Value;
+                    await Task.Delay(50);
+                    i++;
                 }
+                if (title.Length == 0)
+                {
+                    title = "External source";
+                }
+
+                return (title, source);
             }
             catch (Exception ex)
             {
