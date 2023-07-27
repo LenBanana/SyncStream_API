@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Cors;
+﻿using iText.Kernel.Geom;
+using iText.Kernel.XMP.Impl.XPath;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -13,6 +15,7 @@ using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.PostgresModels;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -149,6 +152,8 @@ namespace SyncStreamAPI.Controllers
         [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
         public async Task<IActionResult> addFile(string token)
         {
+            // Create a list to track uploaded files during this session
+            var uploadFiles = new List<string>();
             try
             {
                 // Check if the request is valid and contains any files
@@ -176,9 +181,11 @@ namespace SyncStreamAPI.Controllers
 
                     // Create a new DbFile object and save the file to disk
                     var fileInfo = new FileInfo(file.FileName);
-                    var dbFile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension, dbUser);
-                    var path = Path.Combine(General.FilePath, $"{dbFile.FileKey}{dbFile.FileEnding}");
+                    var dbFile = new DbFile(System.IO.Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension, dbUser);
+                    var path = System.IO.Path.Combine(General.FilePath, $"{dbFile.FileKey}{dbFile.FileEnding}");
                     Directory.CreateDirectory(General.FilePath);
+                    // Add the temporary file path to the list of uploaded files
+                    uploadFiles.Add(path);
                     using (var fileStream = System.IO.File.Create(path))
                     {
                         await file.CopyToAsync(fileStream);
@@ -188,12 +195,18 @@ namespace SyncStreamAPI.Controllers
                     var savedFile = _postgres.Files?.Add(dbFile);
                     await _postgres.SaveChangesAsync();
                     await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new DTOModel.FileDto(dbFile));
+                    uploadFiles.Remove(path);
                 }
 
                 return Ok();
             }
             catch (Exception ex)
             {
+                // If there was an exception during processing, remove any temporary files not saved to DB
+                foreach (var path in uploadFiles)
+                {
+                    System.IO.File.Delete(path);
+                }
                 Console.WriteLine(ex.ToString());
                 return StatusCode(StatusCodes.Status500InternalServerError);
             }
