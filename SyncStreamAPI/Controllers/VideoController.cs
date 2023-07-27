@@ -151,14 +151,13 @@ namespace SyncStreamAPI.Controllers
         {
             try
             {
-                // Check if the request is valid and contains a file
-                if (Request.ContentLength <= 0 || Request.Form == null || !Request.Form.Files.Any())
+                // Check if the request is valid and contains any files
+                if (Request.Form == null || Request.Form.Files.Count == 0)
                 {
                     return Unauthorized();
                 }
 
                 // Get the user from the database and verify their token
-                var file = Request.Form.Files[0];
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
                 var Token = dbUser?.RememberTokens.SingleOrDefault(x => x.Token == token);
                 if (Token == null || dbUser == null)
@@ -166,26 +165,31 @@ namespace SyncStreamAPI.Controllers
                     return Unauthorized();
                 }
 
-                // Check if the file is valid
-                if (file.Length <= 0)
+                // Iterate through all the uploaded files
+                foreach (var file in Request.Form.Files)
                 {
-                    return StatusCode(StatusCodes.Status405MethodNotAllowed);
+                    // Check if the file is valid
+                    if (file.Length <= 0)
+                    {
+                        continue; // Skip empty files
+                    }
+
+                    // Create a new DbFile object and save the file to disk
+                    var fileInfo = new FileInfo(file.FileName);
+                    var dbFile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension, dbUser);
+                    var path = Path.Combine(General.FilePath, $"{dbFile.FileKey}{dbFile.FileEnding}");
+                    Directory.CreateDirectory(General.FilePath);
+                    using (var fileStream = System.IO.File.Create(path))
+                    {
+                        await file.CopyToAsync(fileStream);
+                    }
+
+                    // Add the DbFile object to the database and save changes
+                    var savedFile = _postgres.Files?.Add(dbFile);
+                    await _postgres.SaveChangesAsync();
+                    await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new DTOModel.FileDto(dbFile));
                 }
 
-                // Create a new DbFile object and save the file to disk
-                var fileInfo = new FileInfo(file.FileName);
-                var dbFile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension, dbUser);
-                var path = Path.Combine(General.FilePath, $"{dbFile.FileKey}{dbFile.FileEnding}");
-                Directory.CreateDirectory(General.FilePath);
-                using (var fileStream = System.IO.File.Create(path))
-                {
-                    await file.CopyToAsync(fileStream);
-                }
-
-                // Add the DbFile object to the database and save changes
-                var savedFile = _postgres.Files?.Add(dbFile);
-                await _postgres.SaveChangesAsync();
-                await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new DTOModel.FileDto(dbFile));
                 return Ok();
             }
             catch (Exception ex)
