@@ -21,6 +21,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using YoutubeDLSharp;
 using YoutubeDLSharp.Metadata;
+using Path = System.IO.Path;
 
 namespace SyncStreamAPI.Controllers
 {
@@ -197,19 +198,18 @@ namespace SyncStreamAPI.Controllers
                     await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new DTOModel.FileDto(dbFile));
                     uploadFiles.Remove(path);
                 }
-
-                return Ok();
             }
             catch (Exception ex)
             {
-                // If there was an exception during processing, remove any temporary files not saved to DB
-                foreach (var path in uploadFiles)
-                {
-                    System.IO.File.Delete(path);
-                }
                 Console.WriteLine(ex.ToString());
                 return StatusCode(StatusCodes.Status500InternalServerError);
             }
+            // If any files have not been completely uploaded, remove any temporary files not saved to DB
+            foreach (var path in uploadFiles)
+            {
+                System.IO.File.Delete(path);
+            }
+            return Ok();
         }
 
         [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = int.MaxValue)]

@@ -9,6 +9,7 @@ namespace SyncStreamAPI.Interfaces
     {
         Task savedToDb(string id);
         Task getDownloads(List<FileDto> files);
+        Task getFolderUsers(List<UserDTO> users);
         Task getFolders(FolderDto folder);
         Task getFileInfo(DownloadFileInfo info);
         Task getStorageInfo(List<FileStorageInfo> info);
