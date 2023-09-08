@@ -226,7 +226,7 @@ namespace SyncStreamAPI.Hubs
 
             var fileName = await General.ResolveURL(url, Configuration);
             var conv = new DownloadClientValue(dbUser.ID, fileName, token, url, quality, audioOnly);
-            _ = _manager.YtDownload(conv);
+            _ = _manager.YtDlpDownload(conv);
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
@@ -393,7 +393,7 @@ namespace SyncStreamAPI.Hubs
         {
             var dbUser = await _postgres.Users.Include(x => x.RememberTokens)
                 .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
-            await _manager.CancelM3U8Conversion(dbUser.ID, downloadId);
+            await _manager.CancelDownload(dbUser.ID, downloadId);
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
