@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using HtmlAgilityPack;
+using PuppeteerSharp;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.Interfaces;
 using SyncStreamAPI.Models.StreamExtraction;
@@ -17,7 +18,7 @@ namespace SyncStreamAPI.Helper.StreamingSites
                     client.Url = client.Url.Replace("https://streamtape.com/v/", "https://streamtape.com/e/");
                 var page = await BrowserAutomation.Browser.NewPageAsync();
                 await page.GoToAsync(client.Url);
-                await page.WaitForSelectorAsync("button.plyr__control--overlaid");
+                await page.WaitForSelectorAsync("button.plyr__control--overlaid", new WaitForSelectorOptions() { Timeout = 2500 });
                 await page.MainFrame.EvaluateExpressionAsync("document.querySelector(\".play-overlay\").click()");
                 await Task.Delay(100);
                 await page.MainFrame.EvaluateExpressionAsync("document.querySelector(\".play-overlay\").click()");

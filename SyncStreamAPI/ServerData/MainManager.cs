@@ -120,7 +120,6 @@ namespace SyncStreamAPI.ServerData
                 return;
             }
 
-            await RunYtDlpDownload(downloadClient);
             if (downloadClient.CancellationToken.IsCancellationRequested &&
                 userYtPlaylistDownload.ContainsKey(tokenSource))
             {
@@ -134,8 +133,6 @@ namespace SyncStreamAPI.ServerData
                 var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
                 await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
             }
-
-            userDownloads.TryTake(out downloadClient);
             await StartNextYtDownload();
         }
 
@@ -191,6 +188,8 @@ namespace SyncStreamAPI.ServerData
                 Console.WriteLine("Download cancelled by user");
                 FileCheck.CheckOverrideFile(dbFile.GetPath());
             }
+            userDownloads.TryTake(out downloadClient);
+            await hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
         }
 
         public async void AddDownload(DownloadClientValue downloadClient)
