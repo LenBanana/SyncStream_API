@@ -12,7 +12,7 @@ namespace SyncStreamAPI.Helper
         IServiceProvider _serviceProvider { get; set; }
         public static IBrowser Browser { get; private set; } = Puppeteer.LaunchAsync(new LaunchOptions
         {
-            Headless = false,
+            Headless = true,
             Args = new string[] {
                 "--no-sandbox", 
                 $"--load-extension=\"{(RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "/app/ublock" : "C:\\Users\\Len\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\cjpalhdlnbpafiamejdnhcphjbkeiagm\\1.51.0_1")}\"",
@@ -44,7 +44,7 @@ namespace SyncStreamAPI.Helper
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Error initiating browser\n\n" + ex.Message);
+                Console.WriteLine("Error initiating browser\n\n" + ex.Message + "\n\n" + ex.InnerException?.Message);
             }
         }
 
