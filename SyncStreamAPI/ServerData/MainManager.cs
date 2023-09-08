@@ -199,9 +199,9 @@ namespace SyncStreamAPI.ServerData
             var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
             var ytDownload = false;
             IStreamDownloader downloader = null;
-            if (downloadClient.Url.StartsWith("https://streamtape.com"))
+            if (downloadClient.Url.StartsWith("https://streamtape.com") || downloadClient.Url.StartsWith("https://s.to/redirect/"))
                 downloader = new StreamTape();
-            if (downloadClient.Url.StartsWith("https://voe.sx") || downloadClient.Url.StartsWith("https://yodelswartlike.com"))
+            if (downloadClient.Url.StartsWith("https://voe.sx") || downloadClient.Url.StartsWith("https://yodelswartlike.com") || downloadClient.Url.StartsWith("https://s.to/redirect/"))
                 downloader = new Voe();
             if (downloader != null)
             {
