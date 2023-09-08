@@ -63,7 +63,7 @@ namespace SyncStreamAPI
             services.AddSingleton(provider =>
             {
                 BrowserAutomation browser = new BrowserAutomation(provider);
-                browser.Init();
+                BrowserAutomation.Init();
                 return browser;
             });
             services.AddSingleton(provider =>
@@ -105,7 +105,7 @@ namespace SyncStreamAPI
             app.UseAuthorization();
             applicationLifetime.ApplicationStopping.Register(() =>
             {
-                browser?.Dispose();
+                BrowserAutomation.Browser?.Dispose();
             });
 
             app.UseEndpoints(endpoints =>

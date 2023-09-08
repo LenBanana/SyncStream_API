@@ -210,7 +210,7 @@ namespace SyncStreamAPI.Hubs
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-        public async Task DownloadYtVideo(string token, string url, string quality = "1080", bool audioOnly = false)
+        public async Task DownloadYtVideo(string token, string url, string quality = "1080", bool audioOnly = false, bool embedSubtitles = false)
         {
             var dbUser = await _postgres.Users.Include(x => x.RememberTokens)
                 .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
@@ -219,7 +219,7 @@ namespace SyncStreamAPI.Hubs
                 var ytdl = General.GetYoutubeDL();
                 var playlistInfo = await ytdl.RunVideoDataFetch(url);
                 var vids = playlistInfo.Data.Entries.Select(x =>
-                    new DownloadClientValue(dbUser.ID, x.Title, token, x.Url, quality, audioOnly)).ToList();
+                    new DownloadClientValue(dbUser.ID, x.Title, token, x.Url, quality, audioOnly, embedSubtitles)).ToList();
                 _manager.YtPlaylistDownload(vids);
                 return;
             }

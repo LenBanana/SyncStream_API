@@ -7,18 +7,27 @@ using System.Threading.Tasks;
 
 namespace SyncStreamAPI.Helper
 {
-    public class BrowserAutomation : IDisposable
+    public class BrowserAutomation
     {
         IServiceProvider _serviceProvider { get; set; }
-        public IBrowser browser { get; private set; }
-        public NavigationOptions options { get; private set; }
+        public static IBrowser Browser { get; private set; } = Puppeteer.LaunchAsync(new LaunchOptions
+        {
+            Headless = false,
+            Args = new string[] {
+                "--no-sandbox", 
+                $"--load-extension=\"{(RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "/app/ublock" : "C:\\Users\\Len\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\cjpalhdlnbpafiamejdnhcphjbkeiagm\\1.51.0_1")}\"",
+                "--autoplay-policy=no-user-gesture-required"
+            },
+            IgnoredDefaultArgs = new [] { "--disable-extensions" }
+        }).Result;
+        private static  NavigationOptions options { get; set; }
 
         public BrowserAutomation(IServiceProvider provider)
         {
             _serviceProvider = provider;
         }
 
-        public async void Init()
+        public static async void Init()
         {
             try
             {
@@ -31,18 +40,6 @@ namespace SyncStreamAPI.Helper
                 {
                     LinuxBash.Bash($"chmod -R +x {path}");
                 }
-
-                browser = await Puppeteer.LaunchAsync(new LaunchOptions
-                {
-                    Headless = true,
-                    Args = new string[] {
-                        "--user-agent=\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36\"",
-                        "--disable-gpu",
-                        "--disable-dev-shm-usage",
-                        "--disable-setuid-sandbox",
-                        "--no-sandbox"
-                    }
-                });
                 Console.WriteLine("Successfully initiated browser");
             }
             catch (Exception ex)
@@ -51,16 +48,11 @@ namespace SyncStreamAPI.Helper
             }
         }
 
-        public async Task<BrowserM3U8Response> GetM3U8FromUrl(string url)
+        public static async Task<BrowserM3U8Response> GetM3U8FromUrl(string url)
         {
-            if (browser == null)
-            {
-                return new BrowserM3U8Response();
-            }
-
             var result = new BrowserM3U8Response();
             result.InputUrl = url;
-            var page = await browser.NewPageAsync();
+            var page = await Browser.NewPageAsync();
             page.Response += (sender, e) =>
             {
                 if (e.Response.Url.ToLower().Contains("m3u8"))
@@ -98,12 +90,6 @@ namespace SyncStreamAPI.Helper
             }
             await page.DisposeAsync();
             return result;
-        }
-
-        public void Dispose()
-        {
-            Console.WriteLine("Disposing browser");
-            browser?.Dispose();
         }
     }
 }

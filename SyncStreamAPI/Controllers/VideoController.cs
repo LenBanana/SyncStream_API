@@ -21,6 +21,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using YoutubeDLSharp;
 using YoutubeDLSharp.Metadata;
+using YoutubeDLSharp.Options;
 using Path = System.IO.Path;
 
 namespace SyncStreamAPI.Controllers
@@ -60,10 +61,6 @@ namespace SyncStreamAPI.Controllers
                 if (!dbFile.Temporary && (dbUser == null))
                 {
                     // If the user is not authorized to view the content, return a 403 error and display an error message
-                    if (dbUser != null)
-                    {
-                        await _hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertType.Danger) { Question = "You do not have permissions to view this content", Answer1 = "Ok" });
-                    }
                     return Unauthorized("You do not have permissions to view this content");
                 }
 
@@ -105,22 +102,24 @@ namespace SyncStreamAPI.Controllers
                 // Check if the user is authenticated and has the necessary privileges
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
                 var tokenObj = dbUser?.RememberTokens.SingleOrDefault(x => x.Token == token);
-                if (tokenObj == null || dbUser == null)
+                if (tokenObj == null)
                 {
                     // If the user is not authorized to view the content, return a 403 error and display an error message
-                    if (dbUser != null)
-                    {
-                        var errorMessage = "You do not have permissions to view this content";
-                        await _hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertType.Danger) { Question = errorMessage, Answer1 = "Ok" });
-                        return Unauthorized(errorMessage);
-                    }
-                    return Unauthorized();
+                    if (dbUser == null) return Unauthorized();
+                    const string errorMessage = "You do not have permissions to view this content";
+                    await _hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertType.Danger) { Question = errorMessage, Answer1 = "Ok" });
+                    return Unauthorized(errorMessage);
                 }
 
                 // Fetch the video data for the provided YouTube URL using the YouTube DL library
                 var ytdl = General.GetYoutubeDL();
-                RunResult<VideoData> data = await ytdl.RunVideoDataFetch(url);
-
+                RunResult<VideoData> data = await ytdl.RunVideoDataFetch(url, overrideOptions: new OptionSet()
+                {
+                    EmbedSubs = true,
+                    ListSubs = true,
+                    WriteSubs = true,
+                    SubLangs = "[Ee][Nn].*,[Dd][Ee].*"
+                });
                 // If the video data was fetched successfully, return a list of available video quality options
                 if (data != null && data.Data != null)
                 {
@@ -135,14 +134,14 @@ namespace SyncStreamAPI.Controllers
                 else
                 {
                     // If the video data could not be fetched, return a 404 error with a specific error message
-                    var errorMessage = "Video data could not be fetched for the provided URL";
+                    const string errorMessage = "Video data could not be fetched for the provided URL";
                     return StatusCode(StatusCodes.Status404NotFound, errorMessage);
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex.ToString());
-                var errorMessage = "An error occurred while processing the request";
+                const string errorMessage = "An error occurred while processing the request";
                 return StatusCode(StatusCodes.Status500InternalServerError, errorMessage);
             }
         }

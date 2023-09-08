@@ -82,8 +82,9 @@ namespace SyncStreamAPI.Helper
             }
 
             var downloadLocation = Path.Combine(directoryPath, Path.GetFileName(downloadUrl));
+            if (File.Exists(downloadLocation)) { return; }
             var data = await DownloadFileBytesAsync(downloadUrl);
-            File.WriteAllBytes(downloadLocation, data);
+            await File.WriteAllBytesAsync(downloadLocation, data);
         }
     }
 }

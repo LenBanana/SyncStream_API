@@ -6,6 +6,7 @@ using SyncStreamAPI.Models;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using SyncStreamAPI.Helper.StreamingSites;
 using Xabe.FFmpeg;
 using YoutubeDLSharp;
 using YoutubeDLSharp.Options;
@@ -40,10 +41,9 @@ namespace SyncStreamAPI.ServerData.Helper
         public static async Task<RunResult<string>> DownloadMedia(YoutubeDL ytdl, DownloadClientValue downloadClient,
             bool audioOnly, IProgress<DownloadProgress> progress)
         {
-            var maxThreads = downloadClient.Preset > ConversionPreset.Fast ? "8" : "4";
-            var options = new OptionSet() { AudioMultistreams = !audioOnly };
-            options.AddCustomOption("--concurrent-fragments", maxThreads);
-            downloadClient.Quality = (downloadClient.Quality == null ? "1080" : downloadClient.Quality);
+            var maxThreads = downloadClient.Preset > ConversionPreset.Fast ? 8 : 4;
+            var options = new OptionSet() { AudioMultistreams = !audioOnly, EmbedSubs = downloadClient.EmbedSubtitles, ConcurrentFragments = maxThreads, SubLangs = "[Ee][Nn].*,[Dd][Ee].*", SubFormat = "best"};
+            downloadClient.Quality ??= "1080";
             return audioOnly
                 ? await ytdl.RunAudioDownload(downloadClient.Url, AudioConversionFormat.Mp3, progress: progress,
                     ct: downloadClient.CancellationToken.Token, overrideOptions: options)
