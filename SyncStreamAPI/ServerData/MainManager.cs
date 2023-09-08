@@ -126,12 +126,9 @@ namespace SyncStreamAPI.ServerData
                 var downloads = userYtPlaylistDownload[tokenSource];
                 userDownloads.Where(x => downloads.FirstOrDefault(y => y.UniqueId == x.UniqueId) != null).ToList()
                     .ForEach(x => x.CancellationToken.Cancel());
-            }
-
-            using (var scope = ServiceProvider.CreateScope())
-            {
-                var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                await _hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
+                using var scope = ServiceProvider.CreateScope();
+                var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+                await hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
             }
             await StartNextYtDownload();
         }
@@ -188,8 +185,9 @@ namespace SyncStreamAPI.ServerData
                 Console.WriteLine("Download cancelled by user");
                 FileCheck.CheckOverrideFile(dbFile.GetPath());
             }
-            userDownloads.TryTake(out downloadClient);
             await hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
+            userDownloads.TryTake(out downloadClient);
+            await StartNextYtDownload();
         }
 
         public async void AddDownload(DownloadClientValue downloadClient)
@@ -198,9 +196,9 @@ namespace SyncStreamAPI.ServerData
             var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
             var ytDownload = false;
             IStreamDownloader downloader = null;
-            if (downloadClient.Url.StartsWith("https://streamtape.com") || downloadClient.Url.StartsWith("https://s.to/redirect/"))
+            if (downloadClient.Url.StartsWith("https://streamtape.com"))
                 downloader = new StreamTape();
-            if (downloadClient.Url.StartsWith("https://voe.sx") || downloadClient.Url.StartsWith("https://yodelswartlike.com") || downloadClient.Url.StartsWith("https://s.to/redirect/"))
+            if (downloadClient.Url.StartsWith("https://voe.sx") || downloadClient.Url.StartsWith("https://yodelswartlike.com"))
                 downloader = new Voe();
             if (downloader != null)
             {
