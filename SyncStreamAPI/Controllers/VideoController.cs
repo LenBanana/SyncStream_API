@@ -113,29 +113,25 @@ namespace SyncStreamAPI.Controllers
 
                 // Fetch the video data for the provided YouTube URL using the YouTube DL library
                 var ytdl = General.GetYoutubeDL();
-                RunResult<VideoData> data = await ytdl.RunVideoDataFetch(url, overrideOptions: new OptionSet()
+                var data = await ytdl.RunVideoDataFetch(url);
+                switch (data)
                 {
-                    EmbedSubs = true,
-                    ListSubs = true,
-                    WriteSubs = true,
-                    SubLangs = "[Ee][Nn].*,[Dd][Ee].*"
-                });
-                // If the video data was fetched successfully, return a list of available video quality options
-                if (data != null && data.Data != null)
-                {
-                    var qualityOptions = data.Data?.Formats
-                        .Where(x => x.Height >= 360 && x.Height <= 2160)
-                        .Select(x => x.Height)
-                        .Distinct()
-                        .ToList();
+                    // If the video data was fetched successfully, return a list of available video quality options
+                    case { Data: not null }:
+                    {
+                        var qualityOptions = data.Data?.Formats
+                            .Where(x => x.Height >= 360 && x.Height <= 2160)
+                            .Select(x => x.Height)
+                            .Distinct()
+                            .ToList();
 
-                    return Ok(qualityOptions);
-                }
-                else
-                {
-                    // If the video data could not be fetched, return a 404 error with a specific error message
-                    const string errorMessage = "Video data could not be fetched for the provided URL";
-                    return StatusCode(StatusCodes.Status404NotFound, errorMessage);
+                        return Ok(qualityOptions);
+                    }
+                    default:
+                    {
+                        const string errorMessage = "Video data could not be fetched for the provided URL";
+                        return StatusCode(StatusCodes.Status404NotFound, errorMessage);
+                    }
                 }
             }
             catch (Exception ex)
@@ -157,7 +153,7 @@ namespace SyncStreamAPI.Controllers
             try
             {
                 // Check if the request is valid and contains any files
-                if (Request.Form == null || Request.Form.Files.Count == 0)
+                if (Request.Form?.Files?.Count == 0)
                 {
                     return Unauthorized();
                 }
@@ -165,7 +161,7 @@ namespace SyncStreamAPI.Controllers
                 // Get the user from the database and verify their token
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
                 var Token = dbUser?.RememberTokens.SingleOrDefault(x => x.Token == token);
-                if (Token == null || dbUser == null)
+                if (Token == null)
                 {
                     return Unauthorized();
                 }
@@ -186,7 +182,7 @@ namespace SyncStreamAPI.Controllers
                     Directory.CreateDirectory(General.FilePath);
                     // Add the temporary file path to the list of uploaded files
                     uploadFiles.Add(path);
-                    using (var fileStream = System.IO.File.Create(path))
+                    await using (var fileStream = System.IO.File.Create(path))
                     {
                         await file.CopyToAsync(fileStream);
                     }
