@@ -14,7 +14,7 @@ WORKDIR "/src/SyncStreamAPI"
 #RUN dotnet build "SyncStreamAPI.csproj" -c Release -o /app/build
 
 FROM build AS publish
-RUN dotnet publish "SyncStreamAPI.csproj" -c Release -o /app/publish
+RUN dotnet publish "SyncStreamAPI.csproj" -c Release -p:DefineConstants=LINUX -o /app/publish
 
 FROM base AS final
 WORKDIR /app
