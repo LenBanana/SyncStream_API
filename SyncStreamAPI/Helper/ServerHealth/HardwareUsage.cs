@@ -17,7 +17,7 @@ public class HardwareUsage
         var process = Process.GetCurrentProcess();
         var diskUsage = GetDiskUsage(process);
         var memoryUsage = await GetMemoryUsage(process);
-        var cpuUsage = GetCpuUsage(process);
+        var cpuUsage = GetCpuUsage();
         var upTime = DateTime.Now - process.StartTime;
         var formattedUpTime = upTime.ToString(@"dd\:hh\:mm\:ss");
         return new ServerHealthDto(diskUsage, memoryUsage, cpuUsage, formattedUpTime);
@@ -93,11 +93,47 @@ public class HardwareUsage
         return percentMemoryUsed;
     }
 
-    private static double GetCpuUsage(Process process)
+    private static double GetCpuUsage()
     {
-        using PerformanceCounter cpuCounter =
-            new("Process", "% Processor Time", Process.GetCurrentProcess().ProcessName);
-        var currentCpuUsage = cpuCounter.NextValue() / Environment.ProcessorCount;
-        return currentCpuUsage;
+        double cpuUsage = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) 
+            ? GetCpuUsageOnLinux() 
+            : RuntimeInformation.IsOSPlatform(OSPlatform.Windows) 
+                ? GetCpuUsageOnWindows() 
+                : throw new NotSupportedException("OS not supported");
+        return cpuUsage;
     }
+    
+    static double GetCpuUsageOnLinux()
+    {
+        string[] lines = File.ReadAllLines("/proc/stat");
+        foreach (string line in lines)
+        {
+            // Look for the line that starts with "cpu "
+            if (line.StartsWith("cpu "))
+            {
+                string[] values = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                double idleTime = double.Parse(values[4]);
+                double totalTime = 0;
+                for (int i = 1; i < values.Length; i++)
+                {
+                    totalTime += double.Parse(values[i]);
+                }
+                return 100 * (1.0 - (idleTime / totalTime));
+            }
+        }
+        return 0;
+    }
+
+#if WINDOWS
+    static double GetCpuUsageOnWindows()
+    {
+        using PerformanceCounter cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
+        return cpuCounter.NextValue();
+    }
+#else
+    static double GetCpuUsageOnWindows()
+    {
+        throw new NotSupportedException("This method is not supported on non-Windows platforms.");
+    }
+#endif
 }
