@@ -18,12 +18,12 @@ namespace SyncStreamAPI.Helper
 {
     public class General
     {
-        public static Random random { get; } = new Random();
+        public static Random Random { get; } = new Random();
         public static string SystemMessageName { get; } = "Dreckbot";
         public static string FilePath { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? System.IO.Directory.GetCurrentDirectory() + "/VideoFiles" : System.IO.Directory.GetCurrentDirectory() + "\\VideoFiles";
         public static string TemporaryFilePath { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? System.IO.Directory.GetCurrentDirectory() + "/Temp" : System.IO.Directory.GetCurrentDirectory() + "\\Temp";
-        public static string YtDLPUrl { get; } = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp";
-        public static string XmlMethodDescriptions = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? System.IO.Directory.GetCurrentDirectory() + "/PrivilegeMethodDescriptions.xml" : System.IO.Directory.GetCurrentDirectory() + "\\PrivilegeMethodDescriptions.xml";
+        public static string YtDlpUrl { get; } = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp";
+        public static readonly string XmlMethodDescriptions = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? System.IO.Directory.GetCurrentDirectory() + "/PrivilegeMethodDescriptions.xml" : System.IO.Directory.GetCurrentDirectory() + "\\PrivilegeMethodDescriptions.xml";
         public static int GuestRoomAmount { get; } = 6;
         public static int MaxParallelConversions { get; set; } = 6;
         public static int MaxParallelYtDownloads { get; set; } = 4;
@@ -31,6 +31,7 @@ namespace SyncStreamAPI.Helper
         public static TimeSpan DaysToKeepTemporaryFiles { get; } = TimeSpan.FromDays(14);
         public static TimeSpan MinutesToKeepFFmpeg { get; } = TimeSpan.FromMinutes(10);
         public static TimeSpan CheckIntervalInMinutes { get; } = TimeSpan.FromMinutes(1);
+        public static TimeSpan ServerHealthTimeInSeconds { get; } = TimeSpan.FromSeconds(1);
         public static TimeSpan SecondsToKickMember { get; } = TimeSpan.FromSeconds(10);
 
         public static int GallowGameLength { get; } = 90;
@@ -44,6 +45,7 @@ namespace SyncStreamAPI.Helper
         public static int BlackjackShoeSize { get; } = 6;
         public static string LoggedInGroupName { get; } = "approved";
         public static string BottedInGroupName { get; } = "dreckbots";
+        public static string AdminGroupName { get; } = "admin";
 
         //FFMpeg
         public static string DefaultAudioFormat { get; } = ".mp3";
@@ -83,10 +85,10 @@ namespace SyncStreamAPI.Helper
             switch (language)
             {
                 case Language.German:
-                    num = random.Next(0, GermanGallowWords.GermanGallowWordList.Count - 1);
+                    num = Random.Next(0, GermanGallowWords.GermanGallowWordList.Count - 1);
                     return GermanGallowWords.GermanGallowWordList[num].FirstCharToUpper();
                 case Language.English:
-                    num = random.Next(0, EnglishGallowWords.EnglishGallowWordList.Count - 1);
+                    num = Random.Next(0, EnglishGallowWords.EnglishGallowWordList.Count - 1);
                     return EnglishGallowWords.EnglishGallowWordList[num].FirstCharToUpper();
                 default:
                     return "";

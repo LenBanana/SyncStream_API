@@ -32,6 +32,7 @@ namespace SyncStreamAPI
         {
             services.AddSingleton<IContentTypeProvider, FileExtensionContentTypeProvider>();
             services.AddHostedService<DataBackgroundService>();
+            services.AddHostedService<ServerHealthBackgroundService>();
             services.AddSingleton(provider =>
             {
                 MainManager manager = new MainManager(provider);

@@ -73,7 +73,7 @@ namespace SyncStreamAPI.Hubs
             var game = room.BlackjackGame;
             if (game != null && game.members.Count < 5)
             {
-                var bjMember = new BlackjackMember($"BlackJack-Ai {Helper.General.random.Next(0, 99)}", "", _blackjackManager);
+                var bjMember = new BlackjackMember($"BlackJack-Ai {Helper.General.Random.Next(0, 99)}", "", _blackjackManager);
                 bjMember.NewlyJoined = true;
                 bjMember.Ai = true;
                 game.members.Add(bjMember);

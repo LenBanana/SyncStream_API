@@ -36,36 +36,35 @@ namespace SyncStreamAPI.ServerData.Background
 
         private async void CheckDatabaseAndRemoveFiles(object state)
         {
-            using (var scope = _serviceScope.CreateScope())
+            using var scope = _serviceScope.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<PostgresContext>();
+            var thresholdDate = DateTime.UtcNow;
+            var outdatedImages = await dbContext.Files.Where(e => e.DateToBeDeleted < thresholdDate && e.Temporary).ToListAsync();
+            foreach (var image in outdatedImages)
             {
-                var dbContext = scope.ServiceProvider.GetRequiredService<PostgresContext>();
-                var thresholdDate = DateTime.UtcNow;
-                var outdatedImages = await dbContext.Files.Where(e => e.DateToBeDeleted < thresholdDate && e.Temporary).ToListAsync();
-                foreach (var image in outdatedImages)
+                var imgPath = image.GetPath();
+                if (File.Exists(imgPath))
                 {
-                    var imgPath = image.GetPath();
-                    if (File.Exists(imgPath))
-                    {
-                        File.Delete(imgPath);
-                    }
-                    dbContext.Files.Remove(image);
+                    File.Delete(imgPath);
                 }
-                await dbContext.SaveChangesAsync();
-                // Inform the user of the deleted file if connected
-                var imageUpdates = outdatedImages.DistinctBy(image => image.DbUserID).ToList();
-                foreach (var imgUpdate in imageUpdates)
+                dbContext.Files.Remove(image);
+            }
+            await dbContext.SaveChangesAsync();
+            // Inform the user of the deleted file if connected
+            var imageUpdates = outdatedImages.DistinctBy(image => image.DbUserID).ToList();
+            foreach (var imgUpdate in imageUpdates)
+            {
+                var dbUser = dbContext.Users?.FirstOrDefault(x => x.ID == imgUpdate.DbUserID);
+                if (dbUser == null) continue;
                 {
-                    var dbUser = dbContext.Users?.FirstOrDefault(x => x.ID == imgUpdate.DbUserID);
-                    if (dbUser != null)
+                    var shareFolders = dbContext.FolderShare?.Where(x => x.DbUserID == dbUser.ID);
+                    var dbFolder = dbContext.Folders?.Where(x => x.DbUserID == null || x.DbUserID == dbUser.ID || shareFolders.FirstOrDefault(y => y.DbFolderID == x.Id) != null || shareFolders.FirstOrDefault(y => y.DbFolderID == x.ParentId) != null).OrderBy(x => x.Name).ToList();
+                    if (dbFolder == null) continue;
                     {
-                        var shareFolders = dbContext.FolderShare?.Where(x => x.DbUserID == dbUser.ID);
-                        var dbFolder = dbContext.Folders?.Where(x => x.DbUserID == null || x.DbUserID == dbUser.ID || shareFolders.FirstOrDefault(y => y.DbFolderID == x.Id) != null || shareFolders.FirstOrDefault(y => y.DbFolderID == x.ParentId) != null).OrderBy(x => x.Name).ToList();
                         var resultFolder = dbFolder.FirstOrDefault(x => x.Id == imgUpdate.DbFileFolderId);
-                        if (resultFolder != null)
-                        {
-                            var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                            await hub.Clients.Group(dbUser.ID.ToString()).getFolders(new DTOModel.FolderDto(resultFolder));
-                        }
+                        if (resultFolder == null) continue;
+                        var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+                        await hub.Clients.Group(dbUser.ID.ToString()).getFolders(new DTOModel.FolderDto(resultFolder));
                     }
                 }
             }

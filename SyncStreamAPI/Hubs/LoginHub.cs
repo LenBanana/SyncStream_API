@@ -52,6 +52,8 @@ public partial class ServerHub
             await Groups.AddToGroupAsync(Context.ConnectionId, General.LoggedInGroupName);
             if (user.ApiKey != null)
                 await Groups.AddToGroupAsync(Context.ConnectionId, user.ApiKey);
+            if (user.userprivileges >= UserPrivileges.Elevated)
+                await Groups.AddToGroupAsync(Context.ConnectionId, General.AdminGroupName);
             result = user;
         }
 
@@ -163,6 +165,8 @@ public partial class ServerHub
                 await Groups.AddToGroupAsync(Context.ConnectionId, General.LoggedInGroupName);
                 if (dbUser.ApiKey != null)
                     await Groups.AddToGroupAsync(Context.ConnectionId, dbUser.ApiKey);
+                if (dbUser.userprivileges >= UserPrivileges.Elevated)
+                    await Groups.AddToGroupAsync(Context.ConnectionId, General.AdminGroupName);
                 await Clients.Caller.userlogin(dbUser.ToDTO());
                 Token.Created = DateTime.UtcNow;
             }

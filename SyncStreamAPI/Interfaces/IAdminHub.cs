@@ -1,6 +1,7 @@
 ﻿using SyncStreamAPI.Models;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using SyncStreamAPI.Models.ServerHealth;
 
 namespace SyncStreamAPI.Interfaces
 {
@@ -14,5 +15,6 @@ namespace SyncStreamAPI.Interfaces
         Task rememberToken(RememberTokenDTO token);
 
         Task getusers(List<UserDTO> users);
+        Task serverHealth(ServerHealthDto healthDto);
     }
 }

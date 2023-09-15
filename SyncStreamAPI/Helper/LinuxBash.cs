@@ -68,17 +68,17 @@ namespace SyncStreamAPI.Helper
             string downloadUrl = "";
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                downloadUrl = $"{General.YtDLPUrl}.exe";
+                downloadUrl = $"{General.YtDlpUrl}.exe";
             }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
-                downloadUrl = $"{General.YtDLPUrl}_macos";
+                downloadUrl = $"{General.YtDlpUrl}_macos";
             }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                downloadUrl = General.YtDLPUrl;
+                downloadUrl = General.YtDlpUrl;
             }
 
             var downloadLocation = Path.Combine(directoryPath, Path.GetFileName(downloadUrl));

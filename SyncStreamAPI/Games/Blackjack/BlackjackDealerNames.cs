@@ -4,7 +4,7 @@ namespace SyncStreamAPI.Games.Blackjack
 {
     public class BlackjackDealerNames
     {
-        public static string DealerName => DealerNames[Helper.General.random.Next(0, DealerNames.Count - 1)];
+        public static string DealerName => DealerNames[Helper.General.Random.Next(0, DealerNames.Count - 1)];
 
         static List<string> DealerNames { get; set; } = new List<string>()
         {
