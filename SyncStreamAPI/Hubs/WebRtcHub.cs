@@ -14,7 +14,7 @@ namespace SyncStreamAPI.Hubs
         [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
         public async Task CreateStreamOffer(string token, WebRtcClientOffer offer)
         {
-            await Clients.Caller.sendClientOffer(offer);
+            await Clients.Others.sendClientOffer(offer);
         }
     }
 }

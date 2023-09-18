@@ -26,11 +26,6 @@ public class ServerHealthBackgroundService : IHostedService, IDisposable
     }
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        using (var scope = _serviceScope.CreateScope())
-        {
-            var dbContext = scope.ServiceProvider.GetRequiredService<PostgresContext>();
-            await dbContext.Database.EnsureCreatedAsync();
-        }
         _timer = new Timer(UpdateServerHealthStatus, null, TimeSpan.Zero, General.ServerHealthTimeInSeconds);
     }
     
@@ -38,7 +33,7 @@ public class ServerHealthBackgroundService : IHostedService, IDisposable
     private async void UpdateServerHealthStatus(object state)
     {
         using var scope = _serviceScope.CreateScope();
-        var serverHealth = await HardwareUsage.GetServerHealth();
+        var serverHealth = HardwareUsage.GetServerHealth();
         var hubContext = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
         await hubContext.Clients.Group(General.AdminGroupName).serverHealth(serverHealth);
     }

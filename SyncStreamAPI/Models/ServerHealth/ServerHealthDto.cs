@@ -11,6 +11,11 @@ public class ServerHealthDto
         CpuUsage = cpuUsage;
         UpTime = upTime;
     }
+    
+    public ServerHealthDto(string upTime)
+    {
+        UpTime = upTime;
+    }
 
     public double DiskUsage { get; set; }
     public double MemoryUsage { get; set; }

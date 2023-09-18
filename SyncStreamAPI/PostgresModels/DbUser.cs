@@ -13,6 +13,8 @@ namespace SyncStreamAPI.PostgresModels
         public UserPrivileges userprivileges { get; set; }
         public string usersalt { get; set; }
         public List<DbRememberToken> RememberTokens { get; set; }
+        public List<DbConversation> StartedConversations { get; set; }
+        public List<DbConversation> ReceivedConversations { get; set; }
         public string StreamToken { get; set; }
         public string ApiKey { get; set; }
         public List<DbFile> Files { get; set; }
@@ -20,6 +22,8 @@ namespace SyncStreamAPI.PostgresModels
         {
             username = null;
             RememberTokens = new List<DbRememberToken>();
+            StartedConversations = new List<DbConversation>();
+            ReceivedConversations = new List<DbConversation>();
             Files = new List<DbFile>();
             usersalt = Guid.NewGuid().ToString();
             StreamToken = this.GenerateStreamToken().Token;
@@ -29,6 +33,8 @@ namespace SyncStreamAPI.PostgresModels
             username = user;
             approved = -1;
             RememberTokens = new List<DbRememberToken>();
+            StartedConversations = new List<DbConversation>();
+            ReceivedConversations = new List<DbConversation>();
             Files = new List<DbFile>();
         }
     }

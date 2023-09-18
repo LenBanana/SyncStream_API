@@ -49,6 +49,7 @@ public partial class ServerHub
                 await Clients.Caller.rememberToken(new RememberTokenDTO(dbToken, user.ID));
             }
 
+            await Groups.AddToGroupAsync(Context.ConnectionId, user.ID.ToString());
             await Groups.AddToGroupAsync(Context.ConnectionId, General.LoggedInGroupName);
             if (user.ApiKey != null)
                 await Groups.AddToGroupAsync(Context.ConnectionId, user.ApiKey);
@@ -162,6 +163,7 @@ public partial class ServerHub
             {
                 MainManager.GetRoomManager().AddMember(dbUser.ID, Context.ConnectionId);
                 await Groups.AddToGroupAsync(Context.ConnectionId, Token.Token);
+                await Groups.AddToGroupAsync(Context.ConnectionId, dbUser.ID.ToString());
                 await Groups.AddToGroupAsync(Context.ConnectionId, General.LoggedInGroupName);
                 if (dbUser.ApiKey != null)
                     await Groups.AddToGroupAsync(Context.ConnectionId, dbUser.ApiKey);
