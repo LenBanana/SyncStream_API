@@ -16,5 +16,17 @@ namespace SyncStreamAPI.Hubs
         {
             await Clients.Others.sendClientOffer(offer);
         }
+        
+        [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
+        public async Task CreateStreamAnswer(string token, WebRtcClientOffer answer)
+        {
+            await Clients.Others.sendClientAnswer(answer);
+        }
+        
+        [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
+        public async Task SendIceCandidate(string token, WebRtcIceCandidate iceCandidate)
+        {
+            await Clients.Others.sendIceCandidate(iceCandidate);
+        }
     }
 }
