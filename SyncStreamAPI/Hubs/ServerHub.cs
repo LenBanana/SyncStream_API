@@ -179,7 +179,7 @@ namespace SyncStreamAPI.Hubs
 
         public async Task AddVideo(DreckVideo key, string UniqueId)
         {
-            Room? room = GetRoom(UniqueId);
+            var room = GetRoom(UniqueId);
             if (room == null)
             {
                 return;
@@ -198,6 +198,7 @@ namespace SyncStreamAPI.Hubs
             var vidEnded = (room.server.currentVideo.url.Length == 0 || room.server.currentVideo.ended == true);
             if (room.server.playlist?.Select(x => x.url).Contains(key.url) == false)
             {
+                room.server.currentVideo = key;
                 var playerType = await SendPlayerType(room, vidEnded);
                 switch (playerType)
                 {
@@ -221,7 +222,7 @@ namespace SyncStreamAPI.Hubs
                     }
                     case PlayerType.Vimeo:
                     {
-                        VimeoResponse? vimeo = Vimeo.FromUrl(key.url);
+                        var vimeo = Vimeo.FromUrl(key.url);
                         if (vimeo != null)
                         {
                             key.title = vimeo?.Title + (vimeo?.UserName == null ? "" : " - " + vimeo.UserName);
@@ -239,7 +240,7 @@ namespace SyncStreamAPI.Hubs
                             key.url = $"https://www.youtube.com/watch?v={key.url.Split('/').Last()}";
                         }
 
-                        if (key.title == null || key.title.Length == 0)
+                        if (string.IsNullOrEmpty(key.title))
                         {
                             key.title = await General.ResolveURL(key.url, Configuration);
                         }
