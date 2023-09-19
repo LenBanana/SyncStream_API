@@ -25,60 +25,60 @@ namespace SyncStreamAPI.Annotations
         public UserPrivileges RequiredPrivileges { get; set; }
         public AuthenticationType AuthenticationType { get; set; }
         public int TokenPosition { get; set; } = 0;
-        public PrivilegeAttribute() { }
+
+        public PrivilegeAttribute()
+        {
+        }
 
         [Advice(Kind.Around, Targets = Target.Method)]
         public object PrivilegeEnter(
-        [Argument(Source.Metadata)] MethodBase method,
-        [Argument(Source.Name)] string name,
-        [Argument(Source.Arguments)] object[] args,
-        [Argument(Source.Target)] Func<object[], object> target)
+            [Argument(Source.Metadata)] MethodBase method,
+            [Argument(Source.Name)] string name,
+            [Argument(Source.Arguments)] object[] args,
+            [Argument(Source.Target)] Func<object[], object> target)
         {
             try
             {
                 var attribute = (PrivilegeAttribute)method.GetCustomAttribute(typeof(PrivilegeAttribute));
-                if (args == null || args.Length <= attribute.TokenPosition || args[attribute.TokenPosition] is not string)
+                if (attribute != null && (args == null || args.Length <= attribute.TokenPosition ||
+                                          args[attribute.TokenPosition] is not string))
                 {
                     Console.WriteLine("First argument has to be of type 'string'");
                     return new StatusCodeResult(StatusCodes.Status400BadRequest);
                 }
-                var firstArg = args[attribute.TokenPosition];
-                if (HasPrivileges(attribute, (string)firstArg).Result)
+
+                if (attribute != null)
                 {
-                    var result = target(args);
-                    return result;
-                }
-                else
-                {
-                    return new StatusCodeResult(StatusCodes.Status401Unauthorized);
+                    var firstArg = args[attribute.TokenPosition];
+                    return HasPrivileges(attribute, (string)firstArg).Result ? target(args) : new StatusCodeResult(StatusCodes.Status401Unauthorized);
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error in '{name}'");
                 Console.WriteLine(ex.ToString());
-                throw;
             }
+            return null;
         }
 
         private async Task<bool> HasPrivileges(PrivilegeAttribute attribute, string authKey)
         {
-            using (var scope = MainManager.ServiceProvider.CreateScope())
-            {
-                var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                var postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
-                var dbUser = postgres.Users?.Include(x => x.RememberTokens).SingleOrDefault(u =>
+            using var scope = MainManager.ServiceProvider.CreateScope();
+            var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+            var postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
+            var dbUser = postgres.Users?.Include(x => x.RememberTokens).SingleOrDefault(u =>
                 (attribute.AuthenticationType == AuthenticationType.API && u.ApiKey == authKey)
-                || (attribute.AuthenticationType == AuthenticationType.Token && u.RememberTokens != null && u.RememberTokens.Any(y => y.Token == authKey)));
-                if (dbUser == null)
-                    return false;
-                if (dbUser.userprivileges < attribute.RequiredPrivileges)
-                {
-                    await hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(AlertType.Danger) { Question = "You do not have permissions to perform this action", Answer1 = "Ok", Header = "Permission denied" });
-                    return false;
-                }
-            }
-            return true;
+                || (attribute.AuthenticationType == AuthenticationType.Token && u.RememberTokens != null &&
+                    u.RememberTokens.Any(y => y.Token == authKey)));
+            if (dbUser == null)
+                return false;
+            if (dbUser.userprivileges >= attribute.RequiredPrivileges) return true;
+            await hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(AlertType.Danger)
+            {
+                Question = "You do not have permissions to perform this action", Answer1 = "Ok",
+                Header = "Permission denied"
+            });
+            return false;
         }
     }
 }

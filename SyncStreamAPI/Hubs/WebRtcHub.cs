@@ -17,15 +17,21 @@ namespace SyncStreamAPI.Hubs
             if (room.CurrentStreamer == Context.ConnectionId) return;
             await Clients.Client(room.CurrentStreamer).joinWebRtcStream(Context.ConnectionId);
         }
-        
-        
+
+
         [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
         public async Task StartWebRtcStream(string token, string roomId)
         {
             var room = MainManager.GetRoom(roomId);
             if (room == null) return;
+            if (room.CurrentStreamer != null)
+            {
+                await StopWebRtcStream(token, roomId);
+            }
+
             room.CurrentStreamer = Context.ConnectionId;
-            await Clients.GroupExcept(room.uniqueId, new[] { Context.ConnectionId }).startWebRtcStream(Context.ConnectionId);
+            await Clients.GroupExcept(room.uniqueId, new[] { Context.ConnectionId })
+                .startWebRtcStream(Context.ConnectionId);
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
@@ -40,7 +46,8 @@ namespace SyncStreamAPI.Hubs
             var room = MainManager.GetRoom(roomId);
             if (room == null || room.CurrentStreamer?.Length == 0) return;
             if (room.CurrentStreamer != Context.ConnectionId) return;
-            await Clients.GroupExcept(room.uniqueId, new[] { Context.ConnectionId }).stopWebRtcStream(room.CurrentStreamer);
+            await Clients.GroupExcept(room.uniqueId, new[] { Context.ConnectionId })
+                .stopWebRtcStream(room.CurrentStreamer);
             room.CurrentStreamer = null;
             var type = await SendPlayerType(room);
             await Clients.Group(room.uniqueId).stopWebRtcStream(Context.ConnectionId);
