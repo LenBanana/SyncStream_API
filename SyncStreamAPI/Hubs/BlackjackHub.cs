@@ -16,7 +16,7 @@ namespace SyncStreamAPI.Hubs
             if (playing && room.GallowGame != null)
             {
                 _gallowGameManager.PlayNewRound(UniqueId);
-                await SendPlayerType(UniqueId, room.server.currentVideo);
+                await SendPlayerType(room);
             }
             else
             {

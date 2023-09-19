@@ -19,6 +19,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using SyncStreamAPI.Enums.Games;
 
 namespace SyncStreamAPI.Hubs
 {
@@ -32,7 +33,8 @@ namespace SyncStreamAPI.Hubs
         readonly GallowGameManager _gallowGameManager;
         readonly BlackjackManager _blackjackManager;
 
-        public ServerHub(IConfiguration configuration, MainManager manager, PostgresContext postgres, GallowGameManager gallowGameManager, BlackjackManager blackjackManager)
+        public ServerHub(IConfiguration configuration, MainManager manager, PostgresContext postgres,
+            GallowGameManager gallowGameManager, BlackjackManager blackjackManager)
         {
             Configuration = configuration;
             _manager = manager;
@@ -44,65 +46,85 @@ namespace SyncStreamAPI.Hubs
 #nullable enable
         public override async Task OnDisconnectedAsync(Exception? ex)
         {
-            var Rooms = MainManager.GetRooms();
-            var room = Rooms.FirstOrDefault(x => x.server.members.FirstOrDefault(y => y?.ConnectionId == Context.ConnectionId) != null);
+            var rooms = MainManager.GetRooms();
+            var room = rooms.FirstOrDefault(x =>
+                x.server.members.FirstOrDefault(y => y?.ConnectionId == Context.ConnectionId) != null);
             if (room != null)
             {
-                Member? e = room.server.members.FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
+                var e = room.server.members.FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
                 e?.InvokeKick();
+                if (room.CurrentStreamer == Context.ConnectionId)
+                {
+                    room.CurrentStreamer = null;
+                    await Clients.Group(room.uniqueId).stopWebRtcStream(Context.ConnectionId);
+                }
 
                 var gameMode = room.GameMode;
-                if (gameMode == Enums.Games.GameMode.Chess)
+                switch (gameMode)
                 {
-                    var game = ChessLogic.GetChessGame(room.uniqueId);
-                    if (game != null && (game.LightPlayer.ConnectionId == e?.ConnectionId || game.DarkPlayer.ConnectionId == e?.ConnectionId))
+                    case Enums.Games.GameMode.Chess:
                     {
-                        await EndChess(room.uniqueId);
-                    }
-                }
-                if (gameMode == Enums.Games.GameMode.Gallows)
-                {
-                    var game = room.GallowGame;
-                    var gameMemberIdx = game.members.FindIndex(x => x.ConnectionId == e?.ConnectionId);
-                    if (gameMemberIdx > -1)
-                    {
-                        game.members.RemoveAt(gameMemberIdx);
-                    }
-                }
-                if (gameMode == Enums.Games.GameMode.Blackjack)
-                {
-                    var blackjack = room.BlackjackGame;
-                    var gameMemberIdx = blackjack.members.FindIndex(x => x.ConnectionId == e?.ConnectionId);
-                    if (gameMemberIdx > -1)
-                    {
-                        var bjMember = blackjack.members[gameMemberIdx];
-                        blackjack.members.RemoveAt(gameMemberIdx);
-                        if (bjMember.waitingForBet)
+                        var game = ChessLogic.GetChessGame(room.uniqueId);
+                        if (game != null && (game.LightPlayer.ConnectionId == e?.ConnectionId ||
+                                             game.DarkPlayer.ConnectionId == e?.ConnectionId))
                         {
-                            bjMember.waitingForBet = false;
-                            _blackjackManager.AskForBet(blackjack, gameMemberIdx + 1);
+                            await EndChess(room.uniqueId);
                         }
-                        else if (bjMember.waitingForPull)
+
+                        break;
+                    }
+                    case Enums.Games.GameMode.Gallows:
+                    {
+                        var game = room.GallowGame;
+                        var gameMemberIdx = game.members.FindIndex(x => x.ConnectionId == e?.ConnectionId);
+                        if (gameMemberIdx > -1)
                         {
-                            bjMember.waitingForPull = false;
-                            _blackjackManager.AskForPull(blackjack, gameMemberIdx + 1);
-                            await _blackjackManager.SendAllUsers(blackjack);
+                            game.members.RemoveAt(gameMemberIdx);
+                        }
+
+                        break;
+                    }
+                    case Enums.Games.GameMode.Blackjack:
+                    {
+                        var blackjack = room.BlackjackGame;
+                        var gameMemberIdx = blackjack.members.FindIndex(x => x.ConnectionId == e?.ConnectionId);
+                        if (gameMemberIdx > -1)
+                        {
+                            var bjMember = blackjack.members[gameMemberIdx];
+                            blackjack.members.RemoveAt(gameMemberIdx);
+                            if (bjMember.waitingForBet)
+                            {
+                                bjMember.waitingForBet = false;
+                                _blackjackManager.AskForBet(blackjack, gameMemberIdx + 1);
+                            }
+                            else if (bjMember.waitingForPull)
+                            {
+                                bjMember.waitingForPull = false;
+                                _blackjackManager.AskForPull(blackjack, gameMemberIdx + 1);
+                                await _blackjackManager.SendAllUsers(blackjack);
+                            }
+                            else
+                            {
+                                await _blackjackManager.SendAllUsers(blackjack);
+                            }
+                        }
+
+                        if (blackjack.members.Count < 1)
+                        {
+                            await _blackjackManager.PlayNewRound(blackjack.RoomId);
                         }
                         else
                         {
                             await _blackjackManager.SendAllUsers(blackjack);
                         }
+
+                        break;
                     }
-                    if (blackjack.members.Count < 1)
-                    {
-                        await _blackjackManager.PlayNewRound(blackjack.RoomId);
-                    }
-                    else
-                    {
-                        await _blackjackManager.SendAllUsers(blackjack);
-                    }
+                    case GameMode.NotPlaying:
+                        break;
                 }
             }
+
             await base.OnDisconnectedAsync(ex);
         }
 
@@ -129,6 +151,7 @@ namespace SyncStreamAPI.Hubs
                     return false;
                 }
             }
+
             return true;
         }
 
@@ -164,132 +187,167 @@ namespace SyncStreamAPI.Hubs
 
             if (!CheckPrivileges(room))
             {
-                await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "You don't have permissions to add a video to this room", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+                {
+                    Header = "Error", Question = "You don't have permissions to add a video to this room",
+                    Answer1 = "Ok"
+                });
                 return;
             }
+
             var vidEnded = (room.server.currentVideo.url.Length == 0 || room.server.currentVideo.ended == true);
             if (room.server.playlist?.Select(x => x.url).Contains(key.url) == false)
             {
-                var playerType = await SendPlayerType(UniqueId, key, vidEnded);
-                if (playerType == PlayerType.Live)
+                var playerType = await SendPlayerType(room, vidEnded);
+                switch (playerType)
                 {
-                    if (key.title.Length == 0)
+                    case PlayerType.Live:
                     {
-                        key.title = key.url.Split('=').Last().FirstCharToUpper();
+                        if (key.title.Length == 0)
+                        {
+                            key.title = key.url.Split('=').Last().FirstCharToUpper();
+                        }
+
+                        break;
                     }
-                }
-                else if (playerType == PlayerType.External)
-                {
-                    if (key.title.Length == 0)
+                    case PlayerType.External:
                     {
-                        key.title = "External Source";
+                        if (key.title.Length == 0)
+                        {
+                            key.title = "External Source";
+                        }
+
+                        break;
                     }
-                }
-                else if (playerType == PlayerType.Vimeo)
-                {
-                    VimeoResponse? vimeo = Vimeo.FromUrl(key.url);
-                    if (vimeo != null)
+                    case PlayerType.Vimeo:
                     {
-                        key.title = vimeo?.Title + (vimeo?.UserName == null ? "" : " - " + vimeo.UserName);
+                        VimeoResponse? vimeo = Vimeo.FromUrl(key.url);
+                        if (vimeo != null)
+                        {
+                            key.title = vimeo?.Title + (vimeo?.UserName == null ? "" : " - " + vimeo.UserName);
+                        }
+
+                        break;
                     }
-                }
-                else if (playerType == PlayerType.YouTube)
-                {
-                    if (key.url.Split('?')[0].ToLower().EndsWith("playlist"))
-                    {
+                    case PlayerType.YouTube when key.url.Split('?')[0].ToLower().EndsWith("playlist"):
                         await AddPlaylist(key.url, UniqueId);
                         return;
-                    }
-                    if (key.url.Contains("shorts"))
+                    case PlayerType.YouTube:
                     {
-                        key.url = $"https://www.youtube.com/watch?v={key.url.Split('/').Last()}";
-                    }
-
-                    if (key.title == null || key.title.Length == 0)
-                    {
-                        key.title = await General.ResolveURL(key.url, Configuration);
-                    }
-                }
-                else if (playerType == PlayerType.Twitch)
-                {
-                    var videoRegExString = @"\/videos\/(\d+)";
-                    var videoRegEx = new Regex(videoRegExString);
-                    var videoMatches = videoRegEx.Matches(key.url);
-                    if (videoMatches != null && videoMatches.Count > 0)
-                    {
-                        key.url = videoMatches[0]?.Groups[1]?.Value;
-                        key.title = $"Twitch Video - {key.url}";
-                    }
-                    else
-                    {
-                        var titleRegExString = @"twitch.tv\/(\w+)\/?";
-                        var titleRegEx = new Regex(titleRegExString);
-                        var titleMatches = titleRegEx.Matches(key.url);
-                        if (titleMatches != null && titleMatches.Count > 0)
+                        if (key.url.Contains("shorts"))
                         {
-                            key.title = titleMatches[0]?.Groups[1]?.Value;
+                            key.url = $"https://www.youtube.com/watch?v={key.url.Split('/').Last()}";
                         }
+
+                        if (key.title == null || key.title.Length == 0)
+                        {
+                            key.title = await General.ResolveURL(key.url, Configuration);
+                        }
+
+                        break;
                     }
+                    case PlayerType.Twitch:
+                    {
+                        var videoRegExString = @"\/videos\/(\d+)";
+                        var videoRegEx = new Regex(videoRegExString);
+                        var videoMatches = videoRegEx.Matches(key.url);
+                        if (videoMatches != null && videoMatches.Count > 0)
+                        {
+                            key.url = videoMatches[0]?.Groups[1]?.Value;
+                            key.title = $"Twitch Video - {key.url}";
+                        }
+                        else
+                        {
+                            var titleRegExString = @"twitch.tv\/(\w+)\/?";
+                            var titleRegEx = new Regex(titleRegExString);
+                            var titleMatches = titleRegEx.Matches(key.url);
+                            if (titleMatches != null && titleMatches.Count > 0)
+                            {
+                                key.title = titleMatches[0]?.Groups[1]?.Value;
+                            }
+                        }
+
+                        break;
+                    }
+                    case PlayerType.Nothing:
+                        await Clients.Caller.dialog(new Dialog(AlertType.Warning)
+                            { Header = "Denied", Question = "Given input is not allowed", Answer1 = "Ok" });
+                        return;
                 }
-                else if (playerType == PlayerType.Nothing)
-                {
-                    await Clients.Caller.dialog(new Dialog(AlertType.Warning) { Header = "Denied", Question = "Given input is not allowed", Answer1 = "Ok" });
-                    return;
-                }
+
                 room.server.playlist.Add(key);
             }
+
             if (vidEnded)
             {
                 room.server.currentVideo = key;
                 await Clients.Group(UniqueId).videoupdate(key);
             }
+
             await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
             await Clients.All.getrooms(MainManager.GetRooms());
         }
 
-        public async Task<PlayerType> SendPlayerType(string UniqueId, DreckVideo key, bool sendToUsers = true, PlayerType type = PlayerType.Nothing)
+        public async Task<PlayerType> SendPlayerType(Room room, bool sendToUsers = true,
+            PlayerType type = PlayerType.Nothing)
         {
+            var uniqueId = room.uniqueId;
+            var key = room.server.currentVideo;
             var result = PlayerType.Nothing;
+            if (room.CurrentStreamer != null)
+            {
+                if (sendToUsers)
+                {
+                    await Clients.Group(uniqueId).playertype(PlayerType.WebRtc);
+                }
+
+                return PlayerType.WebRtc;
+            }
             if (type != PlayerType.Nothing)
             {
                 if (sendToUsers)
                 {
-                    await Clients.Group(UniqueId).playertype(type);
+                    await Clients.Group(uniqueId).playertype(type);
                 }
 
                 return type;
             }
-            if (key.url == null || key.url.Length == 0 || key.ended)
+
+            if (string.IsNullOrEmpty(key.url) || key.ended)
             {
                 if (sendToUsers)
                 {
-                    await Clients.Group(UniqueId).playertype(PlayerType.Nothing);
+                    await Clients.Group(uniqueId).playertype(PlayerType.Nothing);
                 }
 
                 return result;
             }
-            Uri uriResult;
-            bool validUri = Uri.TryCreate(key.url, UriKind.Absolute, out uriResult) && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
+
+            var validUri = Uri.TryCreate(key.url, UriKind.Absolute, out var uriResult) &&
+                           (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
             if (!validUri)
             {
                 if (sendToUsers)
                 {
-                    await Clients.Group(UniqueId).playertype(PlayerType.Nothing);
+                    await Clients.Group(uniqueId).playertype(PlayerType.Nothing);
                 }
 
                 return result;
             }
+
             var ytRegEx = @"^(https?\:\/\/)?((www\.)?youtube\.com|youtu\.be)\/.+$";
             var twitchRegEx = @"^(https?\:\/\/)?((www\.)?twitch\.tv)\/.+$";
             var vimeoRegEx = @"^(https?\:\/\/)?((www\.)?vimeo\.com)\/.+$";
-            Regex ytRegex = new Regex(ytRegEx);
-            Regex twitchRegex = new Regex(twitchRegEx);
-            Regex vimeoRegex = new Regex(vimeoRegEx);
-            if (key.url.ToLower().Contains("//live.drecktu.be/") || key.url.StartsWith("rtmp") || key.url.Contains("//drecktu.be:8088/live"))
+            var ytRegex = new Regex(ytRegEx);
+            var twitchRegex = new Regex(twitchRegEx);
+            var vimeoRegex = new Regex(vimeoRegEx);
+            if (key.url.ToLower().Contains("//live.drecktu.be/") || key.url.StartsWith("rtmp") ||
+                key.url.Contains("//drecktu.be:8088/live"))
             {
                 if (sendToUsers)
                 {
-                    await Clients.Group(General.BottedInGroupName).sendBotChannelUpdate(new BotLiveChannelInfo() { ChannelId = key.url.Split('=').Last(), RoomName = UniqueId });
+                    await Clients.Group(General.BottedInGroupName).sendBotChannelUpdate(new BotLiveChannelInfo()
+                        { ChannelId = key.url.Split('=').Last(), RoomName = uniqueId });
                 }
 
                 result = PlayerType.Live;
@@ -318,7 +376,7 @@ namespace SyncStreamAPI.Hubs
 
             if (sendToUsers)
             {
-                await Clients.Group(UniqueId).playertype(result);
+                await Clients.Group(uniqueId).playertype(result);
             }
 
             return result;
@@ -332,14 +390,18 @@ namespace SyncStreamAPI.Hubs
                 var playlistInfo = await ytdl.RunVideoDataFetch(url);
                 if (playlistInfo != null)
                 {
-                    var vids = playlistInfo.Data.Entries.Select(x => new DreckVideo(x.Title, x.Url, false, TimeSpan.FromSeconds((double)(x.Duration ?? 0d)), "Playlist")).ToList();
+                    var vids = playlistInfo.Data.Entries.Select(x => new DreckVideo(x.Title, x.Url, false,
+                        TimeSpan.FromSeconds((double)(x.Duration ?? 0d)), "Playlist")).ToList();
                     vids.ForEach(async x => { await AddVideo(x, UniqueId); });
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex.ToString());
-                await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "There has been an error trying to add the playlist", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+                {
+                    Header = "Error", Question = "There has been an error trying to add the playlist", Answer1 = "Ok"
+                });
             }
         }
 
@@ -353,9 +415,14 @@ namespace SyncStreamAPI.Hubs
 
             if (!CheckPrivileges(room))
             {
-                await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "You don't have permissions to remove videos from this room", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+                {
+                    Header = "Error", Question = "You don't have permissions to remove videos from this room",
+                    Answer1 = "Ok"
+                });
                 return;
             }
+
             int idx = room.server.playlist.FindIndex(x => x.url == key);
             if (idx != -1)
             {
@@ -375,15 +442,20 @@ namespace SyncStreamAPI.Hubs
 
             if (!CheckPrivileges(room))
             {
-                await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "You don't have permissions to skip videos in this room", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+                {
+                    Header = "Error", Question = "You don't have permissions to skip videos in this room",
+                    Answer1 = "Ok"
+                });
                 return;
             }
+
             Server MainServer = room.server;
             if (room.server.playlist.Count > 1)
             {
                 MainServer.currentVideo = room.server.playlist[1];
                 room.server.playlist.RemoveAt(0);
-                await SendPlayerType(UniqueId, MainServer.currentVideo);
+                await SendPlayerType(room);
                 await Clients.Group(UniqueId).videoupdate(MainServer.currentVideo);
                 await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
                 await Clients.All.getrooms(MainManager.GetRooms());
@@ -412,9 +484,14 @@ namespace SyncStreamAPI.Hubs
 
             if (!CheckPrivileges(room))
             {
-                await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "You don't have permissions to skip videos in this room", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+                {
+                    Header = "Error", Question = "You don't have permissions to skip videos in this room",
+                    Answer1 = "Ok"
+                });
                 return;
             }
+
             Server MainServer = room.server;
             int idx = MainServer.playlist.FindIndex(x => x.url == key);
             if (idx != -1)
@@ -441,9 +518,14 @@ namespace SyncStreamAPI.Hubs
 
             if (!CheckPrivileges(room))
             {
-                await Clients.Caller.dialog(new Dialog(AlertType.Danger) { Header = "Error", Question = "You don't have permissions to move videos in this room", Answer1 = "Ok" });
+                await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+                {
+                    Header = "Error", Question = "You don't have permissions to move videos in this room",
+                    Answer1 = "Ok"
+                });
                 return;
             }
+
             DreckVideo vid = room.server.playlist[fromIndex];
             room.server.playlist.RemoveAt(fromIndex);
             room.server.playlist.Insert(toIndex, vid);
@@ -462,6 +544,7 @@ namespace SyncStreamAPI.Hubs
             {
                 return;
             }
+
             //if (room.server.currentVideo.url.Contains("twitch.tv"))
             //    await Clients.Group(UniqueId).twitchTimeUpdate(time);
             //else
@@ -502,22 +585,27 @@ namespace SyncStreamAPI.Hubs
             Rooms?.Add(room);
             if (!room.deletable)
             {
-                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x =>
+                    x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
                 var tokenObj = dbUser?.RememberTokens.SingleOrDefault(x => x.Token == token);
                 if (tokenObj == null || dbUser == null || dbUser.userprivileges < UserPrivileges.Administrator)
                 {
                     if (dbUser != null)
                     {
                         var errorMessage = "You do not have permissions to make a room permanent";
-                        await Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertType.Danger) { Question = errorMessage, Answer1 = "Ok" });
+                        await Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertType.Danger)
+                            { Question = errorMessage, Answer1 = "Ok" });
                         return;
                     }
+
                     return;
                 }
+
                 DbRoom dbRoom = new DbRoom(room);
                 var roomEntity = await _postgres.Rooms.AddAsync(dbRoom);
                 await _postgres.SaveChangesAsync();
             }
+
             await Clients.All.getrooms(MainManager.GetRooms());
         }
 
@@ -545,21 +633,26 @@ namespace SyncStreamAPI.Hubs
             var dbRoom = _postgres.Rooms.FirstOrDefault(x => x.uniqueId == UniqueId);
             if (dbRoom != null)
             {
-                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x =>
+                    x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
                 var tokenObj = dbUser?.RememberTokens.SingleOrDefault(x => x.Token == token);
                 if (tokenObj == null || dbUser == null || dbUser.userprivileges < UserPrivileges.Administrator)
                 {
                     if (dbUser != null)
                     {
                         var errorMessage = "You do not have permissions to delete this room";
-                        await Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertType.Danger) { Question = errorMessage, Answer1 = "Ok" });
+                        await Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertType.Danger)
+                            { Question = errorMessage, Answer1 = "Ok" });
                         return;
                     }
+
                     return;
                 }
+
                 _postgres.Rooms.Remove(dbRoom);
                 await _postgres.SaveChangesAsync();
             }
+
             MainManager.GetRooms().TryTake(out room);
             await Clients.All.getrooms(MainManager.GetRooms());
         }

@@ -5,7 +5,10 @@ namespace SyncStreamAPI.Interfaces
 {
     public partial interface IServerHub
     {
-        Task sendClientOffer(WebRtcClientOffer offer);
+        Task startWebRtcStream(string connectionId);
+        Task sendOfferToViewer(WebRtcClientOffer offer);
+        Task stopWebRtcStream(string connectionId);
+        Task joinWebRtcStream(string connectionId);
         Task sendClientAnswer(WebRtcClientOffer answer);
         Task sendIceCandidate(WebRtcIceCandidate iceCandidate);
     }

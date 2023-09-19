@@ -10,6 +10,7 @@
         Live,
         WhiteBoard,
         Blackjack,
-        Chess
+        Chess,
+        WebRtc
     }
 }

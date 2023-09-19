@@ -17,6 +17,8 @@ namespace SyncStreamAPI.Models
         public bool isPrivileged { get; set; }
         public bool deletable { get; set; } = true;
         [NotMapped]
+        public string? CurrentStreamer { get; set; }
+        [NotMapped]
         public Server server { get { return _server; } set { _server = value; } }
         [NotMapped]
         private Server _server { get; set; } = new Server();

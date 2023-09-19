@@ -4,6 +4,7 @@
     {
         public string type { get; set; }
         public string sdp { get; set; }
+        public string? ViewerId { get; set; }
     }
 
 }
