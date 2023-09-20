@@ -325,54 +325,69 @@ namespace SyncStreamAPI.Hubs
         {
             var dbUser = await _postgres.Users.Include(x => x.RememberTokens)
                 .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
+            if (dbUser == null)
+            {
+                // Handle invalid token scenario
+                return;
+            }
+
             if (dbUser.ID == folderId)
             {
-                await _manager.SendDefaultDialog(dbUser.ID.ToString(), "Can't share folders with yourself",
-                    AlertType.Warning);
+                await SendWarningDialog(dbUser.ID, "Can't share folders with yourself");
                 return;
             }
 
-            var shareUser = _postgres.Users?.FirstOrDefault(x => x.ID == userId);
+            var shareUser = await _postgres.Users.FirstOrDefaultAsync(x => x.ID == userId);
             if (shareUser == null)
             {
-                await _manager.SendDefaultDialog(dbUser.ID.ToString(), "Share user does not exist", AlertType.Warning);
+                await SendWarningDialog(dbUser.ID, "Share user does not exist");
                 return;
             }
 
-            var shareFolder = _postgres.Folders?.FirstOrDefault(x => x.Id == folderId);
+            var shareFolder = await _postgres.Folders.FirstOrDefaultAsync(x => x.Id == folderId);
             if (shareFolder == null)
             {
-                await _manager.SendDefaultDialog(dbUser.ID.ToString(), "Share folder does not exist",
-                    AlertType.Warning);
+                await SendWarningDialog(dbUser.ID, "Share folder does not exist");
                 return;
             }
 
             if (shareFolder.DbUserID != dbUser.ID)
             {
-                await _manager.SendDefaultDialog(dbUser.ID.ToString(),
-                    $"Can't share folder {shareFolder.Name} because you don't have ownership", AlertType.Warning);
+                await SendWarningDialog(dbUser.ID,
+                    $"Can't share folder {shareFolder.Name} because you don't have ownership");
                 return;
             }
 
-            var oldFolderShare =
-                _postgres.FolderShare?.FirstOrDefault(x =>
-                    x.DbFolderID == shareFolder.Id && x.DbUserID == shareUser.ID);
+            await HandleFolderSharing(dbUser, shareUser, shareFolder);
+        }
+
+        private async Task SendWarningDialog(int userId, string message)
+        {
+            await _manager.SendDefaultDialog(userId.ToString(), message, AlertType.Warning);
+        }
+
+        private async Task HandleFolderSharing(DbUser dbUser, DbUser shareUser, DbFileFolder shareFolder)
+        {
+            var oldFolderShare = await _postgres.FolderShare.FirstOrDefaultAsync(x =>
+                x.DbFolderID == shareFolder.Id && x.DbUserID == shareUser.ID);
             if (oldFolderShare != null)
             {
                 await _manager.SendDefaultDialog(dbUser.ID.ToString(),
                     $"Not sharing {shareFolder.Name} with {shareUser.username} anymore!", AlertType.Info);
-                _postgres.FolderShare?.Remove(oldFolderShare);
-                await _postgres.SaveChangesAsync();
-                return;
+                _postgres.FolderShare.Remove(oldFolderShare);
+            }
+            else
+            {
+                var newShare = new DbFolderUserShare(shareUser.ID, shareFolder.Id);
+                _postgres.FolderShare.Add(newShare);
+                await _manager.SendDefaultDialog(dbUser.ID.ToString(),
+                    $"Now sharing {shareFolder.Name} with {shareUser.username}!", AlertType.Success);
             }
 
-            var newShare = new DbFolderUserShare(shareUser.ID, shareFolder.Id);
-            _postgres.FolderShare?.Add(newShare);
             await _postgres.SaveChangesAsync();
-            await _manager.SendDefaultDialog(dbUser.ID.ToString(),
-                $"Now sharing {shareFolder.Name} with {shareUser.username}!", AlertType.Success);
-            await GetFolders(shareUser.RememberTokens.OrderByDescending(x => x.Created).FirstOrDefault()?.Token,
-                shareFolder.Id);
+            var token = shareUser.RememberTokens.MaxBy(x => x.Created)?.Token;
+            if (token != null)
+                await GetFolders(token, shareFolder.Id);
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
@@ -383,7 +398,7 @@ namespace SyncStreamAPI.Hubs
             var dbFolder = _postgres.Folders?.Where(x => x.Id == folderId).FirstOrDefault();
             if (dbFolder == null)
             {
-                await _manager.SendDefaultDialog(dbUser.ID.ToString(), $"Could not find folder", AlertType.Warning);
+                await SendWarningDialog(dbUser.ID, "Could not find folder");
                 return;
             }
 
