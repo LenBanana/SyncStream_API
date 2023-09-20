@@ -391,22 +391,58 @@ namespace SyncStreamAPI.Hubs
         {
             var dbUser = await _postgres.Users.Include(x => x.RememberTokens)
                 .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
-            var dbFolder = _postgres.Folders?.Where(x => x.Id == folderId).FirstOrDefault();
+            if (dbUser == null) return;
+
+            var dbFolder = await _postgres.Folders.FirstOrDefaultAsync(x => x.Id == folderId);
             if (dbFolder == null)
             {
                 await SendWarningDialog(dbUser.ID, "Could not find folder");
                 return;
             }
 
-            var shareFolders = _postgres.FolderShare?.Where(x => x.DbUserID == dbUser.ID);
-            var files = _postgres.Files?.Where(x => x.DbFileFolderId == folderId && (x.DbUserID == dbUser.ID ||
-                shareFolders.FirstOrDefault(y => y.DbFolderID == folderId) != null ||
-                shareFolders.FirstOrDefault(y => y.DbFolderID == dbFolder.ParentId) != null ||
-                dbFolder.DbUserID == dbUser.ID));
-            if (files != null)
+            var sharedFolderIds = _postgres.FolderShare
+                .Where(x => x.DbUserID == dbUser.ID)
+                .Select(x => x.DbFolderID)
+                .ToList();
+
+            var allAncestorFolderIds = GetAllAncestorFolders(folderId);
+            allAncestorFolderIds.Add(folderId);
+
+            if (dbFolder.DbUserID == dbUser.ID || sharedFolderIds.Intersect(allAncestorFolderIds).Any() || _postgres.Files.Any(x => x.DbFileFolderId == folderId && x.DbUserID == dbUser.ID))
             {
-                await Clients.Caller.getFolderFiles(files.Select(x => new FileDto(x)).ToList());
+                var files = _postgres.Files
+                    .Where(x => x.DbFileFolderId == folderId)
+                    .ToList();
+
+                if (files.Any())
+                {
+                    await Clients.Caller.getFolderFiles(files.Select(x => new FileDto(x)).ToList());
+                    return;
+                }
             }
+            await Clients.Caller.getFolderFiles(new List<FileDto>());
+        }
+        
+        private List<int> GetAllAncestorFolders(int folderId)
+        {
+            var ancestorFolders = new List<int>();
+            int? currentFolderId = folderId;
+
+            while (currentFolderId.HasValue)
+            {
+                var parentFolder = _postgres.Folders.FirstOrDefault(x => x.Id == currentFolderId.Value);
+                if (parentFolder != null && parentFolder.ParentId.HasValue)
+                {
+                    ancestorFolders.Add(parentFolder.ParentId.Value);
+                    currentFolderId = parentFolder.ParentId;
+                }
+                else
+                {
+                    currentFolderId = null;
+                }
+            }
+
+            return ancestorFolders;
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
