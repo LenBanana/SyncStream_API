@@ -372,16 +372,12 @@ namespace SyncStreamAPI.Hubs
                 x.DbFolderID == shareFolder.Id && x.DbUserID == shareUser.ID);
             if (oldFolderShare != null)
             {
-                await _manager.SendDefaultDialog(dbUser.ID.ToString(),
-                    $"Not sharing {shareFolder.Name} with {shareUser.username} anymore!", AlertType.Info);
                 _postgres.FolderShare.Remove(oldFolderShare);
             }
             else
             {
                 var newShare = new DbFolderUserShare(shareUser.ID, shareFolder.Id);
                 _postgres.FolderShare.Add(newShare);
-                await _manager.SendDefaultDialog(dbUser.ID.ToString(),
-                    $"Now sharing {shareFolder.Name} with {shareUser.username}!", AlertType.Success);
             }
 
             await _postgres.SaveChangesAsync();
@@ -421,7 +417,7 @@ namespace SyncStreamAPI.Hubs
             {
                 folder.Name = folderName;
                 await _postgres.SaveChangesAsync();
-                await GetFolders(token, (int)folder.ParentId);
+                if (folder.ParentId != null) await GetFolders(token, (int)folder.ParentId);
             }
         }
 
