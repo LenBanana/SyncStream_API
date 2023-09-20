@@ -224,7 +224,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             }
 
-            var fileName = await General.ResolveURL(url, Configuration);
+            var fileName = await General.ResolveUrl(url, Configuration);
             var conv = new DownloadClientValue(dbUser.ID, fileName, token, url, quality, audioOnly);
             _ = _manager.YtDlpDownload(conv);
         }

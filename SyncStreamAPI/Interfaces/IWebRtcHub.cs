@@ -7,6 +7,7 @@ namespace SyncStreamAPI.Interfaces
     {
         Task startWebRtcStream(string connectionId);
         Task sendOfferToViewer(WebRtcClientOffer offer);
+        Task getWebRtcCredentials(WebRtcCredentials credentials);
         Task stopWebRtcStream(string connectionId);
         Task joinWebRtcStream(string connectionId);
         Task sendClientAnswer(WebRtcClientOffer answer);

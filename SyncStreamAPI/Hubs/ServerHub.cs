@@ -242,7 +242,7 @@ namespace SyncStreamAPI.Hubs
 
                         if (string.IsNullOrEmpty(key.title))
                         {
-                            key.title = await General.ResolveURL(key.url, Configuration);
+                            key.title = await General.ResolveUrl(key.url, Configuration);
                         }
 
                         break;

@@ -3,6 +3,7 @@ using SyncStreamAPI.Enums;
 using SyncStreamAPI.Models.WebRTC;
 using SyncStreamAPI.PostgresModels;
 using System.Threading.Tasks;
+using SyncStreamAPI.Helper;
 using SyncStreamAPI.ServerData;
 
 namespace SyncStreamAPI.Hubs
@@ -17,7 +18,6 @@ namespace SyncStreamAPI.Hubs
             if (room.CurrentStreamer == Context.ConnectionId) return;
             await Clients.Client(room.CurrentStreamer).joinWebRtcStream(Context.ConnectionId);
         }
-
 
         [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
         public async Task StartWebRtcStream(string token, string roomId)
