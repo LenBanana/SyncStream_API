@@ -38,6 +38,7 @@ namespace SyncStreamAPI.Helper
             ? System.IO.Directory.GetCurrentDirectory() + "/PrivilegeMethodDescriptions.xml"
             : System.IO.Directory.GetCurrentDirectory() + "\\PrivilegeMethodDescriptions.xml";
 
+        public static readonly int DefaultFolderId = 1;
         public static int GuestRoomAmount { get; } = 6;
         public static int MaxParallelConversions { get; set; } = 6;
         public static int MaxParallelYtDownloads { get; set; } = 4;

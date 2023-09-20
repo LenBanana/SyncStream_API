@@ -413,6 +413,10 @@ namespace SyncStreamAPI.Hubs
                 var files = _postgres.Files
                     .Where(x => x.DbFileFolderId == folderId)
                     .ToList();
+                if (folderId == General.DefaultFolderId)
+                {
+                    files = files.Where(x => x.DbUserID == dbUser.ID).ToList();
+                }
 
                 if (files.Any())
                 {
