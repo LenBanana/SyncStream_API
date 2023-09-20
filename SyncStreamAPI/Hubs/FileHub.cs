@@ -135,17 +135,48 @@ namespace SyncStreamAPI.Hubs
         {
             var dbUser = _postgres.Users.Include(x => x.RememberTokens)
                 .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == token));
-            var shareFolders = _postgres.FolderShare?.Where(x => x.DbUserID == dbUser.ID);
-            var folder = _postgres.Folders?.Where(x =>
-                x.DbUserID == null || x.DbUserID == dbUser.ID ||
-                shareFolders.FirstOrDefault(y => y.DbFolderID == x.Id) != null ||
-                shareFolders.FirstOrDefault(y => y.DbFolderID == x.ParentId) != null).OrderBy(x => x.Name).ToList();
-            var resultFolder = folder.FirstOrDefault(x => x.Id == folderId);
+
+            if (dbUser == null)
+            {
+                // Handle invalid token scenario
+                return;
+            }
+
+            var sharedFolderIds = _postgres.FolderShare
+                .Where(x => x.DbUserID == dbUser.ID)
+                .Select(x => x.DbFolderID)
+                .ToList();
+
+            // Fetch all folders that are directly or indirectly shared
+            var allSharedFolders = GetAllSharedFolders(sharedFolderIds);
+
+            var folders = _postgres.Folders
+                .Where(x => x.DbUserID == null || x.DbUserID == dbUser.ID || allSharedFolders.Contains(x.Id))
+                .OrderBy(x => x.Name)
+                .ToList();
+
+            var resultFolder = folders.FirstOrDefault(x => x.Id == folderId);
             if (resultFolder != null)
             {
                 var folderResult = new FolderDto(resultFolder);
                 await Clients.Group(token).getFolders(folderResult);
             }
+        }
+
+        private List<int> GetAllSharedFolders(List<int> sharedFolderIds)
+        {
+            var allSharedFolders = new List<int>();
+            var nextFolders = sharedFolderIds;
+            while (nextFolders.Any())
+            {
+                allSharedFolders.AddRange(nextFolders);
+                nextFolders = _postgres.Folders
+                    .Where(x => nextFolders.Contains(x.ParentId.Value))
+                    .Select(x => x.Id)
+                    .ToList();
+            }
+
+            return allSharedFolders.Distinct().ToList();
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
@@ -210,7 +241,8 @@ namespace SyncStreamAPI.Hubs
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-        public async Task DownloadYtVideo(string token, string url, string quality = "1080", bool audioOnly = false, bool embedSubtitles = false)
+        public async Task DownloadYtVideo(string token, string url, string quality = "1080", bool audioOnly = false,
+            bool embedSubtitles = false)
         {
             var dbUser = await _postgres.Users.Include(x => x.RememberTokens)
                 .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
@@ -219,7 +251,8 @@ namespace SyncStreamAPI.Hubs
                 var ytdl = General.GetYoutubeDL();
                 var playlistInfo = await ytdl.RunVideoDataFetch(url);
                 var vids = playlistInfo.Data.Entries.Select(x =>
-                    new DownloadClientValue(dbUser.ID, x.Title, token, x.Url, quality, audioOnly, embedSubtitles)).ToList();
+                        new DownloadClientValue(dbUser.ID, x.Title, token, x.Url, quality, audioOnly, embedSubtitles))
+                    .ToList();
                 _manager.YtPlaylistDownload(vids);
                 return;
             }
