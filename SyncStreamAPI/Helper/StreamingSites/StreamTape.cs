@@ -20,19 +20,15 @@ namespace SyncStreamAPI.Helper.StreamingSites
                 await page.GoToAsync(client.Url);
                 await page.WaitForSelectorAsync("button.plyr__control--overlaid", new WaitForSelectorOptions() { Timeout = 2500 });
                 await page.MainFrame.EvaluateExpressionAsync("document.querySelector(\".play-overlay\").click()");
-                await Task.Delay(100);
                 await page.MainFrame.EvaluateExpressionAsync("document.querySelector(\".play-overlay\").click()");
-                await Task.Delay(100);
                 await page.MainFrame.EvaluateExpressionAsync(
                     "document.querySelector('.plyr__control--overlaid').click()");
-                await Task.Delay(100);
                 await page.MainFrame.EvaluateExpressionAsync(
                     "document.querySelector('.plyr__controls__item').click()");
-                await Task.Delay(100);
                 var html = await page.GetContentAsync();
-                HtmlDocument doc = new HtmlDocument();
+                var doc = new HtmlDocument();
                 doc.LoadHtml(html);
-                HtmlNode videoNode = doc.DocumentNode.SelectSingleNode("//video");
+                var videoNode = doc.DocumentNode.SelectSingleNode("//video");
                 var webTitle = client.FileName;
                 var downloadUri = "https:" + videoNode?.Attributes["src"]?.Value?.Replace("amp;", "");
                 await page.CloseAsync();

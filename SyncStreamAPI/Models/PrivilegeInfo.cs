@@ -20,7 +20,7 @@ namespace SyncStreamAPI.Models
         public UserPrivileges RequiredPrivileges { get; set; }
         public AuthenticationType AuthenticationType { get; set; }
 
-        public PrivilegeInfo(string methodName, string typeName, string description, UserPrivileges requiredPrivileges, AuthenticationType authenticationType)
+        private PrivilegeInfo(string methodName, string typeName, string description, UserPrivileges requiredPrivileges, AuthenticationType authenticationType)
         {
             MethodName = methodName;
             TypeName = typeName;
@@ -31,10 +31,10 @@ namespace SyncStreamAPI.Models
 
         public static List<PrivilegeInfo> GetPrivilegedMethodsInfo()
         {
-            List<PrivilegeInfo> result = new List<PrivilegeInfo>();
+            var result = new List<PrivilegeInfo>();
 
             // Get the current assembly
-            Assembly assembly = Assembly.GetCallingAssembly();
+            var assembly = Assembly.GetCallingAssembly();
 
             // Get all types in the assembly that have the PrivilegeAttribute applied to them
             var methodsWithAttribute = assembly.GetTypes()
@@ -49,23 +49,25 @@ namespace SyncStreamAPI.Models
                 var xml = File.ReadAllText(xmlDescriptions);
                 var xmlDoc = new XmlDocument();
                 xmlDoc.LoadXml(xml);
-                XmlNodeList resources = xmlDoc.SelectNodes("root/data");
-                foreach (XmlNode node in resources)
-                {
-                    descriptions.Add(node.Attributes["name"].Value, node.InnerText);
-                }
+                var resources = xmlDoc.SelectNodes("root/data");
+                if (resources != null)
+                    foreach (XmlNode node in resources)
+                    {
+                        if (node.Attributes != null) descriptions.Add(node.Attributes["name"]?.Value!, node.InnerText);
+                    }
             }
 
             // Loop through each method and get basic information about it
             foreach (var method in methodsWithAttribute)
             {
                 var attribute = method.GetCustomAttribute<PrivilegeAttribute>();
-                string methodName = method.Name;
-                string typeName = method.ReturnType.FullName;
-                UserPrivileges requiredPrivileges = attribute.RequiredPrivileges;
-                AuthenticationType authenticationType = attribute.AuthenticationType;
-                string desc = descriptions.ContainsKey(methodName) ? descriptions[methodName] : "";
-                PrivilegeInfo methodInfo = new PrivilegeInfo(methodName, typeName, desc, requiredPrivileges, authenticationType);
+                var methodName = method.Name;
+                var typeName = method.ReturnType.FullName;
+                if (attribute == null) continue;
+                var requiredPrivileges = attribute.RequiredPrivileges;
+                var authenticationType = attribute.AuthenticationType;
+                var desc = descriptions.TryGetValue(methodName, out var description) ? description : "";
+                var methodInfo = new PrivilegeInfo(methodName, typeName, desc, requiredPrivileges, authenticationType);
                 result.Add(methodInfo);
             }
 
