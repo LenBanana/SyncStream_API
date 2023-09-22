@@ -18,5 +18,9 @@
     {
         public string ParticipantId { get; set; }
         public string ParticipantName { get; set; }
+        public bool IsMuted { get; set; }
+        public bool IsSpeaking { get; set; }
+        public bool IsVideoMuted { get; set; }
+        public bool IsScreenMuted { get; set; }
     }
 }

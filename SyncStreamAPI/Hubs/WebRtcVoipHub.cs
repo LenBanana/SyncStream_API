@@ -17,7 +17,8 @@ namespace SyncStreamAPI.Hubs
             if (user == null) return;
             await Groups.AddToGroupAsync(Context.ConnectionId, $"AudioRoom-{roomId}");
             await Clients.GroupExcept($"AudioRoom-{roomId}", new[] { Context.ConnectionId })
-                .participantJoined(new VoipParticipantDto() { ParticipantId = Context.ConnectionId, ParticipantName = user.username});
+                .participantJoined(new VoipParticipantDto()
+                    { ParticipantId = Context.ConnectionId, ParticipantName = user.username });
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
@@ -26,6 +27,13 @@ namespace SyncStreamAPI.Hubs
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"AudioRoom-{roomId}");
             await Clients.GroupExcept($"AudioRoom-{roomId}", new[] { Context.ConnectionId })
                 .participantLeft(new VoipParticipantDto() { ParticipantId = Context.ConnectionId });
+        }
+
+        [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
+        public async Task SendStatusToParticipant(string token, VoipParticipantDto participantDto, string roomId)
+        {
+            await Clients.GroupExcept($"AudioRoom-{roomId}", new[] { Context.ConnectionId })
+                .receiveStatusFromParticipant(participantDto);
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]

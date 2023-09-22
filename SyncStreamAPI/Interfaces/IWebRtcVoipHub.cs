@@ -10,4 +10,5 @@ public partial interface IServerHub
     Task receiveIceCandidateFromParticipant(string senderId, VoipIceCandidate candidate);
     Task participantJoined(VoipParticipantDto participantId);
     Task participantLeft(VoipParticipantDto participantId);
+    Task receiveStatusFromParticipant(VoipParticipantDto participantId);
 }
