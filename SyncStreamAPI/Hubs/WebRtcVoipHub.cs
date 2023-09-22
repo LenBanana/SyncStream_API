@@ -4,6 +4,7 @@ using SyncStreamAPI.Models.WebRTC;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
 using SyncStreamAPI.PostgresModels;
+using SyncStreamAPI.ServerData;
 
 namespace SyncStreamAPI.Hubs
 {
@@ -12,30 +13,36 @@ namespace SyncStreamAPI.Hubs
         [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
         public async Task JoinAudioRoom(string token, string roomId)
         {
+            var user = await MainManager.GetUser(token);
+            if (user == null) return;
             await Groups.AddToGroupAsync(Context.ConnectionId, $"AudioRoom-{roomId}");
-            // Notify existing participants about the new user
             await Clients.GroupExcept($"AudioRoom-{roomId}", new[] { Context.ConnectionId })
-                .participantJoined(Context.ConnectionId);
+                .participantJoined(new VoipParticipantDto() { ParticipantId = Context.ConnectionId, ParticipantName = user.username});
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
         public async Task LeaveAudioRoom(string token, string roomId)
         {
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"AudioRoom-{roomId}");
-            // Notify existing participants about the new user
             await Clients.GroupExcept($"AudioRoom-{roomId}", new[] { Context.ConnectionId })
-                .participantLeft(Context.ConnectionId);
+                .participantLeft(new VoipParticipantDto() { ParticipantId = Context.ConnectionId });
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
         public async Task SendOfferToParticipant(string token, string participantId, VoipOffer offer)
         {
+            var user = await MainManager.GetUser(token);
+            if (user == null) return;
+            offer.ParticipantName = user.username;
             await Clients.Client(participantId).receiveOfferFromParticipant(Context.ConnectionId, offer);
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
         public async Task SendAnswerToParticipant(string token, string participantId, VoipOffer answer)
         {
+            var user = await MainManager.GetUser(token);
+            if (user == null) return;
+            answer.ParticipantName = user.username;
             await Clients.Client(participantId).receiveAnswerFromParticipant(Context.ConnectionId, answer);
         }
 

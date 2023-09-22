@@ -1,4 +1,5 @@
-﻿using iText.Layout.Splitting;
+﻿#nullable enable
+using iText.Layout.Splitting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -85,6 +86,16 @@ namespace SyncStreamAPI.ServerData
             RoomManager = new RoomManager(ServiceProvider, Rooms);
             GeneralManager.ReadSettings(Configuration);
             GeneralManager.AddDefaultRooms();
+        }
+        
+        public static async Task<DbUser?> GetUser(string token)
+        {
+            using var scope = ServiceProvider.CreateScope();
+            var postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
+            var dbUser = await postgres.Users
+                .Include(x => x.RememberTokens)
+                .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
+            return dbUser;
         }
 
         public async Task SendDefaultDialog(string group, string message, Enums.AlertType alertType, string header = "")
