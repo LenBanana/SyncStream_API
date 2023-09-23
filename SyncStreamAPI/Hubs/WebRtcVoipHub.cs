@@ -58,6 +58,10 @@ namespace SyncStreamAPI.Hubs
         [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
         public async Task SendIceCandidateToParticipant(string token, string participantId, VoipIceCandidate candidate)
         {
+            var user = await MainManager.GetUser(token);
+            if (user == null) return;
+            candidate.ParticipantName = user.username;
+            candidate.ParticipantId = Context.ConnectionId;
             await Clients.Client(participantId).receiveIceCandidateFromParticipant(Context.ConnectionId, candidate);
         }
     }

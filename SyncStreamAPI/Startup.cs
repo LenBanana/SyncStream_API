@@ -38,6 +38,11 @@ namespace SyncStreamAPI
                 MainManager manager = new MainManager(provider);
                 return manager;
             });
+            /*services.AddSingleton(provider =>
+            {
+                WebRtcSfuManager webRtcSfuManager = new WebRtcSfuManager(Configuration, provider);
+                return webRtcSfuManager;
+            });*/
             services.AddDbContext<PostgresContext>(options =>
             {
                 options.UseNpgsql(Configuration.GetConnectionString("SyncStreamDB"));
@@ -86,7 +91,7 @@ namespace SyncStreamAPI
             });
         }
 
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, MainManager manager, IHostApplicationLifetime applicationLifetime, BrowserAutomation? browser)
+        public void Configure(IApplicationBuilder app, IWebHostEnvironment env, MainManager manager, IHostApplicationLifetime applicationLifetime, BrowserAutomation? browser) //, WebRtcSfuManager webRtcSfuManager
         {
             var forwardingOptions = new ForwardedHeadersOptions() { ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.All };
             app.UseForwardedHeaders(forwardingOptions);

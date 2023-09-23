@@ -1,13 +1,15 @@
 ﻿using System.Threading.Tasks;
+using Org.WebRtc;
 using SyncStreamAPI.Models.WebRTC;
 
 namespace SyncStreamAPI.Interfaces;
 
 public partial interface IServerHub
 {
-    Task startSFUStream(string connectionId);
-    Task stopSFUStream(string connectionId);
-    Task joinSFUStream(string connectionId);
-    Task sendAnswerToSFU(WebRtcClientOffer answer);
-    Task sendIceCandidateToSFU(WebRtcIceCandidate iceCandidate);
+    Task receiveOfferFromServer(string senderId, RTCSessionDescription offer);
+    Task receiveAnswerFromServer(string senderId, RTCSessionDescription answer);
+    Task receiveIceCandidateFromServer(string senderId, VoipIceCandidate candidate);
+    Task receiveStatusFromServer(VoipParticipantDto participantId);
+    Task sfuParticipantJoined(VoipParticipantDto participantId);
+    Task sfuParticipantLeft(VoipParticipantDto participantId);
 }

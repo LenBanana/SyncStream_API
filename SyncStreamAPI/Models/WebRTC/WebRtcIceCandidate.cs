@@ -10,6 +10,8 @@ public class WebRtcIceCandidate
 
 public class VoipIceCandidate
 {
+    public string ParticipantId { get; set; }
+    public string ParticipantName { get; set; }
     public string Candidate { get; set; }
     public string SdpMid { get; set; }
     public int? SdpMLineIndex { get; set; }
