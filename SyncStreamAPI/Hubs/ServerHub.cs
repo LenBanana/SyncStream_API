@@ -29,17 +29,17 @@ namespace SyncStreamAPI.Hubs
         IConfiguration Configuration { get; }
 
         readonly MainManager _manager;
-        readonly WebRtcSfuManager _webRtcSfuManager;
+        //readonly WebRtcSfuManager _webRtcSfuManager;
         readonly PostgresContext _postgres;
         readonly GallowGameManager _gallowGameManager;
         readonly BlackjackManager _blackjackManager;
 
         public ServerHub(IConfiguration configuration, MainManager manager, PostgresContext postgres,
-            GallowGameManager gallowGameManager, BlackjackManager blackjackManager, WebRtcSfuManager webRtcSfuManager)
+            GallowGameManager gallowGameManager, BlackjackManager blackjackManager) //WebRtcSfuManager webRtcSfuManager
         {
             Configuration = configuration;
             _manager = manager;
-            _webRtcSfuManager = webRtcSfuManager;
+            //_webRtcSfuManager = webRtcSfuManager;
             _postgres = postgres;
             _gallowGameManager = gallowGameManager;
             _blackjackManager = blackjackManager;
