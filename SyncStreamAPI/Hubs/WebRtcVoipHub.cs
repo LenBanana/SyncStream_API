@@ -32,6 +32,7 @@ namespace SyncStreamAPI.Hubs
         [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
         public async Task SendStatusToParticipant(string token, VoipParticipantDto participantDto, string roomId)
         {
+            participantDto.ParticipantId = Context.ConnectionId;
             await Clients.GroupExcept($"AudioRoom-{roomId}", new[] { Context.ConnectionId })
                 .receiveStatusFromParticipant(participantDto);
         }
