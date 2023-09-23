@@ -63,12 +63,7 @@ public class WebRtcSfuManager
         peerConnection.OnIceCandidate += (candidate) =>
         {
             if (candidate == null) return;
-            var iceCandidate = new WebRtcIceCandidate()
-            {
-                Candidate = candidate.Candidate.Candidate,
-                SdpMid = candidate.Candidate.SdpMid,
-                SdpMLineIndex = candidate.Candidate.SdpMLineIndex
-            };
+            
         };
         peerConnection.OnNegotiationNeeded += () =>
         {

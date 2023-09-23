@@ -1,5 +1,6 @@
 ﻿using SyncStreamAPI.Models.WebRTC;
 using System.Threading.Tasks;
+using Org.WebRtc;
 
 namespace SyncStreamAPI.Interfaces
 {
@@ -11,6 +12,6 @@ namespace SyncStreamAPI.Interfaces
         Task stopWebRtcStream(string connectionId);
         Task joinWebRtcStream(string connectionId);
         Task sendClientAnswer(WebRtcClientOffer answer);
-        Task sendIceCandidate(WebRtcIceCandidate iceCandidate);
+        Task sendIceCandidate(object iceCandidate);
     }
 }

@@ -55,10 +55,4 @@ public partial class ServerHub
         answer.ParticipantName = user.username;
         await Clients.Client(participantId).receiveAnswerFromParticipant(Context.ConnectionId, answer);
     }
-
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task SendIceCandidateToSFUParticipant(string token, string participantId, VoipIceCandidate candidate)
-    {
-        await Clients.Client(participantId).receiveIceCandidateFromParticipant(Context.ConnectionId, candidate);
-    }
 }

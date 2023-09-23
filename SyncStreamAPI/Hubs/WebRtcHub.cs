@@ -3,6 +3,7 @@ using SyncStreamAPI.Enums;
 using SyncStreamAPI.Models.WebRTC;
 using SyncStreamAPI.PostgresModels;
 using System.Threading.Tasks;
+using Org.WebRtc;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.ServerData;
 
@@ -64,17 +65,16 @@ namespace SyncStreamAPI.Hubs
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-        public async Task SendIceCandidate(string token, string roomId, WebRtcIceCandidate iceCandidate)
+        public async Task SendIceCandidate(string token, string roomId, object iceCandidate)
         {
             var room = MainManager.GetRoom(roomId);
             if (room == null || room.CurrentStreamer?.Length == 0) return;
             if (room.CurrentStreamer == Context.ConnectionId) return;
-            iceCandidate.ViewerId = Context.ConnectionId;
             await Clients.Client(room.CurrentStreamer).sendIceCandidate(iceCandidate);
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-        public async Task SendIceCandidateToViewer(string token, string connectionId, WebRtcIceCandidate iceCandidate)
+        public async Task SendIceCandidateToViewer(string token, string connectionId, object iceCandidate)
         {
             await Clients.Client(connectionId).sendIceCandidate(iceCandidate);
         }

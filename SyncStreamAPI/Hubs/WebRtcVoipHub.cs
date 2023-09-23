@@ -3,6 +3,7 @@ using SyncStreamAPI.Enums;
 using SyncStreamAPI.Models.WebRTC;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
+using Org.WebRtc;
 using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
 
@@ -56,12 +57,10 @@ namespace SyncStreamAPI.Hubs
         }
 
         [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-        public async Task SendIceCandidateToParticipant(string token, string participantId, VoipIceCandidate candidate)
+        public async Task SendIceCandidateToParticipant(string token, string participantId, object candidate)
         {
             var user = await MainManager.GetUser(token);
             if (user == null) return;
-            candidate.ParticipantName = user.username;
-            candidate.ParticipantId = Context.ConnectionId;
             await Clients.Client(participantId).receiveIceCandidateFromParticipant(Context.ConnectionId, candidate);
         }
     }
