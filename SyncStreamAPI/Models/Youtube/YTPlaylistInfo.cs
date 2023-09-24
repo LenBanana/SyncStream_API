@@ -1,8 +1,8 @@
-﻿using Newtonsoft.Json;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using Newtonsoft.Json;
 
-namespace SyncStreamAPI.Models
+namespace SyncStreamAPI.Models.Youtube
 {
     public static class PlaylistInfoExtension
     {

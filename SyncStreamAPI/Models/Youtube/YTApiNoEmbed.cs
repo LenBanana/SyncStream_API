@@ -1,7 +1,7 @@
-﻿using Newtonsoft.Json;
-using System;
+﻿using System;
+using Newtonsoft.Json;
 
-namespace SyncStreamAPI.Models
+namespace SyncStreamAPI.Models.Youtube
 {
     public class YTApiNoEmbed
     {

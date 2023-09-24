@@ -1,7 +1,7 @@
-﻿using Newtonsoft.Json;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using Newtonsoft.Json;
 
-namespace SyncStreamAPI.Models
+namespace SyncStreamAPI.Models.Youtube
 {
     public class YtVideoInfo
     {

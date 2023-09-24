@@ -15,6 +15,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
 using SyncStreamAPI.Models.WebRTC;
+using SyncStreamAPI.Models.Youtube;
 using YoutubeDLSharp;
 
 namespace SyncStreamAPI.Helper
@@ -61,11 +62,6 @@ namespace SyncStreamAPI.Helper
         public static string LoggedInGroupName { get; } = "approved";
         public static string BottedInGroupName { get; } = "dreckbots";
         public static string AdminGroupName { get; } = "admin";
-
-        //FFMpeg
-        public static string DefaultAudioFormat { get; } = ".mp3";
-
-        public static string DefaultAudioMimeType { get; } = "audio/mpeg";
 
         //Task timeout (ms)
         public static int FFmpegTimeout { get; } = 5000;
@@ -258,7 +254,7 @@ namespace SyncStreamAPI.Helper
                 string key = section.Value;
                 string videokey = GetYtVideoKey(url);
                 string Url = "https://www.googleapis.com/youtube/v3/videos?part=snippet&id=" + videokey + "&key=" + key;
-                Ytapi apiResult;
+                YtApi apiResult;
                 HttpWebRequest request = (HttpWebRequest)WebRequest.Create(Url);
                 request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
 
@@ -266,13 +262,13 @@ namespace SyncStreamAPI.Helper
                 using (System.IO.Stream stream = response.GetResponseStream())
                 using (System.IO.StreamReader reader = new System.IO.StreamReader(stream))
                 {
-                    apiResult = new Ytapi().FromJson(await reader.ReadToEndAsync());
+                    apiResult = new YtApi().FromJson(await reader.ReadToEndAsync());
                 }
 
-                if (apiResult != null && apiResult.Items.Count > 0)
+                if (apiResult != null && apiResult.items.Count > 0)
                 {
-                    title = apiResult.Items.First().Snippet.Title + " - " +
-                            apiResult.Items.First().Snippet.ChannelTitle;
+                    title = apiResult.items.First().snippet.title + " - " +
+                            apiResult.items.First().snippet.channelTitle;
                 }
 
                 return title;
@@ -281,37 +277,6 @@ namespace SyncStreamAPI.Helper
             {
                 Console.WriteLine(ex.ToString());
                 return "";
-            }
-        }
-
-        public static async Task<(string title, string source)> ResolveTitle(string url, int maxTries)
-        {
-            try
-            {
-                string title = "";
-                string source = "";
-                int i = 0;
-                while ((title.Length == 0 || title.ToLower().Trim() == "youtube") && i < maxTries)
-                {
-                    source = await HttpClient.GetStringAsync(url);
-                    title = System.Text.RegularExpressions.Regex.Match(source,
-                        @"\<title\b[^>]*\>\s*(?<Title>[\s\S]*?)\</title\>",
-                        System.Text.RegularExpressions.RegexOptions.IgnoreCase).Groups["Title"].Value;
-                    await Task.Delay(50);
-                    i++;
-                }
-
-                if (title.Length == 0)
-                {
-                    title = "External source";
-                }
-
-                return (title, source);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.ToString());
-                return ("External source", "");
             }
         }
     }
