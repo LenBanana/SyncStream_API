@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using SyncStreamAPI.ServerData.Helper;
 
 namespace SyncStreamAPI.Hubs
 {
@@ -97,7 +98,7 @@ namespace SyncStreamAPI.Hubs
             }
 
             await Clients.Caller.hostupdate(newMember.ishost);
-            var type = await SendPlayerType(room);
+            var type = await RoomManager.SendPlayerType(room);
             if (type != PlayerType.Nothing)
             {
                 await Clients.Caller.videoupdate(mainServer.currentVideo);

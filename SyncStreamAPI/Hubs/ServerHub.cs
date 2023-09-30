@@ -20,6 +20,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using SyncStreamAPI.Enums.Games;
+using SyncStreamAPI.ServerData.Helper;
 
 namespace SyncStreamAPI.Hubs
 {
@@ -29,6 +30,7 @@ namespace SyncStreamAPI.Hubs
         IConfiguration Configuration { get; }
 
         readonly MainManager _manager;
+
         //readonly WebRtcSfuManager _webRtcSfuManager;
         readonly PostgresContext _postgres;
         readonly GallowGameManager _gallowGameManager;
@@ -196,216 +198,11 @@ namespace SyncStreamAPI.Hubs
                 });
                 return;
             }
-
-            var vidEnded = (room.server.currentVideo.url.Length == 0 || room.server.currentVideo.ended == true);
-            if (room.server.playlist?.Select(x => x.url).Contains(key.url) == false)
+            var result = await RoomManager.AddVideo(key, UniqueId);
+            if (!string.IsNullOrEmpty(result))
             {
-                room.server.currentVideo = key;
-                var playerType = await SendPlayerType(room, vidEnded);
-                switch (playerType)
-                {
-                    case PlayerType.Live:
-                    {
-                        if (key.title.Length == 0)
-                        {
-                            key.title = key.url.Split('=').Last().FirstCharToUpper();
-                        }
-
-                        break;
-                    }
-                    case PlayerType.External:
-                    {
-                        if (key.title.Length == 0)
-                        {
-                            key.title = "External Source";
-                        }
-
-                        break;
-                    }
-                    case PlayerType.Vimeo:
-                    {
-                        var vimeo = Vimeo.FromUrl(key.url);
-                        if (vimeo != null)
-                        {
-                            key.title = vimeo?.Title + (vimeo?.UserName == null ? "" : " - " + vimeo.UserName);
-                        }
-
-                        break;
-                    }
-                    case PlayerType.YouTube when key.url.Split('?')[0].ToLower().EndsWith("playlist"):
-                        await AddPlaylist(key.url, UniqueId);
-                        return;
-                    case PlayerType.YouTube:
-                    {
-                        if (key.url.Contains("shorts"))
-                        {
-                            key.url = $"https://www.youtube.com/watch?v={key.url.Split('/').Last()}";
-                        }
-
-                        if (string.IsNullOrEmpty(key.title))
-                        {
-                            key.title = await General.ResolveUrl(key.url, Configuration);
-                        }
-
-                        break;
-                    }
-                    case PlayerType.Twitch:
-                    {
-                        var videoRegExString = @"\/videos\/(\d+)";
-                        var videoRegEx = new Regex(videoRegExString);
-                        var videoMatches = videoRegEx.Matches(key.url);
-                        if (videoMatches != null && videoMatches.Count > 0)
-                        {
-                            key.url = videoMatches[0]?.Groups[1]?.Value;
-                            key.title = $"Twitch Video - {key.url}";
-                        }
-                        else
-                        {
-                            var titleRegExString = @"twitch.tv\/(\w+)\/?";
-                            var titleRegEx = new Regex(titleRegExString);
-                            var titleMatches = titleRegEx.Matches(key.url);
-                            if (titleMatches != null && titleMatches.Count > 0)
-                            {
-                                key.title = titleMatches[0]?.Groups[1]?.Value;
-                            }
-                        }
-
-                        break;
-                    }
-                    case PlayerType.Nothing:
-                        await Clients.Caller.dialog(new Dialog(AlertType.Warning)
-                            { Header = "Denied", Question = "Given input is not allowed", Answer1 = "Ok" });
-                        return;
-                }
-
-                room.server.playlist.Add(key);
-            }
-
-            if (vidEnded)
-            {
-                room.server.currentVideo = key;
-                await Clients.Group(UniqueId).videoupdate(key);
-            }
-
-            await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
-            await Clients.All.getrooms(MainManager.GetRooms());
-        }
-
-        public async Task<PlayerType> SendPlayerType(Room room, bool sendToUsers = true,
-            PlayerType type = PlayerType.Nothing)
-        {
-            var uniqueId = room.uniqueId;
-            var key = room.server.currentVideo;
-            var result = PlayerType.Nothing;
-            if (room.CurrentStreamer != null)
-            {
-                if (sendToUsers)
-                {
-                    await Clients.Group(uniqueId).playertype(PlayerType.WebRtc);
-                }
-
-                return PlayerType.WebRtc;
-            }
-
-            if (type != PlayerType.Nothing)
-            {
-                if (sendToUsers)
-                {
-                    await Clients.Group(uniqueId).playertype(type);
-                }
-
-                return type;
-            }
-
-            if (string.IsNullOrEmpty(key.url) || key.ended)
-            {
-                if (sendToUsers)
-                {
-                    await Clients.Group(uniqueId).playertype(PlayerType.Nothing);
-                }
-
-                return result;
-            }
-
-            var validUri = Uri.TryCreate(key.url, UriKind.Absolute, out var uriResult) &&
-                           (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
-            if (!validUri)
-            {
-                if (sendToUsers)
-                {
-                    await Clients.Group(uniqueId).playertype(PlayerType.Nothing);
-                }
-
-                return result;
-            }
-
-            var ytRegEx = @"^(https?\:\/\/)?((www\.)?youtube\.com|youtu\.be)\/.+$";
-            var twitchRegEx = @"^(https?\:\/\/)?((www\.)?twitch\.tv)\/.+$";
-            var vimeoRegEx = @"^(https?\:\/\/)?((www\.)?vimeo\.com)\/.+$";
-            var ytRegex = new Regex(ytRegEx);
-            var twitchRegex = new Regex(twitchRegEx);
-            var vimeoRegex = new Regex(vimeoRegEx);
-            if (key.url.ToLower().Contains("//live.drecktu.be/") || key.url.StartsWith("rtmp") ||
-                key.url.Contains("//drecktu.be:8088/live"))
-            {
-                if (sendToUsers)
-                {
-                    await Clients.Group(General.BottedInGroupName).sendBotChannelUpdate(new BotLiveChannelInfo()
-                        { ChannelId = key.url.Split('=').Last(), RoomName = uniqueId });
-                }
-
-                result = PlayerType.Live;
-            }
-            else if (ytRegex.IsMatch(key.url))
-            {
-                result = PlayerType.YouTube;
-            }
-            else if (twitchRegex.IsMatch(key.url))
-            {
-                if (key.url.Contains("/clip/"))
-                {
-                    return PlayerType.Nothing;
-                }
-
-                result = PlayerType.Twitch;
-            }
-            else if (vimeoRegex.IsMatch(key.url))
-            {
-                result = PlayerType.Vimeo;
-            }
-            else
-            {
-                result = PlayerType.External;
-            }
-
-            if (sendToUsers)
-            {
-                await Clients.Group(uniqueId).playertype(result);
-            }
-
-            return result;
-        }
-
-        public async Task AddPlaylist(string url, string UniqueId)
-        {
-            try
-            {
-                var ytdl = General.GetYoutubeDL();
-                var playlistInfo = await ytdl.RunVideoDataFetch(url);
-                if (playlistInfo != null)
-                {
-                    var vids = playlistInfo.Data.Entries.Select(x => new DreckVideo(x.Title, x.Url, false,
-                        TimeSpan.FromSeconds((double)(x.Duration ?? 0d)), "Playlist")).ToList();
-                    vids.ForEach(async x => { await AddVideo(x, UniqueId); });
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.ToString());
-                await Clients.Caller.dialog(new Dialog(AlertType.Danger)
-                {
-                    Header = "Error", Question = "There has been an error trying to add the playlist", Answer1 = "Ok"
-                });
+                await Clients.Caller.dialog(new Dialog(AlertType.Warning)
+                    { Header = "Denied", Question = result, Answer1 = "Ok" });
             }
         }
 
@@ -459,7 +256,7 @@ namespace SyncStreamAPI.Hubs
             {
                 MainServer.currentVideo = room.server.playlist[1];
                 room.server.playlist.RemoveAt(0);
-                await SendPlayerType(room);
+                await RoomManager.SendPlayerType(room);
                 await Clients.Group(UniqueId).videoupdate(MainServer.currentVideo);
                 await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
                 await Clients.All.getrooms(MainManager.GetRooms());

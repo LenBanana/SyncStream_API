@@ -4,6 +4,7 @@ using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.GameModels.Members;
 using System;
 using System.Threading.Tasks;
+using SyncStreamAPI.ServerData.Helper;
 
 namespace SyncStreamAPI.Hubs
 {
@@ -16,7 +17,7 @@ namespace SyncStreamAPI.Hubs
             if (playing && room.GallowGame != null)
             {
                 _gallowGameManager.PlayNewRound(UniqueId);
-                await SendPlayerType(room);
+                await RoomManager.SendPlayerType(room);
             }
             else
             {

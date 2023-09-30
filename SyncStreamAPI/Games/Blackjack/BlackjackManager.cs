@@ -165,8 +165,8 @@ namespace SyncStreamAPI.Games.Blackjack
             var idx = blackjackGames.FindIndex(x => x.RoomId == UniqueId);
             if (idx < 0)
             {
-                Room room = MainManager.GetRoomManager().GetRoom(UniqueId);
-                List<BlackjackMember> bjMember = new List<BlackjackMember>();
+                var room = MainManager.GetRoom(UniqueId);
+                var bjMember = new List<BlackjackMember>();
                 foreach (var member in room.server.members.Take(5).ToList())
                 {
                     bjMember.Add(member.ToBlackjackMember(this));
