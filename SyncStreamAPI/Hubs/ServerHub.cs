@@ -19,6 +19,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using SyncStreamAPI.Annotations;
 using SyncStreamAPI.Enums.Games;
 using SyncStreamAPI.ServerData.Helper;
 
@@ -362,11 +363,14 @@ namespace SyncStreamAPI.Hubs
             await Clients.All.getrooms(MainManager.GetRooms());
         }
 
+        [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token,
+            TokenPosition = 1)]
         public async Task AddRoom(Room room, string token)
         {
             var rooms = MainManager.GetRooms();
             var roomCount = 0;
-            while (rooms?.Any(x => x.uniqueId == room.uniqueId) == true)
+            var enumerable = rooms as Room[] ?? rooms.ToArray();
+            while (enumerable?.Any(x => x.uniqueId == room.uniqueId) == true)
             {
                 room.uniqueId = room.uniqueId + roomCount++;
             }
@@ -374,18 +378,6 @@ namespace SyncStreamAPI.Hubs
             RoomManager.AddRoom(room);
             if (!room.deletable)
             {
-                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x =>
-                    x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
-                var tokenObj = dbUser?.RememberTokens.SingleOrDefault(x => x.Token == token);
-                if (tokenObj == null || dbUser == null || dbUser.userprivileges < UserPrivileges.Administrator)
-                {
-                    if (dbUser == null) return;
-                    const string errorMessage = "You do not have permissions to make a room permanent";
-                    await Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertType.Danger)
-                        { Question = errorMessage, Answer1 = "Ok" });
-                    return;
-                }
-
                 var dbRoom = new DbRoom(room);
                 await _postgres.Rooms.AddAsync(dbRoom);
                 await _postgres.SaveChangesAsync();
@@ -407,6 +399,8 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
+        [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token,
+            TokenPosition = 1)]
         public async Task RemoveRoom(string uniqueId, string token)
         {
             var room = GetRoom(uniqueId);
@@ -415,28 +409,15 @@ namespace SyncStreamAPI.Hubs
                 return;
             }
 
-            var dbRoom = _postgres.Rooms.FirstOrDefault(x => x.uniqueId == uniqueId);
-            if (dbRoom == null)
-            {
-                return;
-            }
-
-            var dbUser = _postgres.Users?.Include(x => x.RememberTokens)
-                .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == token) == true
-                                     && x.userprivileges >= UserPrivileges.Administrator);
-
-            if (dbUser == null)
-            {
-                const string errorMessage = "You do not have permissions to delete this room";
-                await Clients.Caller.dialog(new Dialog(Enums.AlertType.Danger, errorMessage));
-                return;
-            }
-
-            _postgres.Rooms.Remove(dbRoom);
-            await _postgres.SaveChangesAsync();
-
             if (RoomManager.RemoveRoom(uniqueId))
             {
+                var dbRoom = _postgres.Rooms.FirstOrDefault(x => x.uniqueId == uniqueId);
+                if (dbRoom != null)
+                {
+                    _postgres.Rooms.Remove(dbRoom);
+                    await _postgres.SaveChangesAsync();
+                }
+
                 await Clients.All.getrooms(MainManager.GetRooms());
             }
             else
