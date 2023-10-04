@@ -18,20 +18,57 @@ namespace SyncStreamAPI.ServerData.Helper
 {
     public class RoomManager
     {
-        static IServiceProvider _serviceProvider { get; set; }
-        public static BlockingCollection<Room> Rooms { get; set; } = new BlockingCollection<Room>();
+        static IServiceProvider ServiceProvider { get; set; }
+        private static BlockingCollection<Room> Rooms { get; set; } = new BlockingCollection<Room>();
+        private static readonly object LockObj = new object();
         public RoomManager(IServiceProvider serviceProvider, BlockingCollection<Room> rooms)
         {
-            _serviceProvider = serviceProvider;
+            ServiceProvider = serviceProvider;
             Rooms = rooms;
         }
         public static Room? GetRoom(string UniqueId)
         {
-            return Rooms.FirstOrDefault(x => x.uniqueId == UniqueId);
+            return GetRooms().FirstOrDefault(x => x.uniqueId == UniqueId);
         }
-        public BlockingCollection<Room> GetRooms()
+        public static void AddRoom(Room room)
         {
-            return Rooms;
+            Rooms.Add(room);
+        }
+
+        public static bool RemoveRoom(string uniqueId)
+        {
+            lock (LockObj)
+            {
+                var tempStorage = new List<Room>();
+                Room room;
+
+                // Dequeue rooms until we find the one to remove or the collection is empty
+                while (Rooms.TryTake(out room))
+                {
+                    if (room.uniqueId == uniqueId)
+                    {
+                        // Re-enqueue the other rooms
+                        foreach (var r in tempStorage)
+                        {
+                            Rooms.Add(r);
+                        }
+                        return true; // Room found and removed
+                    }
+                    tempStorage.Add(room);
+                }
+
+                // If we reach here, the room wasn't found. Re-enqueue all rooms.
+                foreach (var r in tempStorage)
+                {
+                    Rooms.Add(r);
+                }
+                return false; // Room not found
+            }
+        }
+
+        public static IEnumerable<Room> GetRooms()
+        {
+            return Rooms.ToList();
         }
 
         public void AddToMemberCheck(Member member)
@@ -44,7 +81,7 @@ namespace SyncStreamAPI.ServerData.Helper
             await KickMember(e);
         }
 
-        public async Task KickMember(Member e)
+        private async Task KickMember(Member e)
         {
             if (e != null)
             {
@@ -60,20 +97,20 @@ namespace SyncStreamAPI.ServerData.Helper
                         }
 
                         room.server.members.Remove(e);
-                        using (var scope = _serviceProvider.CreateScope())
+                        using (var scope = ServiceProvider.CreateScope())
                         {
-                            var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+                            var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
                             if (room.server.members.Count > 0)
                             {
                                 var game = room.GallowGame;
                                 if (e.ishost)
                                 {
                                     room.server.members[0].ishost = true;
-                                    await _hub.Clients.Client(room.server.members[0].ConnectionId).hostupdate(true);
+                                    await hub.Clients.Client(room.server.members[0].ConnectionId).hostupdate(true);
                                 }
                             }
-                            await _hub.Clients.Group(room.uniqueId).userupdate(room.server.members?.Select(x => x.ToDTO()).ToList());
-                            await _hub.Clients.All.getrooms(GetRooms());
+                            await hub.Clients.Group(room.uniqueId).userupdate(room.server.members?.Select(x => x.ToDTO()).ToList());
+                            await hub.Clients.All.getrooms(GetRooms());
                         }
                     }
                 }
@@ -86,11 +123,9 @@ namespace SyncStreamAPI.ServerData.Helper
 
         public async void AddMember(int id, string connectionId)
         {
-            using (var scope = _serviceProvider.CreateScope())
-            {
-                var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                await _hub.Groups.AddToGroupAsync(connectionId, id.ToString());
-            }
+            using var scope = ServiceProvider.CreateScope();
+            var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+            await hub.Groups.AddToGroupAsync(connectionId, id.ToString());
         }
 
         public static async Task<string> AddVideo(DreckVideo key, string UniqueId)
@@ -100,8 +135,8 @@ namespace SyncStreamAPI.ServerData.Helper
             {
                 return "Room not found";
             }
-            using var scope = _serviceProvider.CreateScope();
-            var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+            using var scope = ServiceProvider.CreateScope();
+            var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
             var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
             var vidEnded = (room.server.currentVideo.url.Length == 0 || room.server.currentVideo.ended == true);
             if (room.server.playlist?.Select(x => x.url).Contains(key.url) == false)
@@ -188,11 +223,11 @@ namespace SyncStreamAPI.ServerData.Helper
             if (vidEnded)
             {
                 room.server.currentVideo = key;
-                await _hub.Clients.Group(UniqueId).videoupdate(key);
+                await hub.Clients.Group(UniqueId).videoupdate(key);
             }
 
-            await _hub.Clients.Group(UniqueId).playlistupdate(room.server.playlist);
-            await _hub.Clients.All.getrooms(MainManager.GetRooms());
+            await hub.Clients.Group(UniqueId).playlistupdate(room.server.playlist);
+            await hub.Clients.All.getrooms(MainManager.GetRooms());
             return "";
         }
         
@@ -201,8 +236,8 @@ namespace SyncStreamAPI.ServerData.Helper
         public static async Task<PlayerType> SendPlayerType(Room room, bool sendToUsers = true,
             PlayerType type = PlayerType.Nothing)
         {
-            using var scope = _serviceProvider.CreateScope();
-            var _hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+            using var scope = ServiceProvider.CreateScope();
+            var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
             var uniqueId = room.uniqueId;
             var key = room.server.currentVideo;
             var result = PlayerType.Nothing;
@@ -210,7 +245,7 @@ namespace SyncStreamAPI.ServerData.Helper
             {
                 if (sendToUsers)
                 {
-                    await _hub.Clients.Group(uniqueId).playertype(PlayerType.WebRtc);
+                    await hub.Clients.Group(uniqueId).playertype(PlayerType.WebRtc);
                 }
 
                 return PlayerType.WebRtc;
@@ -220,7 +255,7 @@ namespace SyncStreamAPI.ServerData.Helper
             {
                 if (sendToUsers)
                 {
-                    await _hub.Clients.Group(uniqueId).playertype(type);
+                    await hub.Clients.Group(uniqueId).playertype(type);
                 }
 
                 return type;
@@ -230,7 +265,7 @@ namespace SyncStreamAPI.ServerData.Helper
             {
                 if (sendToUsers)
                 {
-                    await _hub.Clients.Group(uniqueId).playertype(PlayerType.Nothing);
+                    await hub.Clients.Group(uniqueId).playertype(PlayerType.Nothing);
                 }
 
                 return result;
@@ -242,7 +277,7 @@ namespace SyncStreamAPI.ServerData.Helper
             {
                 if (sendToUsers)
                 {
-                    await _hub.Clients.Group(uniqueId).playertype(PlayerType.Nothing);
+                    await hub.Clients.Group(uniqueId).playertype(PlayerType.Nothing);
                 }
 
                 return result;
@@ -259,7 +294,7 @@ namespace SyncStreamAPI.ServerData.Helper
             {
                 if (sendToUsers)
                 {
-                    await _hub.Clients.Group(General.BottedInGroupName).sendBotChannelUpdate(new BotLiveChannelInfo()
+                    await hub.Clients.Group(General.BottedInGroupName).sendBotChannelUpdate(new BotLiveChannelInfo()
                         { ChannelId = key.url.Split('=').Last(), RoomName = uniqueId });
                 }
 
@@ -289,7 +324,7 @@ namespace SyncStreamAPI.ServerData.Helper
 
             if (sendToUsers)
             {
-                await _hub.Clients.Group(uniqueId).playertype(result);
+                await hub.Clients.Group(uniqueId).playertype(result);
             }
 
             return result;

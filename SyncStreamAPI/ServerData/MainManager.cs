@@ -42,7 +42,7 @@ namespace SyncStreamAPI.ServerData
         public static GeneralManager GetGeneralManager() => GeneralManager;
         public static RoomManager GetRoomManager() => RoomManager;
         public static Room? GetRoom(string UniqueId) => RoomManager.GetRoom(UniqueId);
-        public static BlockingCollection<Room> GetRooms() => RoomManager.GetRooms();
+        public static IEnumerable<Room> GetRooms() => RoomManager.GetRooms();
         public BlockingCollection<LiveUser> LiveUsers { get; set; } = new BlockingCollection<LiveUser>();
 
         public Dictionary<WebClient, DownloadClientValue> userWebDownloads { get; set; } =

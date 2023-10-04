@@ -134,26 +134,24 @@ namespace SyncStreamAPI.Hubs
 
         public bool CheckPrivileges(Room room, int minPriv = 1)
         {
-            if (room.isPrivileged)
+            if (!room.isPrivileged) return true;
+            var member = room.server.members.FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
+            if (member != null)
             {
-                var member = room.server.members.FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
-                if (member != null)
+                if (member.ishost)
                 {
-                    if (member.ishost)
-                    {
-                        return true;
-                    }
-
-                    var user = _postgres.Users.FirstOrDefault(x => x.username == member.username);
-                    if (user == null || user.userprivileges < (UserPrivileges)minPriv)
-                    {
-                        return false;
-                    }
+                    return true;
                 }
-                else
+
+                var user = _postgres.Users.FirstOrDefault(x => x.username == member.username);
+                if (user == null || user.userprivileges < (UserPrivileges)minPriv)
                 {
                     return false;
                 }
+            }
+            else
+            {
+                return false;
             }
 
             return true;
@@ -166,14 +164,9 @@ namespace SyncStreamAPI.Hubs
 
         private Room? GetRoom(string UniqueId)
         {
-            BlockingCollection<Room> Rooms = MainManager.GetRooms();
-            Room? room = Rooms.FirstOrDefault(x => x.uniqueId == UniqueId);
-            if (room == null)
-            {
-                return null;
-            }
-
-            return room;
+            var rooms = MainManager.GetRooms();
+            var room = rooms.FirstOrDefault(x => x.uniqueId == UniqueId);
+            return room ?? null;
         }
 
         public async Task GetRooms()
@@ -198,6 +191,7 @@ namespace SyncStreamAPI.Hubs
                 });
                 return;
             }
+
             var result = await RoomManager.AddVideo(key, UniqueId);
             if (!string.IsNullOrEmpty(result))
             {
@@ -208,7 +202,7 @@ namespace SyncStreamAPI.Hubs
 
         public async Task RemoveVideo(string key, string UniqueId)
         {
-            Room? room = GetRoom(UniqueId);
+            var room = GetRoom(UniqueId);
             if (room == null)
             {
                 return;
@@ -224,7 +218,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             }
 
-            int idx = room.server.playlist.FindIndex(x => x.url == key);
+            var idx = room.server.playlist.FindIndex(x => x.url == key);
             if (idx != -1)
             {
                 room.server.playlist.RemoveAt(idx);
@@ -235,7 +229,7 @@ namespace SyncStreamAPI.Hubs
 
         public async Task NextVideo(string UniqueId)
         {
-            Room? room = GetRoom(UniqueId);
+            var room = GetRoom(UniqueId);
             if (room == null)
             {
                 return;
@@ -251,33 +245,33 @@ namespace SyncStreamAPI.Hubs
                 return;
             }
 
-            Server MainServer = room.server;
-            if (room.server.playlist.Count > 1)
+            var mainServer = room.server;
+            switch (room.server.playlist.Count)
             {
-                MainServer.currentVideo = room.server.playlist[1];
-                room.server.playlist.RemoveAt(0);
-                await RoomManager.SendPlayerType(room);
-                await Clients.Group(UniqueId).videoupdate(MainServer.currentVideo);
-                await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
-                await Clients.All.getrooms(MainManager.GetRooms());
-                return;
-            }
-            else if (room.server.playlist.Count == 1)
-            {
-                MainServer.currentVideo.ended = true;
-                room.server.playlist.RemoveAt(0);
-                room.server.isplaying = false;
-                await Clients.Group(UniqueId).isplayingupdate(room.server.isplaying);
-                await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
-                await Clients.Group(UniqueId).sendserver(room.server);
-                await Clients.Group(UniqueId).playertype(PlayerType.Nothing);
-                await Clients.All.getrooms(MainManager.GetRooms());
+                case > 1:
+                    mainServer.currentVideo = room.server.playlist[1];
+                    room.server.playlist.RemoveAt(0);
+                    await RoomManager.SendPlayerType(room);
+                    await Clients.Group(UniqueId).videoupdate(mainServer.currentVideo);
+                    await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
+                    await Clients.All.getrooms(MainManager.GetRooms());
+                    return;
+                case 1:
+                    mainServer.currentVideo.ended = true;
+                    room.server.playlist.RemoveAt(0);
+                    room.server.isplaying = false;
+                    await Clients.Group(UniqueId).isplayingupdate(room.server.isplaying);
+                    await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
+                    await Clients.Group(UniqueId).sendserver(room.server);
+                    await Clients.Group(UniqueId).playertype(PlayerType.Nothing);
+                    await Clients.All.getrooms(MainManager.GetRooms());
+                    break;
             }
         }
 
         public async Task PlayVideo(string key, string UniqueId)
         {
-            Room? room = GetRoom(UniqueId);
+            var room = GetRoom(UniqueId);
             if (room == null)
             {
                 return;
@@ -293,16 +287,16 @@ namespace SyncStreamAPI.Hubs
                 return;
             }
 
-            Server MainServer = room.server;
-            int idx = MainServer.playlist.FindIndex(x => x.url == key);
+            var mainServer = room.server;
+            var idx = mainServer.playlist.FindIndex(x => x.url == key);
             if (idx != -1)
             {
-                DreckVideo tempUrl = room.server.playlist[idx];
+                var tempUrl = room.server.playlist[idx];
                 room.server.playlist.RemoveAt(idx);
                 room.server.playlist.RemoveAt(0);
                 room.server.playlist.Insert(0, tempUrl);
-                MainServer.currentVideo = room.server.playlist[0];
-                await Clients.Group(UniqueId).videoupdate(MainServer.currentVideo);
+                mainServer.currentVideo = room.server.playlist[0];
+                await Clients.Group(UniqueId).videoupdate(mainServer.currentVideo);
                 await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
                 await Clients.All.getrooms(MainManager.GetRooms());
                 return;
@@ -311,7 +305,7 @@ namespace SyncStreamAPI.Hubs
 
         public async Task MoveVideo(int fromIndex, int toIndex, string UniqueId)
         {
-            Room? room = GetRoom(UniqueId);
+            var room = GetRoom(UniqueId);
             if (room == null)
             {
                 return;
@@ -327,7 +321,7 @@ namespace SyncStreamAPI.Hubs
                 return;
             }
 
-            DreckVideo vid = room.server.playlist[fromIndex];
+            var vid = room.server.playlist[fromIndex];
             room.server.playlist.RemoveAt(fromIndex);
             room.server.playlist.Insert(toIndex, vid);
             await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
@@ -335,7 +329,7 @@ namespace SyncStreamAPI.Hubs
 
         public async Task SetTime(double time, string UniqueId)
         {
-            Room? room = GetRoom(UniqueId);
+            var room = GetRoom(UniqueId);
             if (room == null)
             {
                 return;
@@ -346,16 +340,13 @@ namespace SyncStreamAPI.Hubs
                 return;
             }
 
-            //if (room.server.currentVideo.url.Contains("twitch.tv"))
-            //    await Clients.Group(UniqueId).twitchTimeUpdate(time);
-            //else
             await Clients.Group(UniqueId).timeupdate(time);
             room.server.currenttime = time;
         }
 
         public async Task PlayPause(bool isplaying, string UniqueId)
         {
-            Room? room = GetRoom(UniqueId);
+            var room = GetRoom(UniqueId);
             if (room == null)
             {
                 return;
@@ -367,23 +358,20 @@ namespace SyncStreamAPI.Hubs
             }
 
             room.server.isplaying = isplaying;
-            //if (room.server.currentVideo.url.Contains("twitch.tv"))
-            //    await Clients.Group(UniqueId).twitchPlaying(isplaying);
-            //else
             await Clients.Group(UniqueId).isplayingupdate(isplaying);
             await Clients.All.getrooms(MainManager.GetRooms());
         }
 
         public async Task AddRoom(Room room, string token)
         {
-            var Rooms = MainManager.GetRooms();
-            int RoomCount = 0;
-            while (Rooms?.Any(x => x.uniqueId == room.uniqueId) == true)
+            var rooms = MainManager.GetRooms();
+            var roomCount = 0;
+            while (rooms?.Any(x => x.uniqueId == room.uniqueId) == true)
             {
-                room.uniqueId = room.uniqueId + RoomCount++;
+                room.uniqueId = room.uniqueId + roomCount++;
             }
 
-            Rooms?.Add(room);
+            RoomManager.AddRoom(room);
             if (!room.deletable)
             {
                 var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x =>
@@ -391,19 +379,15 @@ namespace SyncStreamAPI.Hubs
                 var tokenObj = dbUser?.RememberTokens.SingleOrDefault(x => x.Token == token);
                 if (tokenObj == null || dbUser == null || dbUser.userprivileges < UserPrivileges.Administrator)
                 {
-                    if (dbUser != null)
-                    {
-                        var errorMessage = "You do not have permissions to make a room permanent";
-                        await Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertType.Danger)
-                            { Question = errorMessage, Answer1 = "Ok" });
-                        return;
-                    }
-
+                    if (dbUser == null) return;
+                    const string errorMessage = "You do not have permissions to make a room permanent";
+                    await Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertType.Danger)
+                        { Question = errorMessage, Answer1 = "Ok" });
                     return;
                 }
 
-                DbRoom dbRoom = new DbRoom(room);
-                var roomEntity = await _postgres.Rooms.AddAsync(dbRoom);
+                var dbRoom = new DbRoom(room);
+                await _postgres.Rooms.AddAsync(dbRoom);
                 await _postgres.SaveChangesAsync();
             }
 
@@ -412,8 +396,8 @@ namespace SyncStreamAPI.Hubs
 
         public async Task ChangeRoom(Room room)
         {
-            var Rooms = MainManager.GetRooms();
-            var changeRoom = Rooms.FirstOrDefault(x => x.uniqueId == room.uniqueId);
+            var rooms = MainManager.GetRooms();
+            var changeRoom = rooms.FirstOrDefault(x => x.uniqueId == room.uniqueId);
             if (changeRoom != null)
             {
                 changeRoom.name = room.name;
@@ -423,39 +407,43 @@ namespace SyncStreamAPI.Hubs
             }
         }
 
-        public async Task RemoveRoom(string UniqueId, string token)
+        public async Task RemoveRoom(string uniqueId, string token)
         {
-            Room? room = GetRoom(UniqueId);
+            var room = GetRoom(uniqueId);
             if (room == null || room.isPrivileged)
             {
                 return;
             }
 
-            var dbRoom = _postgres.Rooms.FirstOrDefault(x => x.uniqueId == UniqueId);
-            if (dbRoom != null)
+            var dbRoom = _postgres.Rooms.FirstOrDefault(x => x.uniqueId == uniqueId);
+            if (dbRoom == null)
             {
-                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x =>
-                    x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
-                var tokenObj = dbUser?.RememberTokens.SingleOrDefault(x => x.Token == token);
-                if (tokenObj == null || dbUser == null || dbUser.userprivileges < UserPrivileges.Administrator)
-                {
-                    if (dbUser != null)
-                    {
-                        var errorMessage = "You do not have permissions to delete this room";
-                        await Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(Enums.AlertType.Danger)
-                            { Question = errorMessage, Answer1 = "Ok" });
-                        return;
-                    }
-
-                    return;
-                }
-
-                _postgres.Rooms.Remove(dbRoom);
-                await _postgres.SaveChangesAsync();
+                return;
             }
 
-            MainManager.GetRooms().TryTake(out room);
-            await Clients.All.getrooms(MainManager.GetRooms());
+            var dbUser = _postgres.Users?.Include(x => x.RememberTokens)
+                .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == token) == true
+                                     && x.userprivileges >= UserPrivileges.Administrator);
+
+            if (dbUser == null)
+            {
+                const string errorMessage = "You do not have permissions to delete this room";
+                await Clients.Caller.dialog(new Dialog(Enums.AlertType.Danger, errorMessage));
+                return;
+            }
+
+            _postgres.Rooms.Remove(dbRoom);
+            await _postgres.SaveChangesAsync();
+
+            if (RoomManager.RemoveRoom(uniqueId))
+            {
+                await Clients.All.getrooms(MainManager.GetRooms());
+            }
+            else
+            {
+                var errorMessage = $"There was an error attempting to remove {room.name}";
+                await Clients.Caller.dialog(new Dialog(Enums.AlertType.Danger, errorMessage));
+            }
         }
 
         public async Task Ping(DateTime date)
