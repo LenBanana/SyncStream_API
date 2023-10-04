@@ -9,16 +9,6 @@ namespace SyncStreamAPI.Helper.FFmpeg
 {
     public class FFmpegCutMedia : FFmpegFunction, IFFmpegFunction
     {
-        public FFmpegCutMedia(string inputPath, string outputPath, DbFile inputFile = null, DbFile outputFile = null) : base(inputPath, outputPath)
-        {
-            InputFile = inputFile;
-            OutputFile = outputFile;
-        }
-
-        public FFmpegCutMedia(string inputPath, string outputPath, IProgress<double> progress) : base(inputPath, outputPath, progress)
-        {
-        }
-
         public FFmpegCutMedia(string inputPath, string outputPath, TimeSpan start, TimeSpan end, IProgress<double> progress, DbFile inputFile = null, DbFile outputFile = null) : base(inputPath, outputPath, start, end, progress)
         {
             InputFile = inputFile;

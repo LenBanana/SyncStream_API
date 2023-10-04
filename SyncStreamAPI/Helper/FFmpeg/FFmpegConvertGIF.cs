@@ -15,10 +15,6 @@ namespace SyncStreamAPI.Helper.FFmpeg
             OutputFile = outputFile;
         }
 
-        public FFmpegConvertGIF(string inputPath, string outputPath, IProgress<double> progress) : base(inputPath, outputPath, progress)
-        {
-        }
-
         public new async Task<string> Execute()
         {
             FileCheck.CheckOverrideFile(OutputPath);

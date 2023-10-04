@@ -300,7 +300,6 @@ namespace SyncStreamAPI.Hubs
                 await Clients.Group(UniqueId).videoupdate(mainServer.currentVideo);
                 await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
                 await Clients.All.getrooms(MainManager.GetRooms());
-                return;
             }
         }
 

@@ -11,9 +11,6 @@ namespace SyncStreamAPI.Helper.FFmpeg
         {
         }
 
-        public FFmpegMediaInfo(string inputPath, string outputPath, IProgress<double> progress) : base(inputPath, outputPath, progress)
-        {
-        }
         public async Task<double?> GetTotalFrames()
         {
             var frames = 0d;
