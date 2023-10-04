@@ -49,7 +49,7 @@ public class ExtensionController : Controller
         if (!string.IsNullOrEmpty(room.password) && string.IsNullOrEmpty(password))
             return Unauthorized("Room is password protected");
         if (room.password != password)
-            return BadRequest("Wrong password");
+            return Unauthorized("Wrong password");
         var user = await _postgres.Users.FirstOrDefaultAsync(x => x.ApiKey == apiKey);
         if (user == null)
             return BadRequest("User not found");
