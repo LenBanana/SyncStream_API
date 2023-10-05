@@ -41,14 +41,15 @@ public class ExtensionController : Controller
 
     [HttpPost("[action]")]
     [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.API)]
-    public async Task<IActionResult> AddVideoByExtension(string apiKey, string roomId, string videoUrl, string password = null)
+    public async Task<IActionResult> AddVideoByExtension(string apiKey, string roomId, string videoUrl,
+        string password = null)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null)
             return BadRequest("Room not found");
         if (!string.IsNullOrEmpty(room.password) && string.IsNullOrEmpty(password))
             return Unauthorized("Room is password protected");
-        if (room.password != password)
+        if (!string.IsNullOrEmpty(room.password) && room.password != password)
             return Unauthorized("Wrong password");
         var user = await _postgres.Users.FirstOrDefaultAsync(x => x.ApiKey == apiKey);
         if (user == null)

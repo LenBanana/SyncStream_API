@@ -70,9 +70,6 @@ namespace ScreenIT.Helper
                                 progress.Report(frame);
                             }
                         }
-#if DEBUG
-                        Debug.WriteLine(e.Data);
-#endif
                         Console.WriteLine(e.Data);
                         // Reset the timer if new output is received
                         timer.Change(General.FFmpegTimeout, Timeout.Infinite);
@@ -89,7 +86,6 @@ namespace ScreenIT.Helper
             }
             process.Kill();
             process.Dispose();
-            process = null;
             return success;
         }
 

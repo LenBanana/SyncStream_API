@@ -37,8 +37,8 @@ namespace SyncStreamAPI.Controllers
             try
             {
                 var dbUser = _postgres.Users?.FirstOrDefault(x => x.StreamToken != null && x.StreamToken == rtmpData.token && x.username.ToLower() == rtmpData.name.ToLower());
-                string Token = dbUser?.StreamToken;
-                if (Token == null || Token.Length == 0 || dbUser.userprivileges < UserPrivileges.Approved)
+                var token = dbUser?.StreamToken;
+                if (string.IsNullOrEmpty(token) || dbUser.userprivileges < UserPrivileges.Approved)
                 {
                     return Unauthorized();
                 }
