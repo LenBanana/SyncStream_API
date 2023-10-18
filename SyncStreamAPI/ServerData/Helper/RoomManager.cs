@@ -283,9 +283,9 @@ namespace SyncStreamAPI.ServerData.Helper
                 return result;
             }
 
-            var ytRegEx = @"^(https?\:\/\/)?((www\.)?youtube\.com|youtu\.be)\/.+$";
-            var twitchRegEx = @"^(https?\:\/\/)?((www\.)?twitch\.tv)\/.+$";
-            var vimeoRegEx = @"^(https?\:\/\/)?((www\.)?vimeo\.com)\/.+$";
+            const string ytRegEx = @"^(https?\:\/\/)?((www\.)?youtube\.com|youtu\.be)\/.+$";
+            const string twitchRegEx = @"^(https?\:\/\/)?((www\.)?twitch\.tv)\/.+$";
+            const string vimeoRegEx = @"^(https?\:\/\/)?((www\.)?vimeo\.com)\/.+$";
             var ytRegex = new Regex(ytRegEx);
             var twitchRegex = new Regex(twitchRegEx);
             var vimeoRegex = new Regex(vimeoRegEx);
@@ -306,11 +306,6 @@ namespace SyncStreamAPI.ServerData.Helper
             }
             else if (twitchRegex.IsMatch(key.url))
             {
-                if (key.url.Contains("/clip/"))
-                {
-                    return PlayerType.Nothing;
-                }
-
                 result = PlayerType.Twitch;
             }
             else if (vimeoRegex.IsMatch(key.url))
