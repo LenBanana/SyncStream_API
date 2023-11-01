@@ -99,9 +99,9 @@ namespace SyncStreamAPI.Hubs
 
             await Clients.Caller.hostupdate(newMember.ishost);
             var type = await RoomManager.SendPlayerType(room);
-            if (type != PlayerType.Nothing)
+            if (type != PlayerType.Nothing && mainServer.playlist.Count > 0)
             {
-                await Clients.Caller.videoupdate(mainServer.currentVideo);
+                await Clients.Caller.videoupdate(mainServer.playlist[0]);
             }
 
             await Clients.Caller.isplayingupdate(mainServer.isplaying);

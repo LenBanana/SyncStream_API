@@ -21,15 +21,18 @@ namespace SyncStreamAPI.ServerData.Helper
         static IServiceProvider ServiceProvider { get; set; }
         private static BlockingCollection<Room> Rooms { get; set; } = new BlockingCollection<Room>();
         private static readonly object LockObj = new object();
+
         public RoomManager(IServiceProvider serviceProvider, BlockingCollection<Room> rooms)
         {
             ServiceProvider = serviceProvider;
             Rooms = rooms;
         }
+
         public static Room? GetRoom(string UniqueId)
         {
             return GetRooms().FirstOrDefault(x => x.uniqueId == UniqueId);
         }
+
         public static void AddRoom(Room room)
         {
             Rooms.Add(room);
@@ -52,8 +55,10 @@ namespace SyncStreamAPI.ServerData.Helper
                         {
                             Rooms.Add(r);
                         }
+
                         return true; // Room found and removed
                     }
+
                     tempStorage.Add(room);
                 }
 
@@ -62,6 +67,7 @@ namespace SyncStreamAPI.ServerData.Helper
                 {
                     Rooms.Add(r);
                 }
+
                 return false; // Room not found
             }
         }
@@ -89,7 +95,7 @@ namespace SyncStreamAPI.ServerData.Helper
                 {
                     var room = GetRoom(e.RoomId);
                     if (room != null)
-                    {                        
+                    {
                         e.Kicked -= Member_Kicked;
                         if (!room.server.members.Contains(e))
                         {
@@ -109,7 +115,9 @@ namespace SyncStreamAPI.ServerData.Helper
                                     await hub.Clients.Client(room.server.members[0].ConnectionId).hostupdate(true);
                                 }
                             }
-                            await hub.Clients.Group(room.uniqueId).userupdate(room.server.members?.Select(x => x.ToDTO()).ToList());
+
+                            await hub.Clients.Group(room.uniqueId)
+                                .userupdate(room.server.members?.Select(x => x.ToDTO()).ToList());
                             await hub.Clients.All.getrooms(GetRooms());
                         }
                     }
@@ -135,6 +143,7 @@ namespace SyncStreamAPI.ServerData.Helper
             {
                 return "Room not found";
             }
+
             using var scope = ServiceProvider.CreateScope();
             var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
             var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
@@ -192,15 +201,24 @@ namespace SyncStreamAPI.ServerData.Helper
                     }
                     case PlayerType.Twitch:
                     {
-                        const string videoRegExString = @"\/videos\/(\d+)";
-                        var videoRegEx = new Regex(videoRegExString);
-                        var videoMatches = videoRegEx.Matches(key.url);
-                        if (videoMatches.Count > 0)
+                        var urlPatterns = new (string pattern, string titlePrefix)[] 
                         {
-                            key.url = videoMatches[0]?.Groups[1]?.Value;
-                            key.title = $"Twitch Video - {key.url}";
+                            (@"\/videos\/(\d+)", "Twitch Video - "),
+                            (@"clips\.twitch\.tv\/([\w\-]+)", "Twitch Clip - "),
+                        };
+
+                        foreach (var (pattern, titlePrefix) in urlPatterns)
+                        {
+                            var regex = new Regex(pattern);
+                            var matches = regex.Matches(key.url);
+
+                            if (matches.Count <= 0) continue;
+                            key.url = key.url;
+                            key.title = $"{titlePrefix}{key.url}";
+                            break;
                         }
-                        else
+
+                        if (string.IsNullOrEmpty(key.title))
                         {
                             const string titleRegExString = @"twitch.tv\/(\w+)\/?";
                             var titleRegEx = new Regex(titleRegExString);
@@ -210,7 +228,6 @@ namespace SyncStreamAPI.ServerData.Helper
                                 key.title = titleMatches[0]?.Groups[1]?.Value;
                             }
                         }
-
                         break;
                     }
                     case PlayerType.Nothing:
@@ -230,8 +247,7 @@ namespace SyncStreamAPI.ServerData.Helper
             await hub.Clients.All.getrooms(MainManager.GetRooms());
             return "";
         }
-        
-        
+
 
         public static async Task<PlayerType> SendPlayerType(Room room, bool sendToUsers = true,
             PlayerType type = PlayerType.Nothing)
@@ -284,7 +300,7 @@ namespace SyncStreamAPI.ServerData.Helper
             }
 
             const string ytRegEx = @"^(https?\:\/\/)?((www\.)?youtube\.com|youtu\.be)\/.+$";
-            const string twitchRegEx = @"^(https?\:\/\/)?((www\.)?twitch\.tv)\/.+$";
+            const string twitchRegEx = @"^(https?\:\/\/)?((www\.)?twitch\.tv|clips\.twitch\.tv)\/.+$";
             const string vimeoRegEx = @"^(https?\:\/\/)?((www\.)?vimeo\.com)\/.+$";
             var ytRegex = new Regex(ytRegEx);
             var twitchRegex = new Regex(twitchRegEx);
@@ -324,8 +340,7 @@ namespace SyncStreamAPI.ServerData.Helper
 
             return result;
         }
-        
-        
+
 
         public static async Task AddPlaylist(string url, string UniqueId)
         {

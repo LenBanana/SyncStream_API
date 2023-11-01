@@ -44,13 +44,13 @@ namespace SyncStreamAPI.Annotations
                                           args[attribute.TokenPosition] is not string))
                 {
                     Console.WriteLine("First argument has to be of type 'string'");
-                    return new StatusCodeResult(StatusCodes.Status400BadRequest);
+                    return Task.FromResult(false);
                 }
 
                 if (attribute != null)
                 {
                     var firstArg = args[attribute.TokenPosition];
-                    return HasPrivileges(attribute, (string)firstArg).Result ? target(args) : new StatusCodeResult(StatusCodes.Status401Unauthorized);
+                    return Task.FromResult(HasPrivileges(attribute, (string)firstArg).Result ? target(args) : false);
                 }
             }
             catch (Exception ex)
@@ -58,7 +58,7 @@ namespace SyncStreamAPI.Annotations
                 Console.WriteLine($"Error in '{name}'");
                 Console.WriteLine(ex.ToString());
             }
-            return null;
+            return Task.FromResult(false);
         }
 
         private async Task<bool> HasPrivileges(PrivilegeAttribute attribute, string authKey)

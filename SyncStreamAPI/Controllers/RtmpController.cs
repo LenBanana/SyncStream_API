@@ -44,7 +44,7 @@ namespace SyncStreamAPI.Controllers
                 }
 
                 var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.id == rtmpData.token);
-                if (liveUser == null)
+                if (liveUser != null) return Ok();
                 {
                     _manager.LiveUsers.Add(new LiveUser() { userName = dbUser.username, id = rtmpData.token });
                     var liveUsers = _manager.LiveUsers;
@@ -65,15 +65,15 @@ namespace SyncStreamAPI.Controllers
         {
             try
             {
-                var dbUser = _postgres.Users?.FirstOrDefault(x => x.StreamToken != null && x.StreamToken == rtmpData.token && x.username.ToLower() == rtmpData.name.ToLower());
-                string Token = dbUser?.StreamToken;
-                if (Token == null || Token.Length == 0 || dbUser.userprivileges < UserPrivileges.Approved)
+                var dbUser = _postgres.Users?.FirstOrDefault(x => x.StreamToken != null && x.StreamToken == rtmpData.token);
+                var token = dbUser?.StreamToken;
+                if (string.IsNullOrEmpty(token) || dbUser.userprivileges < UserPrivileges.Approved)
                 {
                     return Unauthorized();
                 }
 
                 var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.id == rtmpData.token);
-                if (liveUser != null)
+                if (liveUser == null) return Ok();
                 {
                     _manager.LiveUsers.TryTake(out liveUser);
                     var liveUsers = _manager.LiveUsers;
@@ -94,13 +94,13 @@ namespace SyncStreamAPI.Controllers
         {
             try
             {
-                var liveUser = _manager.LiveUsers?.FirstOrDefault(x => x.userName.ToLower() == rtmpData.name.ToLower());
+                var liveUser = _manager.LiveUsers?.FirstOrDefault(x => string.Equals(x.userName, rtmpData.name, StringComparison.CurrentCultureIgnoreCase));
                 if (liveUser == null)
                 {
                     return StatusCode(StatusCodes.Status404NotFound);
                 }
 
-                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == rtmpData.token)).FirstOrDefault();
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens)?.FirstOrDefault(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == rtmpData.token));
                 if (dbUser == null || dbUser.userprivileges < UserPrivileges.Approved)
                 {
                     return Unauthorized();
@@ -123,13 +123,13 @@ namespace SyncStreamAPI.Controllers
         {
             try
             {
-                var liveUser = _manager.LiveUsers?.FirstOrDefault(x => x.userName.ToLower() == rtmpData.name.ToLower());
+                var liveUser = _manager.LiveUsers?.FirstOrDefault(x => string.Equals(x.userName, rtmpData.name, StringComparison.CurrentCultureIgnoreCase));
                 if (liveUser == null)
                 {
                     return StatusCode(StatusCodes.Status404NotFound);
                 }
 
-                var dbUser = _postgres.Users?.Include(x => x.RememberTokens).Where(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == rtmpData.token)).FirstOrDefault();
+                var dbUser = _postgres.Users?.Include(x => x.RememberTokens)?.FirstOrDefault(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == rtmpData.token));
                 if (dbUser == null || dbUser.userprivileges < UserPrivileges.Approved)
                 {
                     return Unauthorized();
