@@ -50,7 +50,7 @@ namespace SyncStreamAPI.Annotations
                 if (attribute != null)
                 {
                     var firstArg = args[attribute.TokenPosition];
-                    return Task.FromResult(HasPrivileges(attribute, (string)firstArg).Result ? target(args) : false);
+                    return HasPrivileges(attribute, (string)firstArg).Result ? target(args) : false;
                 }
             }
             catch (Exception ex)
