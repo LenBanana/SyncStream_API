@@ -116,7 +116,7 @@ namespace SyncStreamAPI.Controllers
                 var data = await ytdl.RunVideoDataFetch(url, overrideOptions: new OptionSet()
                 {
                     ForceIPv4 = true,
-                    NoCookies = true
+                    CookiesFromBrowser = "firefox"
                 });
                 switch (data)
                 {

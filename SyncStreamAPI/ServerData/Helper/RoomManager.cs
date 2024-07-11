@@ -351,7 +351,7 @@ namespace SyncStreamAPI.ServerData.Helper
                 var playlistInfo = await ytdl.RunVideoDataFetch(url, overrideOptions: new OptionSet()
                 {
                     ForceIPv4 = true,
-                    NoCookies = true
+                    CookiesFromBrowser = "firefox",
                 });
                 if (playlistInfo != null)
                 {

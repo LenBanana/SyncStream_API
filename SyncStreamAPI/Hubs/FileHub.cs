@@ -253,7 +253,7 @@ namespace SyncStreamAPI.Hubs
                 var playlistInfo = await ytdl.RunVideoDataFetch(url, overrideOptions: new OptionSet()
                 {
                     ForceIPv4 = true,
-                    NoCookies = true
+                    CookiesFromBrowser = "firefox"
                 });
                 var vids = playlistInfo.Data.Entries.Select(x =>
                         new DownloadClientValue(dbUser.ID, x.Title, token, x.Url, quality, audioOnly, embedSubtitles))

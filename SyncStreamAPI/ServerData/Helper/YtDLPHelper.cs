@@ -46,7 +46,7 @@ namespace SyncStreamAPI.ServerData.Helper
             {
                 AudioMultistreams = !audioOnly, EmbedSubs = downloadClient.EmbedSubtitles,
                 ConcurrentFragments = maxThreads, SubLangs = "[Ee][Nn].*,[Dd][Ee].*", SubFormat = "best",
-                ForceIPv4 = true, NoCookies = true
+                ForceIPv4 = true, CookiesFromBrowser = "firefox"
             };
             downloadClient.Quality ??= "1080";
             return audioOnly
