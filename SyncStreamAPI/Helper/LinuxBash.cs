@@ -65,10 +65,12 @@ namespace SyncStreamAPI.Helper
         {
             if (string.IsNullOrEmpty(directoryPath)) { directoryPath = Directory.GetCurrentDirectory(); }
 
-            string downloadUrl = "";
+            var downloadUrl = "";
+            var downloadLocation = Path.Combine(directoryPath, "yt-dlp");
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 downloadUrl = $"{General.YtDlpUrl}.exe";
+                downloadLocation += ".exe";
             }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
@@ -80,8 +82,6 @@ namespace SyncStreamAPI.Helper
             {
                 downloadUrl = $"{General.YtDlpUrl}_linux";
             }
-
-            var downloadLocation = Path.Combine(directoryPath, Path.GetFileName(downloadUrl));
             if (File.Exists(downloadLocation)) { return; }
             var data = await DownloadFileBytesAsync(downloadUrl);
             await File.WriteAllBytesAsync(downloadLocation, data);
