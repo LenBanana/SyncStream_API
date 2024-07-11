@@ -24,7 +24,7 @@ namespace SyncStreamAPI.Helper.FFmpeg
                 string formattedEnd = $"{(int)End.TotalHours:D2}:{End.Minutes:D2}:{End.Seconds:D2}";
                 var args = $"-ss {formattedStart} -to {formattedEnd} -i \"{InputPath}\" -c copy \"{OutputPath}\"";
 
-                var success = await FFmpegTools.ExecuteFFMPEG(args,
+                var success = await FFmpegTools.ExecuteFfmpeg(args,
                 exitCondition: e => Regex.IsMatch(e.Data, DefaultConversionRegex),
                 errorCondition: e => Regex.IsMatch(e.Data, DefaultErrorRegex) || Regex.IsMatch(e.Data, @"^-to value smaller than -ss; aborting\.$"),
                 Progress

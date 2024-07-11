@@ -132,9 +132,8 @@ namespace SyncStreamAPI.ServerData
             }
 
             if (downloadClient.CancellationToken.IsCancellationRequested &&
-                userYtPlaylistDownload.ContainsKey(tokenSource))
+                userYtPlaylistDownload.TryGetValue(tokenSource, out var downloads))
             {
-                var downloads = userYtPlaylistDownload[tokenSource];
                 userDownloads.Where(x => downloads.FirstOrDefault(y => y.UniqueId == x.UniqueId) != null).ToList()
                     .ForEach(x => x.CancellationToken.Cancel());
                 using var scope = ServiceProvider.CreateScope();

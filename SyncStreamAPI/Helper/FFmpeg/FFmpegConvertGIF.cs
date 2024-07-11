@@ -35,13 +35,13 @@ namespace SyncStreamAPI.Helper.FFmpeg
         private async Task<bool> GeneratePalette(string inputPath, string tempPalettePath)
         {
             var args = $"-y -i \"{inputPath}\" -vf \"fps=10,scale=trunc(iw/2)*2:trunc(ih/2)*2:flags=lanczos,palettegen=stats_mode=diff\" -c:v gif \"{tempPalettePath}\"";
-            return await FFmpegTools.ExecuteFFMPEG(args, e => Regex.IsMatch(e.Data, DefaultConversionRegex));
+            return await FFmpegTools.ExecuteFfmpeg(args, e => Regex.IsMatch(e.Data, DefaultConversionRegex));
         }
 
         private async Task<bool> ConvertToGif(string inputPath, string tempPalettePath, string outputPath)
         {
             var args = $"-i \"{inputPath}\" -i \"{tempPalettePath}\" -lavfi \"fps=10,scale=trunc(iw/2)*2:trunc(ih/2)*2:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse\" -y \"{outputPath}\"";
-            return await FFmpegTools.ExecuteFFMPEG(args,
+            return await FFmpegTools.ExecuteFfmpeg(args,
                 exitCondition: e => Regex.IsMatch(e.Data, DefaultConversionRegex),
                 errorCondition: e => Regex.IsMatch(e.Data, DefaultErrorRegex)
                 );

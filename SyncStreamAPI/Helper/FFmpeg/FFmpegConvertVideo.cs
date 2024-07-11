@@ -23,7 +23,7 @@ namespace SyncStreamAPI.Helper.FFmpeg
             var codec = FFmpegTools.GetVideoCodec(outputExtension);
             var audioCodec = FFmpegTools.GetAudioCodec(outputExtension);
             var args = $"-i \"{InputPath}\" -c:v {codec} -preset slow -crf 18 -pix_fmt yuv420p -c:a {audioCodec} \"{OutputPath}\"";
-            var success = await FFmpegTools.ExecuteFFMPEG(args,
+            var success = await FFmpegTools.ExecuteFfmpeg(args,
                 exitCondition: e => Regex.IsMatch(e.Data, DefaultConversionRegex) || Regex.IsMatch(e.Data, @"^\[libx264 @ [0-9a-f]+\] kb\/s:\d+(\.\d+)?$"),
                 errorCondition: e => Regex.IsMatch(e.Data, DefaultErrorRegex),
                 Progress

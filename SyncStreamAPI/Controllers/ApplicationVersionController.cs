@@ -55,7 +55,7 @@ namespace SyncStreamAPI.Controllers
                 return NotFound();
             }
             var memory = new MemoryStream();
-            using (var stream = new FileStream(filePath, FileMode.Open))
+            await using (var stream = new FileStream(filePath, FileMode.Open))
             {
                 await stream.CopyToAsync(memory);
             }
@@ -71,16 +71,16 @@ namespace SyncStreamAPI.Controllers
             {
                 return StatusCode(StatusCodes.Status403Forbidden);
             }
-            var fileInfo = new FileInfo(file.FileName);
             var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, appName);
-            using (var ms = System.IO.File.OpenWrite(path))
+            await using (var ms = System.IO.File.OpenWrite(path))
             {
                 await file.CopyToAsync(ms);
             }
             var ver = _postgres.AppVersions?.SingleOrDefault(x => x.Name == appName);
             if (ver == null)
             {
-                _postgres.AppVersions.Add(new DbApplicationVersion() { LastUpdate = DateTime.UtcNow, Name = appName, Version = version });
+                _postgres.AppVersions?.Add(new DbApplicationVersion()
+                    { LastUpdate = DateTime.UtcNow, Name = appName, Version = version });
             }
             else
             {

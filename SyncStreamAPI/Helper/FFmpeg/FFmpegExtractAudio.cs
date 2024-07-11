@@ -20,7 +20,7 @@ namespace SyncStreamAPI.Helper.FFmpeg
             FileCheck.CheckOverrideFile(OutputPath);
 
             var args = $"-i \"{InputPath}\" -vn -acodec libmp3lame \"{OutputPath}\"";
-            var success = await FFmpegTools.ExecuteFFMPEG(
+            var success = await FFmpegTools.ExecuteFfmpeg(
                 args,
                 exitCondition: e => Regex.IsMatch(e.Data, DefaultConversionRegex),
                 errorCondition: e => Regex.IsMatch(e.Data, DefaultErrorRegex) || Regex.IsMatch(e.Data, @"^Output file #\d+ does not contain any stream$")

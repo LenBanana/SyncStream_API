@@ -20,7 +20,7 @@ namespace SyncStreamAPI.Helper.FFmpeg
             FileCheck.CheckOverrideFile(OutputPath);
 
             var args = $"-i \"{InputPath}\" -c:a {FFmpegTools.GetAudioCodec(TargetFormat)} -b:a 192k \"{OutputPath}\"";
-            var success = await FFmpegTools.ExecuteFFMPEG(args,
+            var success = await FFmpegTools.ExecuteFfmpeg(args,
                 exitCondition: e => Regex.IsMatch(e.Data, DefaultConversionRegex),
                 errorCondition: e => Regex.IsMatch(e.Data, DefaultErrorRegex),
                 Progress

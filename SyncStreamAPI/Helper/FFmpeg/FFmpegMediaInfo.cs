@@ -28,7 +28,7 @@ namespace SyncStreamAPI.Helper.FFmpeg
                     frames = d;
                 });
 
-                bool success = await FFmpegTools.ExecuteFFMPEG(args,
+                bool success = await FFmpegTools.ExecuteFfmpeg(args,
                     exitCondition: e => Regex.IsMatch(e.Data, DefaultConversionRegex),
                     errorCondition: e => Regex.IsMatch(e.Data, DefaultErrorRegex),
                     p
