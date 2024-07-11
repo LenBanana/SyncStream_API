@@ -11,6 +11,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Xabe.FFmpeg;
+using YoutubeDLSharp.Options;
 
 namespace SyncStreamAPI.Hubs
 {
@@ -249,7 +250,11 @@ namespace SyncStreamAPI.Hubs
             if (url.Contains("playlist?list="))
             {
                 var ytdl = General.GetYoutubeDL();
-                var playlistInfo = await ytdl.RunVideoDataFetch(url);
+                var playlistInfo = await ytdl.RunVideoDataFetch(url, overrideOptions: new OptionSet()
+                {
+                    ForceIPv4 = true,
+                    NoCookies = true
+                });
                 var vids = playlistInfo.Data.Entries.Select(x =>
                         new DownloadClientValue(dbUser.ID, x.Title, token, x.Url, quality, audioOnly, embedSubtitles))
                     .ToList();
@@ -408,7 +413,8 @@ namespace SyncStreamAPI.Hubs
             var allAncestorFolderIds = GetAllAncestorFolders(folderId);
             allAncestorFolderIds.Add(folderId);
 
-            if (dbFolder.DbUserID == dbUser.ID || sharedFolderIds.Intersect(allAncestorFolderIds).Any() || _postgres.Files.Any(x => x.DbFileFolderId == folderId && x.DbUserID == dbUser.ID))
+            if (dbFolder.DbUserID == dbUser.ID || sharedFolderIds.Intersect(allAncestorFolderIds).Any() ||
+                _postgres.Files.Any(x => x.DbFileFolderId == folderId && x.DbUserID == dbUser.ID))
             {
                 var files = _postgres.Files
                     .Where(x => x.DbFileFolderId == folderId)
@@ -424,9 +430,10 @@ namespace SyncStreamAPI.Hubs
                     return;
                 }
             }
+
             await Clients.Caller.getFolderFiles(new List<FileDto>());
         }
-        
+
         private List<int> GetAllAncestorFolders(int folderId)
         {
             var ancestorFolders = new List<int>();

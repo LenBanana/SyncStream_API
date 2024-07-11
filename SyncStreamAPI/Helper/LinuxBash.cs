@@ -78,7 +78,7 @@ namespace SyncStreamAPI.Helper
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                downloadUrl = General.YtDlpUrl;
+                downloadUrl = $"{General.YtDlpUrl}_linux";
             }
 
             var downloadLocation = Path.Combine(directoryPath, Path.GetFileName(downloadUrl));

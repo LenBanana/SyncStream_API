@@ -13,6 +13,7 @@ using Microsoft.Extensions.Configuration;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Models.Bots;
+using YoutubeDLSharp.Options;
 
 namespace SyncStreamAPI.ServerData.Helper
 {
@@ -347,7 +348,11 @@ namespace SyncStreamAPI.ServerData.Helper
             try
             {
                 var ytdl = General.GetYoutubeDL();
-                var playlistInfo = await ytdl.RunVideoDataFetch(url);
+                var playlistInfo = await ytdl.RunVideoDataFetch(url, overrideOptions: new OptionSet()
+                {
+                    ForceIPv4 = true,
+                    NoCookies = true
+                });
                 if (playlistInfo != null)
                 {
                     var vids = playlistInfo.Data.Entries.Select(x => new DreckVideo(x.Title, x.Url, false,

@@ -113,7 +113,11 @@ namespace SyncStreamAPI.Controllers
 
                 // Fetch the video data for the provided YouTube URL using the YouTube DL library
                 var ytdl = General.GetYoutubeDL();
-                var data = await ytdl.RunVideoDataFetch(url);
+                var data = await ytdl.RunVideoDataFetch(url, overrideOptions: new OptionSet()
+                {
+                    ForceIPv4 = true,
+                    NoCookies = true
+                });
                 switch (data)
                 {
                     // If the video data was fetched successfully, return a list of available video quality options

@@ -42,7 +42,12 @@ namespace SyncStreamAPI.ServerData.Helper
             bool audioOnly, IProgress<DownloadProgress> progress)
         {
             var maxThreads = downloadClient.Preset > ConversionPreset.Fast ? 8 : 4;
-            var options = new OptionSet() { AudioMultistreams = !audioOnly, EmbedSubs = downloadClient.EmbedSubtitles, ConcurrentFragments = maxThreads, SubLangs = "[Ee][Nn].*,[Dd][Ee].*", SubFormat = "best"};
+            var options = new OptionSet()
+            {
+                AudioMultistreams = !audioOnly, EmbedSubs = downloadClient.EmbedSubtitles,
+                ConcurrentFragments = maxThreads, SubLangs = "[Ee][Nn].*,[Dd][Ee].*", SubFormat = "best",
+                ForceIPv4 = true, NoCookies = true
+            };
             downloadClient.Quality ??= "1080";
             return audioOnly
                 ? await ytdl.RunAudioDownload(downloadClient.Url, AudioConversionFormat.Mp3, progress: progress,
