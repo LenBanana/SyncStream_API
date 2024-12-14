@@ -5,68 +5,75 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xabe.FFmpeg;
 
-namespace SyncStreamAPI.Models
+namespace SyncStreamAPI.Models;
+
+public class DownloadClientValue
 {
-    public class DownloadClientValue
+    private readonly WebClient keepAliveClient = new();
+    private bool stopKeepAlive;
+
+    public DownloadClientValue(int userId, string fileName, string token, string url, ConversionPreset preset)
     {
-        public int UserId { get; set; }
-        public ConversionPreset Preset { get; set; }
-        public string Quality { get; set; }
-        public string FileName { get; set; }
-        public string Url { get; set; }
-        public string Token { get; set; }
-        public string UniqueId { get; set; }
-        public bool Running { get; set; }
-        public bool AudioOnly { get; set; }
-        public bool EmbedSubtitles { get; set; }
-        public Stopwatch Stopwatch { get; set; }
-        public CancellationTokenSource CancellationToken { get; set; }
+        UserId = userId;
+        Preset = preset;
+        Token = token;
+        FileName = fileName;
+        Url = url;
+        Running = false;
+        UniqueId = Guid.NewGuid().ToString();
+        CancellationToken = new CancellationTokenSource();
+    }
 
-        readonly WebClient keepAliveClient = new WebClient();
-        bool stopKeepAlive = false;
-        public DownloadClientValue(int userId, string fileName, string token, string url, ConversionPreset preset)
+    public DownloadClientValue(int userId, string fileName, string token, string url, string quality,
+        bool audioOnly = false, bool embedSubtitles = false)
+    {
+        UserId = userId;
+        Preset = ConversionPreset.Faster;
+        Quality = quality;
+        Token = token;
+        FileName = fileName;
+        Url = url;
+        Running = false;
+        AudioOnly = audioOnly;
+        EmbedSubtitles = embedSubtitles;
+        UniqueId = Guid.NewGuid().ToString();
+        CancellationToken = new CancellationTokenSource();
+    }
+
+    public int UserId { get; set; }
+    public ConversionPreset Preset { get; set; }
+    public string Quality { get; set; }
+    public string FileName { get; set; }
+    public string Url { get; set; }
+    public string Token { get; set; }
+    public string UniqueId { get; set; }
+    public bool Running { get; set; }
+    public bool AudioOnly { get; set; }
+    public bool EmbedSubtitles { get; set; }
+    public Stopwatch Stopwatch { get; set; }
+    public CancellationTokenSource CancellationToken { get; set; }
+
+    public async void KeepUrlAlive()
+    {
+        if (Stopwatch == null && !stopKeepAlive)
         {
-            UserId = userId;
-            Preset = preset;
-            Token = token;
-            FileName = fileName;
-            Url = url;
-            Running = false;
-            UniqueId = Guid.NewGuid().ToString();
-            CancellationToken = new CancellationTokenSource();
-        }
-        public DownloadClientValue(int userId, string fileName, string token, string url, string quality, bool audioOnly = false, bool embedSubtitles = false)
-        {
-            UserId = userId;
-            Preset = ConversionPreset.Faster;
-            Quality = quality;
-            Token = token;
-            FileName = fileName;
-            Url = url;
-            Running = false;
-            AudioOnly = audioOnly;
-            EmbedSubtitles = embedSubtitles;
-            UniqueId = Guid.NewGuid().ToString();
-            CancellationToken = new CancellationTokenSource();
-        }
-        public async void KeepUrlAlive()
-        {
-            if (Stopwatch == null && !stopKeepAlive)
+            try
             {
-                try
-                {
-                    await keepAliveClient?.DownloadStringTaskAsync(new Uri(Url));
-                }
-                catch { }
-                await Task.Delay(1000);
-                KeepUrlAlive();
+                await keepAliveClient?.DownloadStringTaskAsync(new Uri(Url));
             }
-            keepAliveClient?.Dispose();
+            catch
+            {
+            }
+
+            await Task.Delay(1000);
+            KeepUrlAlive();
         }
 
-        public void StopKeepAlive()
-        {
-            stopKeepAlive = true;
-        }
+        keepAliveClient?.Dispose();
+    }
+
+    public void StopKeepAlive()
+    {
+        stopKeepAlive = true;
     }
 }

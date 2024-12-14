@@ -1,10 +1,9 @@
-﻿namespace SyncStreamAPI.Enums.Games
+﻿namespace SyncStreamAPI.Enums.Games;
+
+public enum BlackjackSmartReaction
 {
-    public enum BlackjackSmartReaction
-    {
-        Stand,
-        Hit,
-        Double,
-        Split
-    }
+    Stand,
+    Hit,
+    Double,
+    Split
 }

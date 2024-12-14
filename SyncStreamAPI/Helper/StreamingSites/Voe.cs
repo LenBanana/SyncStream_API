@@ -21,16 +21,16 @@ public class Voe : IStreamDownloader
             var downloadUri = "";
             var page = await BrowserAutomation.Browser.NewPageAsync();
             await page.GoToAsync(client.Url);
-            await page.WaitForSelectorAsync("div.plyr__controls", new WaitForSelectorOptions() { Timeout = 2500 });
+            await page.WaitForSelectorAsync("div.plyr__controls", new WaitForSelectorOptions { Timeout = 2500 });
             var html = await page.GetContentAsync();
             var doc = new HtmlDocument();
             doc.LoadHtml(html);
-            string pattern = @"'hls'\s*:\s*'([^']+)'";
+            var pattern = @"'hls'\s*:\s*'([^']+)'";
             var match = Regex.Match(html, pattern);
             if (match.Success)
                 downloadUri = match.Groups[1].Value;
             await page.CloseAsync();
-            return new DownloadExtract()
+            return new DownloadExtract
             {
                 DownloadLink = downloadUri
             };
@@ -38,7 +38,7 @@ public class Voe : IStreamDownloader
         catch (Exception ex)
         {
             Console.WriteLine(ex.ToString());
-            return new DownloadExtract()
+            return new DownloadExtract
             {
                 DownloadLink = client.Url
             };

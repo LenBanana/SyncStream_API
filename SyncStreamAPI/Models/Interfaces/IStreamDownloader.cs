@@ -1,10 +1,9 @@
 ﻿using System.Threading.Tasks;
 using SyncStreamAPI.Models.StreamExtraction;
 
-namespace SyncStreamAPI.Models.Interfaces
+namespace SyncStreamAPI.Models.Interfaces;
+
+public interface IStreamDownloader
 {
-    public interface IStreamDownloader
-    {
-        Task<DownloadExtract> GetDownloadLink(DownloadClientValue client);
-    }
+    Task<DownloadExtract> GetDownloadLink(DownloadClientValue client);
 }

@@ -1,16 +1,15 @@
-﻿namespace SyncStreamAPI.Enums
+﻿namespace SyncStreamAPI.Enums;
+
+public enum PlayerType
 {
-    public enum PlayerType
-    {
-        Nothing,
-        YouTube,
-        Twitch,
-        Vimeo,
-        External,
-        Live,
-        WhiteBoard,
-        Blackjack,
-        Chess,
-        WebRtc
-    }
+    Nothing,
+    YouTube,
+    Twitch,
+    Vimeo,
+    External,
+    Live,
+    WhiteBoard,
+    Blackjack,
+    Chess,
+    WebRtc
 }

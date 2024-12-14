@@ -1,8 +1,6 @@
 ﻿using System.Threading.Tasks;
-using Org.WebRtc;
 using SyncStreamAPI.Annotations;
 using SyncStreamAPI.Enums;
-using SyncStreamAPI.Helper;
 using SyncStreamAPI.Models.WebRTC;
 using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
@@ -18,7 +16,7 @@ public partial class ServerHub
         if (user == null) return;
         await Groups.AddToGroupAsync(Context.ConnectionId, $"AudioRoom-{roomId}");
         await Clients.GroupExcept($"AudioRoom-{roomId}", new[] { Context.ConnectionId })
-            .participantJoined(new VoipParticipantDto()
+            .participantJoined(new VoipParticipantDto
                 { ParticipantId = Context.ConnectionId, ParticipantName = user.username });
     }
 
@@ -27,7 +25,7 @@ public partial class ServerHub
     {
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"AudioRoom-{roomId}");
         await Clients.GroupExcept($"AudioRoom-{roomId}", new[] { Context.ConnectionId })
-            .participantLeft(new VoipParticipantDto() { ParticipantId = Context.ConnectionId });
+            .participantLeft(new VoipParticipantDto { ParticipantId = Context.ConnectionId });
     }
 
     [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]

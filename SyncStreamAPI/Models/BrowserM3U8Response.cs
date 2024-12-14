@@ -1,10 +1,9 @@
 ﻿using System.Collections.Generic;
 
-namespace SyncStreamAPI.Models
+namespace SyncStreamAPI.Models;
+
+public class BrowserM3U8Response
 {
-    public class BrowserM3U8Response
-    {
-        public string InputUrl { get; set; }
-        public List<string> OutputUrls { get; set; } = new List<string>();
-    }
+    public string InputUrl { get; set; }
+    public List<string> OutputUrls { get; set; } = new();
 }

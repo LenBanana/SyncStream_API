@@ -1,48 +1,42 @@
-﻿using SyncStreamAPI.Enums.Games.Cards;
+﻿using System;
+using System.Collections.Generic;
+using SyncStreamAPI.Enums.Games.Cards;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Models.GameModels.Members;
-using System;
-using System.Collections.Generic;
 
-namespace SyncStreamAPI.Models.GameModels.Durak
+namespace SyncStreamAPI.Models.GameModels.Durak;
+
+public class DurakLogic
 {
-    public class DurakLogic
+    public DurakLogic()
     {
-        public List<PlayingCard> cardDeck { get; set; } = new List<PlayingCard>();
-        public List<DurakMember> members { get; set; } = new List<DurakMember>();
+        BuildDeck();
+    }
 
-        public DurakLogic()
-        {
-            BuildDeck();
-        }
+    public List<PlayingCard> cardDeck { get; set; } = new();
+    public List<DurakMember> members { get; set; } = new();
 
-        public void BuildDeck()
-        {
-            foreach (PlayingCardSuit suit in Enum.GetValues(typeof(PlayingCardSuit)))
+    public void BuildDeck()
+    {
+        foreach (PlayingCardSuit suit in Enum.GetValues(typeof(PlayingCardSuit)))
+        foreach (PlayingCardRank rank in Enum.GetValues(typeof(PlayingCardRank)))
+            if ((int)rank > 5)
             {
-                foreach (PlayingCardRank rank in Enum.GetValues(typeof(PlayingCardRank)))
-                {
-                    if ((int)rank > 5)
-                    {
-                        PlayingCard nextCard = new PlayingCard(suit, rank);
-                        cardDeck.Add(nextCard);
-                    }
-                }
+                var nextCard = new PlayingCard(suit, rank);
+                cardDeck.Add(nextCard);
             }
-            cardDeck.Shuffle();
-            GiveCardsToMembers();
-        }
 
-        public void GiveCardsToMembers()
-        {
-            foreach (var member in members)
+        cardDeck.Shuffle();
+        GiveCardsToMembers();
+    }
+
+    public void GiveCardsToMembers()
+    {
+        foreach (var member in members)
+            for (var i = member.cards.Count; i < 6; i++)
             {
-                for (int i = member.cards.Count; i < 6; i++)
-                {
-                    member.cards.Add(cardDeck[i]);
-                    cardDeck.RemoveAt(i);
-                }
+                member.cards.Add(cardDeck[i]);
+                cardDeck.RemoveAt(i);
             }
-        }
     }
 }

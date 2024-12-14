@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -19,16 +18,16 @@ public partial class ServerHub
     public async Task LoginRequest(DbUser requestUser, string userInfo)
     {
         var result = new DbUser();
-        DbUser user = _postgres.Users.Include(x => x.RememberTokens).FirstOrDefault(x =>
+        var user = _postgres.Users.Include(x => x.RememberTokens).FirstOrDefault(x =>
             x.username == requestUser.username && x.password == requestUser.password);
         if (user != null)
         {
             if (user.approved <= 0)
             {
-                await Clients.Caller.dialog(new Dialog(AlertType.Info)
+                await Clients.Caller.dialog(new Dialog
                 {
                     Header = "Thanks for registering",
-                    Question = @$"Please wait until the admin team approves your account", Answer1 = "Ok"
+                    Question = @"Please wait until the admin team approves your account", Answer1 = "Ok"
                 });
                 return;
             }
@@ -103,18 +102,12 @@ public partial class ServerHub
     {
         try
         {
-            if (requestUser == null || string.IsNullOrEmpty(requestUser.password))
-            {
-                return;
-            }
+            if (requestUser == null || string.IsNullOrEmpty(requestUser.password)) return;
 
             var dbUser = _postgres.Users.FirstOrDefault(x => x.ID == requestUser.ID);
             var token = dbUser?.GenerateToken(userInfo);
             if (dbUser?.RememberTokens.Any(x => x.Token == token?.Token) == true)
-            {
                 await Clients.Caller.rememberToken(new RememberTokenDTO(token, dbUser.ID));
-                return;
-            }
         }
         catch (Exception ex)
         {
@@ -127,7 +120,7 @@ public partial class ServerHub
         try
         {
             var dbUser = _postgres.Users?.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
-            if (dbUser == null || (dbUser?.RememberTokens.Any(x => x.Token == token) == false))
+            if (dbUser == null || dbUser?.RememberTokens.Any(x => x.Token == token) == false)
             {
                 await Clients.Caller.userlogin(new DbUser("").ToDTO());
                 return;
@@ -135,30 +128,25 @@ public partial class ServerHub
 
             if (dbUser.approved <= 0)
             {
-                await Clients.Caller.dialog(new Dialog(AlertType.Info)
+                await Clients.Caller.dialog(new Dialog
                 {
                     Header = "Thanks for registering",
-                    Question = @$"Please wait until the admin team approves your account", Answer1 = "Ok"
+                    Question = @"Please wait until the admin team approves your account", Answer1 = "Ok"
                 });
                 return;
             }
 
             dbUser.RememberTokens = dbUser.RememberTokens.GroupBy(x => x.Token)?.Select(x => x.First()).ToList();
             foreach (var t in dbUser.RememberTokens.ToList())
-            {
                 if ((DateTime.UtcNow - t.Created).TotalDays > 30)
                 {
                     dbUser.RememberTokens.Remove(t);
                     _postgres.RememberTokens.Remove(t);
                 }
-            }
 
-            if (dbUser.StreamToken == null)
-            {
-                dbUser.StreamToken = dbUser.GenerateStreamToken().Token;
-            }
+            if (dbUser.StreamToken == null) dbUser.StreamToken = dbUser.GenerateStreamToken().Token;
 
-            DbRememberToken Token = dbUser.RememberTokens.FirstOrDefault(x => x.Token == token);
+            var Token = dbUser.RememberTokens.FirstOrDefault(x => x.Token == token);
             if (Token != null)
             {
                 MainManager.GetRoomManager().AddMember(dbUser.ID, Context.ConnectionId);
@@ -190,10 +178,10 @@ public partial class ServerHub
     [ErrorHandling]
     public async Task ChangeUser(DbUser user, string password)
     {
-        DbUser changeUser = _postgres.Users.FirstOrDefault(x => x.ID == user.ID && password == x.password);
+        var changeUser = _postgres.Users.FirstOrDefault(x => x.ID == user.ID && password == x.password);
         if (changeUser != null)
         {
-            string endMsg = "";
+            var endMsg = "";
             if (changeUser.username != user.username)
             {
                 if (changeUser.username.Length < 2 || changeUser.username.Length > 20)
@@ -218,17 +206,13 @@ public partial class ServerHub
             }
 
             if (endMsg.Length > 0)
-            {
                 endMsg += " successfully changed";
-            }
             else
-            {
                 endMsg = "Nothing changed.";
-            }
 
             await _postgres.SaveChangesAsync();
-            await Clients.Caller.dialog(new Dialog() { Header = "Success", Question = endMsg, Answer1 = "Ok" });
-            List<DbUser> users = _postgres.Users.ToList();
+            await Clients.Caller.dialog(new Dialog { Header = "Success", Question = endMsg, Answer1 = "Ok" });
+            var users = _postgres.Users.ToList();
             await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
         }
         else

@@ -1,39 +1,41 @@
-﻿using NAudio.Wave;
-using System.IO;
+﻿using System.IO;
+using NAudio.Wave;
 
-namespace SyncStreamAPI.Helper
+namespace SyncStreamAPI.Helper;
+
+public class NAudioTools
 {
-    public class NAudioTools
+    public static byte[] GetWaveform(string inputFilePath)
     {
-        public static byte[] GetWaveform(string inputFilePath)
+        using (var reader = new AudioFileReader(inputFilePath))
         {
-            using (var reader = new AudioFileReader(inputFilePath))
-            {
-                var sampleProvider = reader.ToSampleProvider();
-                var samplesPerSecond = sampleProvider.WaveFormat.SampleRate;
-                var channelCount = sampleProvider.WaveFormat.Channels;
-                var durationInSeconds = reader.TotalTime.TotalSeconds;
-                var samplesPerFrame = samplesPerSecond / 30;
-                var buffer = new float[samplesPerFrame * channelCount];
+            var sampleProvider = reader.ToSampleProvider();
+            var samplesPerSecond = sampleProvider.WaveFormat.SampleRate;
+            var channelCount = sampleProvider.WaveFormat.Channels;
+            var durationInSeconds = reader.TotalTime.TotalSeconds;
+            var samplesPerFrame = samplesPerSecond / 30;
+            var buffer = new float[samplesPerFrame * channelCount];
 
-                using (var memoryStream = new MemoryStream())
+            using (var memoryStream = new MemoryStream())
+            {
+                using (var writer =
+                       new WaveFileWriter(memoryStream, new WaveFormat(samplesPerSecond, 16, channelCount)))
                 {
-                    using (var writer = new WaveFileWriter(memoryStream, new WaveFormat(samplesPerSecond, 16, channelCount)))
+                    while (reader.Position < reader.Length)
                     {
-                        while (reader.Position < reader.Length)
+                        var readSamples = sampleProvider.Read(buffer, 0, buffer.Length);
+                        var waveform = new float[readSamples / channelCount];
+                        for (var i = 0; i < readSamples; i += channelCount)
                         {
-                            var readSamples = sampleProvider.Read(buffer, 0, buffer.Length);
-                            var waveform = new float[readSamples / channelCount];
-                            for (int i = 0; i < readSamples; i += channelCount)
-                            {
-                                var sampleValue = buffer[i];
-                                waveform[i / channelCount] = sampleValue;
-                            }
-                            writer.WriteSamples(waveform, 0, waveform.Length);
+                            var sampleValue = buffer[i];
+                            waveform[i / channelCount] = sampleValue;
                         }
+
+                        writer.WriteSamples(waveform, 0, waveform.Length);
                     }
-                    return memoryStream.ToArray();
                 }
+
+                return memoryStream.ToArray();
             }
         }
     }

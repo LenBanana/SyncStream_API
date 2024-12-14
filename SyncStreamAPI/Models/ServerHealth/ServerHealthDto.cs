@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace SyncStreamAPI.Models.ServerHealth;
+﻿namespace SyncStreamAPI.Models.ServerHealth;
 
 public class ServerHealthDto
 {
@@ -11,7 +9,7 @@ public class ServerHealthDto
         CpuUsage = cpuUsage;
         UpTime = upTime;
     }
-    
+
     public ServerHealthDto(string upTime)
     {
         UpTime = upTime;

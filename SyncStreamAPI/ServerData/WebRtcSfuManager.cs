@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Threading.Tasks;
-using Microsoft.AspNet.SignalR;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,7 +7,6 @@ using Org.WebRtc;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
-using SyncStreamAPI.Models.WebRTC;
 
 namespace SyncStreamAPI.ServerData;
 
@@ -16,8 +14,6 @@ public class WebRtcSfuManager
 {
     private readonly IConfiguration _configuration;
     private readonly IServiceProvider _serviceProvider;
-    public RTCConfiguration WebRtcConfiguration { get; private set; }
-    public RTCPeerConnection PeerConnection { get; private set; }
 
     public WebRtcSfuManager(IConfiguration configuration, IServiceProvider serviceProvider)
     {
@@ -26,20 +22,23 @@ public class WebRtcSfuManager
         Setup();
     }
 
+    public RTCConfiguration WebRtcConfiguration { get; private set; }
+    public RTCPeerConnection PeerConnection { get; private set; }
+
     private void Setup()
     {
         var credentials = General.GenerateTemporaryCredentials(_configuration);
         var stunServer = _configuration.GetSection("WebRtcStunServer").Value;
         var turnServer = _configuration.GetSection("WebRtcTurnServer").Value;
-        var configuration = new RTCConfiguration()
+        var configuration = new RTCConfiguration
         {
             IceServers = new[]
             {
-                new RTCIceServer()
+                new RTCIceServer
                 {
                     Urls = new[] { stunServer }
                 },
-                new RTCIceServer()
+                new RTCIceServer
                 {
                     Urls = new[] { turnServer },
                     Username = credentials.Username,
@@ -60,28 +59,18 @@ public class WebRtcSfuManager
 
     private void SetupNewPeerConnection(RTCPeerConnection peerConnection)
     {
-        peerConnection.OnIceCandidate += (candidate) =>
+        peerConnection.OnIceCandidate += candidate =>
         {
             if (candidate == null) return;
-            
         };
-        peerConnection.OnNegotiationNeeded += () =>
-        {
-            
-        };
-        peerConnection.OnIceConnectionStateChange += () =>
-        {
-            
-        };
-        peerConnection.OnTrack += (trackEvent) =>
-        {
-            
-        };
+        peerConnection.OnNegotiationNeeded += () => { };
+        peerConnection.OnIceConnectionStateChange += () => { };
+        peerConnection.OnTrack += trackEvent => { };
     }
-    
+
     public async void CreateOffer(RTCPeerConnection peerConnection)
     {
-        var offer = await peerConnection.CreateOffer(new RTCOfferOptions()
+        var offer = await peerConnection.CreateOffer(new RTCOfferOptions
         {
             IceRestart = false,
             OfferToReceiveAudio = true,
@@ -89,16 +78,16 @@ public class WebRtcSfuManager
         });
         await peerConnection.SetLocalDescription(offer);
     }
-    
+
     public async void CreateAnswer(RTCPeerConnection peerConnection)
     {
-        var answer = await peerConnection.CreateAnswer(new RTCAnswerOptions()
+        var answer = await peerConnection.CreateAnswer(new RTCAnswerOptions
         {
             VoiceActivityDetection = true
         });
         await peerConnection.SetLocalDescription(answer);
     }
-    
+
     public async Task SendOfferToParticipant(string participantId, RTCSessionDescription offer)
     {
         var scope = _serviceProvider.CreateScope();

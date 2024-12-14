@@ -13,12 +13,12 @@ namespace SyncStreamAPI.Controllers;
 public class WebRtcController : Controller
 {
     private readonly IConfiguration Configuration;
-    
+
     public WebRtcController(IConfiguration configuration)
     {
         Configuration = configuration;
     }
-    
+
     [HttpGet("GetWebRtcCredentials")]
     [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
     public IActionResult GetWebRtcCredentials(string token)

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -11,7 +10,7 @@ namespace SyncStreamAPI.Helper.Youtube;
 public class YoutubeApi
 {
     private const string BaseUrl = "https://www.googleapis.com/youtube/v3/";
-    private string _ytApiKey;
+    private readonly string _ytApiKey;
 
     public YoutubeApi(IConfiguration configuration)
     {

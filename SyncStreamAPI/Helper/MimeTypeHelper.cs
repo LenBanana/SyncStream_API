@@ -1,12 +1,13 @@
-﻿using Microsoft.AspNetCore.Http;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.IO;
+using Microsoft.AspNetCore.Http;
 
-namespace SyncStreamAPI.Helper
+namespace SyncStreamAPI.Helper;
+
+public static class MimeTypeHelper
 {
-    public static class MimeTypeHelper
-    {
-        private static readonly Dictionary<string, string> MimeTypeMappings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<string, string> MimeTypeMappings = new(StringComparer.OrdinalIgnoreCase)
     {
         { ".aac", "audio/aac" },
         { ".avi", "video/x-msvideo" },
@@ -33,25 +34,18 @@ namespace SyncStreamAPI.Helper
         { ".webp", "image/webp" },
         { ".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
         { ".xml", "application/xml" },
-        { ".zip", "application/zip" },
+        { ".zip", "application/zip" }
         // Add more MIME types and their corresponding file extensions here
     };
 
-        public static string GetMimeType(IFormFile file)
-        {
-            if (file == null)
-            {
-                throw new ArgumentNullException(nameof(file));
-            }
+    public static string GetMimeType(IFormFile file)
+    {
+        if (file == null) throw new ArgumentNullException(nameof(file));
 
-            var extension = System.IO.Path.GetExtension(file.FileName).ToLowerInvariant();
-            if (MimeTypeMappings.TryGetValue(extension, out string mimeType))
-            {
-                return mimeType;
-            }
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (MimeTypeMappings.TryGetValue(extension, out var mimeType)) return mimeType;
 
-            // Default MIME type for unknown file extensions
-            return "application/octet-stream";
-        }
+        // Default MIME type for unknown file extensions
+        return "application/octet-stream";
     }
 }

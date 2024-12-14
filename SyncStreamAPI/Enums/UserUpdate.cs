@@ -1,10 +1,9 @@
-﻿namespace SyncStreamAPI.Enums
+﻿namespace SyncStreamAPI.Enums;
+
+public enum UserUpdate
 {
-    public enum UserUpdate
-    {
-        RoomNotExist = -3,
-        Banned = -2,
-        WrongPassword = -1,
-        Success = 1
-    }
+    RoomNotExist = -3,
+    Banned = -2,
+    WrongPassword = -1,
+    Success = 1
 }

@@ -1,8 +1,7 @@
-﻿namespace SyncStreamAPI.Enums
+﻿namespace SyncStreamAPI.Enums;
+
+public enum AuthenticationType
 {
-    public enum AuthenticationType
-    {
-        Token,
-        API
-    }
+    Token,
+    API
 }

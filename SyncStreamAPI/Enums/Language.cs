@@ -1,8 +1,7 @@
-﻿namespace SyncStreamAPI.Enums
+﻿namespace SyncStreamAPI.Enums;
+
+public enum Language
 {
-    public enum Language
-    {
-        German,
-        English
-    }
+    German,
+    English
 }

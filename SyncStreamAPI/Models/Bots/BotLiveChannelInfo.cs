@@ -1,8 +1,7 @@
-﻿namespace SyncStreamAPI.Models.Bots
+﻿namespace SyncStreamAPI.Models.Bots;
+
+public class BotLiveChannelInfo
 {
-    public class BotLiveChannelInfo
-    {
-        public string ChannelId { get; set; }
-        public string RoomName { get; set; }
-    }
+    public string ChannelId { get; set; }
+    public string RoomName { get; set; }
 }

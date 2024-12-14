@@ -1,36 +1,36 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
-    <UserSecretsId>ae10e2d7-ce98-43fc-8575-e13f168a5aa4</UserSecretsId>
-    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+        <UserSecretsId>ae10e2d7-ce98-43fc-8575-e13f168a5aa4</UserSecretsId>
+        <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="AspectInjector" Version="2.8.1" />
-    <PackageReference Include="HtmlAgilityPack" Version="1.11.46" />
-    <PackageReference Include="itext7" Version="7.2.5" />
-    <PackageReference Include="Microsoft.AspNet.SignalR" Version="2.4.1" />
-    <PackageReference Include="Microsoft.AspNet.SignalR.Utils" Version="2.4.3" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.NewtonsoftJson" Version="5.0.9" />
-    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.9.10" />
-    <PackageReference Include="NAudio" Version="2.1.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="5.0.10" />
-    <PackageReference Include="PuppeteerSharp" Version="8.0.0" />
-    <PackageReference Include="SixLabors.ImageSharp" Version="3.0.1" />
-    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Version="6.4.0" />
-    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="6.4.0" />
-    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="6.0.1" />
-    <PackageReference Include="WebRtc.NET" Version="1.75.0.1-Alpha" />
-    <PackageReference Include="Xabe.FFmpeg" Version="5.2.5" />
-    <PackageReference Include="Xabe.FFmpeg.Downloader" Version="5.2.5" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="AspectInjector" Version="2.8.1"/>
+        <PackageReference Include="HtmlAgilityPack" Version="1.11.46"/>
+        <PackageReference Include="itext7" Version="7.2.5"/>
+        <PackageReference Include="Microsoft.AspNet.SignalR" Version="2.4.1"/>
+        <PackageReference Include="Microsoft.AspNet.SignalR.Utils" Version="2.4.3"/>
+        <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.NewtonsoftJson" Version="5.0.9"/>
+        <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.9.10"/>
+        <PackageReference Include="NAudio" Version="2.1.0"/>
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.1"/>
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="5.0.10"/>
+        <PackageReference Include="PuppeteerSharp" Version="8.0.0"/>
+        <PackageReference Include="SixLabors.ImageSharp" Version="3.0.1"/>
+        <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Version="6.4.0"/>
+        <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="6.4.0"/>
+        <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="6.0.1"/>
+        <PackageReference Include="WebRtc.NET" Version="1.75.0.1-Alpha"/>
+        <PackageReference Include="Xabe.FFmpeg" Version="5.2.5"/>
+        <PackageReference Include="Xabe.FFmpeg.Downloader" Version="5.2.5"/>
+    </ItemGroup>
 
-  <ItemGroup>
-    <Reference Include="YoutubeDLSharp">
-      <HintPath>..\..\YoutubeDLSharp\YoutubeDLSharp\bin\Debug\netstandard2.0\YoutubeDLSharp.dll</HintPath>
-      <CopyLocal>True</CopyLocal>
-    </Reference>
-  </ItemGroup>
+    <ItemGroup>
+        <Reference Include="YoutubeDLSharp">
+            <HintPath>..\..\YoutubeDLSharp\YoutubeDLSharp\bin\Debug\netstandard2.0\YoutubeDLSharp.dll</HintPath>
+            <CopyLocal>True</CopyLocal>
+        </Reference>
+    </ItemGroup>
 </Project>

@@ -340,16 +340,4 @@ ASALocalRun/
 
 # BeatPulse healthcheck temp database
 healthchecksdb
-/SyncStreamAPI/VideoFiles
-/SyncStreamAPI/ffmpeg.exe
-/SyncStreamAPI/ffprobe.exe
-/SyncStreamAPI/version.json
-/SyncStreamAPI/.local-chromium/Win64-970485/chrome-win
-/SyncStreamAPI/ffmpeg
-/SyncStreamAPI/ffprobe
-/SyncStreamAPI/yt-dlp
-/SyncStreamAPI/.local-chromium
-/SyncStreamAPI/Dockerfile
-/SyncStreamAPI/yt-dlp.exe
-/SyncStreamAPI/Temp
-/SyncStreamAPI/PrivilegeMethodDescriptions.xml
+TwitchStats/

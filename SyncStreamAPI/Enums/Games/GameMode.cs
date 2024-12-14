@@ -1,10 +1,9 @@
-﻿namespace SyncStreamAPI.Enums.Games
+﻿namespace SyncStreamAPI.Enums.Games;
+
+public enum GameMode
 {
-    public enum GameMode
-    {
-        NotPlaying,
-        Blackjack,
-        Gallows,
-        Chess
-    }
+    NotPlaying,
+    Blackjack,
+    Gallows,
+    Chess
 }

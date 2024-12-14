@@ -2,60 +2,58 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace ScreenIT.Helper
+namespace ScreenIT.Helper;
+
+public class FileCheck
 {
-    public class FileCheck
+    public static async Task WaitForFile(string filePath)
     {
-        public static async Task WaitForFile(string filePath)
+        var file = new FileInfo(filePath);
+        if (!IsFileLocked(file))
+            return;
+        var watcher = new FileSystemWatcher(file.Directory.FullName);
+
+        watcher.NotifyFilter = NotifyFilters.LastWrite;
+        watcher.Filter = file.Name;
+
+        var fileWrittenEvent = new ManualResetEvent(false);
+
+        watcher.Changed += (sender, e) =>
         {
-            var file = new FileInfo(filePath);
-            if (!IsFileLocked(file))
-                return;
-            var watcher = new FileSystemWatcher(file.Directory.FullName);
+            if (e.FullPath == filePath && !IsFileLocked(file)) fileWrittenEvent.Set();
+        };
 
-            watcher.NotifyFilter = NotifyFilters.LastWrite;
-            watcher.Filter = file.Name;
+        watcher.EnableRaisingEvents = true;
+        await Task.Run(() => fileWrittenEvent.WaitOne());
+        watcher.EnableRaisingEvents = false;
+        watcher.Dispose();
+    }
 
-            var fileWrittenEvent = new ManualResetEvent(false);
-
-            watcher.Changed += (sender, e) =>
-            {
-                if (e.FullPath == filePath && !IsFileLocked(file))
-                {
-                    fileWrittenEvent.Set();
-                }
-            };
-
-            watcher.EnableRaisingEvents = true;
-            await Task.Run(() => fileWrittenEvent.WaitOne());
-            watcher.EnableRaisingEvents = false;
-            watcher.Dispose();
+    public static bool CheckOverrideFile(string outputPath)
+    {
+        if (File.Exists(outputPath))
+        {
+            File.Delete(outputPath);
+            return true;
         }
 
-        public static bool CheckOverrideFile(string outputPath)
+        return false;
+    }
+
+    private static bool IsFileLocked(FileInfo file)
+    {
+        try
         {
-            if (File.Exists(outputPath))
+            using (var stream = file.Open(FileMode.Open, FileAccess.Read, FileShare.None))
             {
-                File.Delete(outputPath);
-                return true;
+                stream.Close();
             }
+
             return false;
         }
-
-        private static bool IsFileLocked(FileInfo file)
+        catch (IOException)
         {
-            try
-            {
-                using (var stream = file.Open(FileMode.Open, FileAccess.Read, FileShare.None))
-                {
-                    stream.Close();
-                }
-                return false;
-            }
-            catch (IOException)
-            {
-                return true;
-            }
+            return true;
         }
     }
 }

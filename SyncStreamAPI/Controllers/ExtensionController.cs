@@ -1,5 +1,4 @@
-﻿using System;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -23,11 +22,11 @@ namespace SyncStreamAPI.Controllers;
 [Route("api/extension")]
 public class ExtensionController : Controller
 {
-    private readonly IHubContext<ServerHub, IServerHub> _hub;
-    private readonly PostgresContext _postgres;
-    private readonly IContentTypeProvider _contentTypeProvider;
-    private readonly MainManager _manager;
     private readonly IConfiguration _configuration;
+    private readonly IContentTypeProvider _contentTypeProvider;
+    private readonly IHubContext<ServerHub, IServerHub> _hub;
+    private readonly MainManager _manager;
+    private readonly PostgresContext _postgres;
 
     public ExtensionController(IHubContext<ServerHub, IServerHub> hub, PostgresContext postgres,
         IContentTypeProvider contentTypeProvider, MainManager manager, IConfiguration configuration)
@@ -54,7 +53,7 @@ public class ExtensionController : Controller
         var user = await _postgres.Users.FirstOrDefaultAsync(x => x.ApiKey == apiKey);
         if (user == null)
             return BadRequest("User not found");
-        var result = await RoomManager.AddVideo(new DreckVideo()
+        var result = await RoomManager.AddVideo(new DreckVideo
         {
             AddedBy = user.username,
             ended = false,

@@ -9,6 +9,7 @@ public class DbMessage
         Id = 0;
         Time = DateTime.Now;
     }
+
     public DbMessage(string message, int senderId)
     {
         Id = 0;

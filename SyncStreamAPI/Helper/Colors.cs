@@ -1,11 +1,10 @@
-﻿namespace SyncStreamAPI.Helper
+﻿namespace SyncStreamAPI.Helper;
+
+public static class Colors
 {
-    public static class Colors
-    {
-        public static string SystemColor = "#839BCC";
-        public static string SystemUserColor = "#BB0A1E";
-        public static string WhisperUserColor = "#6699DD";
-        public static string WhisperReceiverColor = "#00717C";
-        public static string WhisperMsgColor = "#DDFFEE";
-    }
+    public static string SystemColor = "#839BCC";
+    public static string SystemUserColor = "#BB0A1E";
+    public static string WhisperUserColor = "#6699DD";
+    public static string WhisperReceiverColor = "#00717C";
+    public static string WhisperMsgColor = "#DDFFEE";
 }

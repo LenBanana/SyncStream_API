@@ -1,26 +1,25 @@
-﻿namespace SyncStreamAPI.Models.WebRTC
-{
-    public class WebRtcClientOffer
-    {
-        public string type { get; set; }
-        public string sdp { get; set; }
-        public string? ViewerId { get; set; }
-    }
+﻿namespace SyncStreamAPI.Models.WebRTC;
 
-    public class VoipOffer
-    {
-        public string ParticipantName { get; set; }
-        public string Type { get; set; } // "offer" or "answer"
-        public string Sdp { get; set; } // Session description
-    }
-    
-    public class VoipParticipantDto
-    {
-        public string ParticipantId { get; set; }
-        public string ParticipantName { get; set; }
-        public bool IsMuted { get; set; }
-        public bool IsSpeaking { get; set; }
-        public bool IsVideoMuted { get; set; }
-        public bool IsScreenMuted { get; set; }
-    }
+public class WebRtcClientOffer
+{
+    public string type { get; set; }
+    public string sdp { get; set; }
+    public string? ViewerId { get; set; }
+}
+
+public class VoipOffer
+{
+    public string ParticipantName { get; set; }
+    public string Type { get; set; } // "offer" or "answer"
+    public string Sdp { get; set; } // Session description
+}
+
+public class VoipParticipantDto
+{
+    public string ParticipantId { get; set; }
+    public string ParticipantName { get; set; }
+    public bool IsMuted { get; set; }
+    public bool IsSpeaking { get; set; }
+    public bool IsVideoMuted { get; set; }
+    public bool IsScreenMuted { get; set; }
 }
