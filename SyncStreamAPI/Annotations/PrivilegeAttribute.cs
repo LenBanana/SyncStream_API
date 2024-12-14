@@ -44,7 +44,7 @@ public class PrivilegeAttribute : Attribute
             if (attribute != null)
             {
                 var firstArg = args[attribute.TokenPosition];
-                return HasPrivileges(attribute, (string)firstArg).Result ? target(args) : false;
+                return HasPrivileges(attribute, (string)firstArg).Result ? target(args) : Task.FromResult(false);;
             }
         }
         catch (Exception ex)
