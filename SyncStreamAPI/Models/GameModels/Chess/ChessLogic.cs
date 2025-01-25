@@ -2,7 +2,7 @@
 using System.Linq;
 
 namespace SyncStreamAPI.Models.GameModels.Chess;
-#nullable enable
+
 public class ChessLogic
 {
     private static List<ChessGame> ChessGames { get; } = new();

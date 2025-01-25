@@ -32,7 +32,6 @@ public class DbFileFolder
     public int? DbUserID { get; set; }
     public string Name { get; set; }
     public List<DbFile> Files { get; set; }
-#nullable enable
     public DbFileFolder? Parent { get; set; }
     public int? ParentId { get; set; }
     public virtual ICollection<DbFileFolder> Children { get; set; }

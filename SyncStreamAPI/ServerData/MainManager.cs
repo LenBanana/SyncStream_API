@@ -1,5 +1,4 @@
-﻿#nullable enable
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -158,7 +157,7 @@ public class MainManager
             .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == downloadClient.Token) == true);
         var fileExtension = downloadClient.AudioOnly ? ".mp3" : ".mp4";
         var dbFile = new DbFile(downloadClient.FileName, fileExtension, dbUser);
-        var filePath = dbFile.GetPath();
+        dbFile.GetPath();
         var ytdl = General.GetYoutubeDl();
         ytdl.OutputFolder = General.FilePath;
         ytdl.RestrictFilenames = true;
@@ -181,7 +180,7 @@ public class MainManager
         try
         {
             runResult = await YtDLPHelper.DownloadMedia(ytdl, downloadClient, downloadClient.AudioOnly, progress);
-            if (runResult != null && runResult?.Success == true)
+            if (runResult is { Success: true })
             {
                 dbUser.Files.Add(dbFile);
                 await postgres.SaveChangesAsync();
@@ -239,7 +238,6 @@ public class MainManager
         {
             await using var stream = webClient.OpenRead(downloadClient.Url);
             var totalDownload = Convert.ToInt64(webClient.ResponseHeaders["Content-Length"]);
-            var mb = totalDownload / 1024d / 1024d;
             if (totalDownload <= 0)
             {
                 var response = await BrowserAutomation.GetM3U8FromUrl(downloadClient.Url);
@@ -266,7 +264,7 @@ public class MainManager
     {
         using (var scope = ServiceProvider.CreateScope())
         {
-            var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+            scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
             var downloadClient = userDownloads.FirstOrDefault(x => x.UniqueId == downloadId);
             if (downloadClient == null || downloadClient.UserId != userId ||
                 downloadClient.CancellationToken.IsCancellationRequested) return Task.CompletedTask;
@@ -289,7 +287,8 @@ public class MainManager
                    !userDownloads.All(x => x.Running))
             {
                 var nextDownload =
-                    userDownloads.FirstOrDefault(x => !x.Running && !x.CancellationToken.IsCancellationRequested);
+                    userDownloads.FirstOrDefault(x => x is
+                        { Running: false, CancellationToken.IsCancellationRequested: false });
                 if (nextDownload == null) continue;
                 nextDownload.Running = true;
                 var clientResult = new DownloadInfo("Your download is starting, please wait...",

@@ -97,7 +97,7 @@ public class GallowGameManager
             var points = General.GallowGuessPoints - guessedGallow + Time +
                          game.GallowWord.Length * General.GallowWordLengthMultiplierPlayer;
             gallowMember.guessedGallowTime = Time;
-            gallowMember.gallowPoints += points != null && points > 0 ? (int)points : 0;
+            gallowMember.gallowPoints += points is > 0 ? (int)points : 0;
             gallowMember.guessedGallow = true;
 
             var correntAnswerServerMsg = new SystemMessage($"{message.username} answered correctly");

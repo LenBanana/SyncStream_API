@@ -100,7 +100,6 @@ public class RoomManager
                         var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
                         if (room.server.members.Count > 0)
                         {
-                            var game = room.GallowGame;
                             if (e.ishost)
                             {
                                 room.server.members[0].ishost = true;

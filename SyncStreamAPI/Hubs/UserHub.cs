@@ -165,7 +165,7 @@ public partial class ServerHub
         if (idxMember != -1)
         {
             var game = room.GallowGame;
-            if (game != null && game.PlayingGallows) game.UpdateGallowWord(true);
+            if (game is { PlayingGallows: true }) game.UpdateGallowWord(true);
 
             if (idxHost != -1)
             {
@@ -197,13 +197,13 @@ public partial class ServerHub
         if (mainServer.members.Count > 0)
         {
             var gallowGame = room.GallowGame;
-            if (gallowGame != null && gallowGame.PlayingGallows)
+            if (gallowGame is { PlayingGallows: true })
                 if (mainServer.members.Count < 2)
                     await PlayGallowsSettings(UniqueId, gallowGame.GameLanguage, gallowGame.GameLength);
 
             if (isHost)
             {
-                if (gallowGame != null && gallowGame.PlayingGallows) gallowGame.UpdateGallowWord(true);
+                if (gallowGame is { PlayingGallows: true }) gallowGame.UpdateGallowWord(true);
 
                 if (mainServer.members.Count > 0 && mainServer.members[0] != null) mainServer.members[0].ishost = true;
 

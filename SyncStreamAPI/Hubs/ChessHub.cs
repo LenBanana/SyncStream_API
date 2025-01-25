@@ -46,7 +46,6 @@ public partial class ServerHub
         var room = GetRoom(UniqueId);
         if (room == null) return;
 
-        var MainServer = room.server;
         var game = ChessLogic.GetChessGame(UniqueId);
         if (game == null) return;
 

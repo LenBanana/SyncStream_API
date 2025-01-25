@@ -40,9 +40,7 @@ public class VideoController : Controller
     }
 
     [HttpGet("[action]")]
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token,
-        TokenPosition = 1)]
-    public async Task<IActionResult> fileByToken(string fileKey, string token)
+    public async Task<IActionResult> fileByToken(string fileKey, string? token)
     {
         try
         {
@@ -58,7 +56,7 @@ public class VideoController : Controller
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x =>
                 x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
             // Check if the user is authenticated and has the necessary privileges
-            if (!dbFile.Temporary && dbUser == null)
+            if (!dbFile.Public && dbUser == null)
                 // If the user is not authorized to view the content, return a 403 error and display an error message
                 return Unauthorized("You do not have permissions to view this content");
 
@@ -79,14 +77,11 @@ public class VideoController : Controller
             var contentType = _contentTypeProvider.TryGetContentType(path, out var contentTypeResult)
                 ? contentTypeResult
                 : "application/octet-stream";
-            if (dbFile.Temporary)
-            {
-                Response.Headers.Add("Content-Disposition", $"inline;filename={dbFile.Name}{dbFile.FileEnding}");
-                return File(fileStream, contentType);
-            }
-
-            return File(fileStream, contentType,
-                dbFile.Name.EndsWith(dbFile.FileEnding) ? dbFile.Name : dbFile.Name + dbFile.FileEnding, true);
+            if (!dbFile.Temporary)
+                return File(fileStream, contentType,
+                    dbFile.Name.EndsWith(dbFile.FileEnding) ? dbFile.Name : dbFile.Name + dbFile.FileEnding, true);
+            Response.Headers.Add("Content-Disposition", $"inline;filename={dbFile.Name}{dbFile.FileEnding}");
+            return File(fileStream, contentType);
         }
         catch (Exception ex)
         {
@@ -129,7 +124,7 @@ public class VideoController : Controller
                 case { Data: not null }:
                 {
                     var qualityOptions = data.Data?.Formats
-                        .Where(x => x.Height >= 360 && x.Height <= 2160)
+                        .Where(x => x.Height is >= 360 and <= 2160)
                         .Select(x => x.Height)
                         .Distinct()
                         .ToList();
@@ -189,7 +184,7 @@ public class VideoController : Controller
                 }
 
                 // Add the DbFile object to the database and save changes
-                var savedFile = _postgres.Files?.Add(dbFile);
+                _postgres.Files?.Add(dbFile);
                 await _postgres.SaveChangesAsync();
                 await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new FileDto(dbFile));
                 uploadFiles.Remove(path);
@@ -215,8 +210,7 @@ public class VideoController : Controller
         try
         {
             // Ensure request has a file attached
-            if (Request.ContentLength <= 0 || Request.Form == null || Request.Form.Files == null ||
-                Request.Form.Files.Count <= 0) return Unauthorized();
+            if (Request.ContentLength <= 0 || Request.Form is not { Files.Count: > 0 }) return Unauthorized();
 
             // Validate API key against DbUsers API key
             var dbUser = _postgres.Users.SingleOrDefault(u => u.ApiKey == apiKey);
@@ -235,7 +229,7 @@ public class VideoController : Controller
             }
 
             // Save new DbFile object to database
-            var savedFile = _postgres.Files?.Add(dbfile);
+            _postgres.Files?.Add(dbfile);
             await _postgres.SaveChangesAsync();
             await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new FileDto(dbfile));
             // Return Ok response code

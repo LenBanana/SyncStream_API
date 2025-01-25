@@ -12,7 +12,6 @@ public class NAudioTools
             var sampleProvider = reader.ToSampleProvider();
             var samplesPerSecond = sampleProvider.WaveFormat.SampleRate;
             var channelCount = sampleProvider.WaveFormat.Channels;
-            var durationInSeconds = reader.TotalTime.TotalSeconds;
             var samplesPerFrame = samplesPerSecond / 30;
             var buffer = new float[samplesPerFrame * channelCount];
 

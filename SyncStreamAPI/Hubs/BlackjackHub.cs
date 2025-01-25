@@ -41,7 +41,7 @@ public partial class ServerHub
     {
         var room = GetRoom(UniqueId);
         var game = room.BlackjackGame;
-        if (game != null && game.members.Count > 1)
+        if (game is { members.Count: > 1 })
         {
             var idx = game.members.FindIndex(x => x.ConnectionId == Context.ConnectionId);
             var member = game.members[idx];
@@ -75,7 +75,7 @@ public partial class ServerHub
     {
         var room = GetRoom(UniqueId);
         var game = room.BlackjackGame;
-        if (game != null && game.members.Count < 5)
+        if (game is { members.Count: < 5 })
         {
             var bjMember = new BlackjackMember($"BlackJack-Ai {General.Random.Next(0, 99)}", "", _blackjackManager)
             {

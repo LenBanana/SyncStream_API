@@ -38,6 +38,7 @@ public class DbFile
     public DateTime? DateToBeDeleted { get; set; }
     public int DbFileFolderId { get; set; }
     public bool Temporary { get; set; }
+    public bool Public { get; set; }
 
     public string GetPath()
     {

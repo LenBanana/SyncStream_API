@@ -30,7 +30,6 @@ public class StreamTape : IStreamDownloader
             var doc = new HtmlDocument();
             doc.LoadHtml(html);
             var videoNode = doc.DocumentNode.SelectSingleNode("//video");
-            var webTitle = client.FileName;
             var downloadUri = "https:" + videoNode?.Attributes["src"]?.Value?.Replace("amp;", "");
             await page.CloseAsync();
             return new DownloadExtract

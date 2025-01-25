@@ -225,7 +225,7 @@ public static class General
                 apiResult = new YtApi().FromJson(await client.GetStringAsync(uri));
             }
 
-            if (apiResult != null && apiResult.items.Count > 0)
+            if (apiResult is { items.Count: > 0 })
                 title = apiResult.items.First().snippet.title + " - " +
                         apiResult.items.First().snippet.channelTitle;
 

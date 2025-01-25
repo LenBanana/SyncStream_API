@@ -46,7 +46,7 @@ public partial class ServerHub
         await Clients.GroupExcept(room.uniqueId, new[] { Context.ConnectionId })
             .stopWebRtcStream(room.CurrentStreamer);
         room.CurrentStreamer = null;
-        var type = await RoomManager.SendPlayerType(room);
+        await RoomManager.SendPlayerType(room);
         await Clients.Group(room.uniqueId).stopWebRtcStream(Context.ConnectionId);
     }
 

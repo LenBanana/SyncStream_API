@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -85,7 +86,7 @@ public partial class ServerHub
     [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
     public async Task ChangeDownload(string token, int fileId, string name)
     {
-        if (name == null || name.Length <= 2)
+        if (name is not { Length: > 2 })
         {
             await Clients.Caller.dialog(new Dialog(AlertType.Danger)
                 { Header = "Error", Question = "Filename has to be at least 3 characters long", Answer1 = "Ok" });
@@ -262,10 +263,19 @@ public partial class ServerHub
             return;
         }
 
-        var mediaInfo = await FFmpeg.GetMediaInfo(path);
+        IMediaInfo? mediaInfo = null;
+        try
+        {
+            mediaInfo = await FFmpeg.GetMediaInfo(path);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+        }
+
         if (mediaInfo == null)
         {
-            await _manager.SendDefaultDialog(dbUser.ID.ToString(), "Media info was null", AlertType.Warning);
+            await _manager.SendDefaultDialog(dbUser.ID.ToString(), "Could not get media info", AlertType.Warning);
             return;
         }
 
@@ -412,7 +422,7 @@ public partial class ServerHub
         while (currentFolderId.HasValue)
         {
             var parentFolder = _postgres.Folders.FirstOrDefault(x => x.Id == currentFolderId.Value);
-            if (parentFolder != null && parentFolder.ParentId.HasValue)
+            if (parentFolder is { ParentId: not null })
             {
                 ancestorFolders.Add(parentFolder.ParentId.Value);
                 currentFolderId = parentFolder.ParentId;
@@ -482,10 +492,24 @@ public partial class ServerHub
         var dbUser = await _postgres.Users.Include(x => x.RememberTokens)
             .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
         var file = _postgres.Files.ToList().FirstOrDefault(x => x.ID == id);
-        if (file != null && file.Temporary &&
+        if (file is { Temporary: true } &&
             (file.DbUserID == dbUser.ID || dbUser.userprivileges >= UserPrivileges.Elevated))
         {
             file.DateToBeDeleted = null;
+            await _postgres.SaveChangesAsync();
+            await GetFolderFiles(token, file.DbFileFolderId);
+        }
+    }
+
+    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
+    public async Task ToggleFilePublic(string token, int id)
+    {
+        var dbUser = await _postgres.Users.Include(x => x.RememberTokens)
+            .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
+        var file = _postgres.Files.ToList().FirstOrDefault(x => x.ID == id);
+        if (file != null && (file.DbUserID == dbUser.ID || dbUser.userprivileges >= UserPrivileges.Elevated))
+        {
+            file.Public = !file.Public;
             await _postgres.SaveChangesAsync();
             await GetFolderFiles(token, file.DbFileFolderId);
         }

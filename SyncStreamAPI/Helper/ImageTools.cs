@@ -81,7 +81,7 @@ public class ImageTools
 
     private static async Task SaveToDb(DbFile dbFile, PostgresContext postgresContext)
     {
-        var savedFile = postgresContext.Files?.Add(dbFile);
+        postgresContext.Files?.Add(dbFile);
         await postgresContext.SaveChangesAsync();
     }
 

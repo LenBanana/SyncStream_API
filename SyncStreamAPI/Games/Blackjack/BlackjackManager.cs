@@ -47,14 +47,14 @@ public class BlackjackManager
         if (game != null)
         {
             var memberIdx = game.members.FindIndex(x => x.ConnectionId == member.ConnectionId);
-            if (member.waitingForBet && !member.NewlyJoined && !member.notPlaying)
+            if (member.waitingForBet && member is { NewlyJoined: false, notPlaying: false })
             {
                 member.SetBet(5);
                 game.dealer.money += member.Bet;
                 AskForBet(game, memberIdx + 1);
                 member.waitingForBet = false;
             }
-            else if (member.waitingForPull && !member.NewlyJoined && !member.notPlaying)
+            else if (member.waitingForPull && member is { NewlyJoined: false, notPlaying: false })
             {
                 AskForPull(game, memberIdx + 1);
                 member.waitingForPull = false;
@@ -100,7 +100,7 @@ public class BlackjackManager
     private async Task AddMoney(BlackjackLogic game)
     {
         var dealerText = $"Dealer had {game.dealer.pointsDTO}. ";
-        foreach (var member in game.members?.Where(x => !x.notPlaying && !x.NewlyJoined).ToList())
+        foreach (var member in game.members?.Where(x => x is { notPlaying: false, NewlyJoined: false }).ToList())
         {
             var totalText = $"You had {member.points}";
 
@@ -201,7 +201,7 @@ public class BlackjackManager
         if (memberIdx < game.members.Count)
         {
             var member = game.members[memberIdx];
-            if (!member.notPlaying && !member.NewlyJoined)
+            if (member is { notPlaying: false, NewlyJoined: false })
             {
                 if (!member.Ai)
                 {
@@ -229,7 +229,7 @@ public class BlackjackManager
             await game.PlayRound();
             await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(1000), TimeSpan.FromMilliseconds(2500));
             var idx = game.members.FindIndex(x =>
-                !x.notPlaying && !x.NewlyJoined && x.blackjack == false && x.points < 21);
+                x is { notPlaying: false, NewlyJoined: false } and { blackjack: false, points: < 21 });
             if (idx > -1)
                 AskForPull(game, idx);
             else
@@ -243,7 +243,7 @@ public class BlackjackManager
         {
             var member = game.members[memberIdx];
             var doubleOption = member.cards.Count == 2;
-            if (!member.notPlaying && !member.NewlyJoined && member.blackjack == false && member.points < 21)
+            if (member is { notPlaying: false, NewlyJoined: false } and { blackjack: false, points: < 21 })
             {
                 if (!member.Ai)
                 {

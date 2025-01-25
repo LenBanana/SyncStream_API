@@ -25,7 +25,7 @@ public class FFmpegMediaInfo : FFmpegFunction
 
             var p = new Progress<double>(d => { frames = d; });
 
-            var success = await FFmpegTools.ExecuteFfmpeg(args,
+            await FFmpegTools.ExecuteFfmpeg(args,
                 e => Regex.IsMatch(e.Data, DefaultConversionRegex),
                 e => Regex.IsMatch(e.Data, DefaultErrorRegex),
                 p

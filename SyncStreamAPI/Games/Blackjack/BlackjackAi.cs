@@ -10,9 +10,8 @@ public class BlackjackAi
     public static BlackjackSmartReaction SmartPull(BlackjackMember member, BlackjackDealer dealer, bool doubleOption,
         bool forSplitHand)
     {
-        var dealerCard = dealer.cards[0].Rank;
         var dealerPoints = dealer.pointsDTO;
-        if (member.splitable && !member.didSplit)
+        if (member is { splitable: true, didSplit: false })
             return ReactToSplit(member.cards[0].Rank, (int)dealerPoints, doubleOption);
 
         if ((!forSplitHand && member.cards.Count == 2) || (forSplitHand && member.splitCards.Count == 2))

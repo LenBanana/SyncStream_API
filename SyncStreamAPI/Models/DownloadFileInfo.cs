@@ -2,7 +2,7 @@
 using Xabe.FFmpeg;
 
 namespace SyncStreamAPI.Models;
-#nullable enable
+
 public class DownloadFileInfo
 {
     public DownloadFileInfo(string fileName, string fileType, long size, string hash, IVideoStream? videoStream,

@@ -28,7 +28,7 @@ public class LinuxBash
                 }
             };
             process.Start();
-            var result = process.StandardOutput.ReadToEnd();
+            process.StandardOutput.ReadToEnd();
             process.WaitForExit();
             return true;
         }
@@ -51,7 +51,7 @@ public class LinuxBash
         var client = new HttpClient();
         using (client)
         {
-            if (!Uri.TryCreate(uri, UriKind.Absolute, out var uriResult))
+            if (!Uri.TryCreate(uri, UriKind.Absolute, out _))
                 throw new InvalidOperationException("URI is invalid.");
 
             var fileBytes = await client.GetByteArrayAsync(uri);

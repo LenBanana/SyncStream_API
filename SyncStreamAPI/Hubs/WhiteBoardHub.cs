@@ -44,7 +44,7 @@ public partial class ServerHub
                     gallows = room.GallowGame;
                 }
 
-            if (gallows != null && gallows.PlayingGallows)
+            if (gallows is { PlayingGallows: true })
             {
                 gallows.GameLanguage = language;
                 gallows.GameLength = gameLength;
@@ -77,7 +77,7 @@ public partial class ServerHub
             if (room == null) return;
 
             var game = room.GallowGame;
-            if (game != null && game.PlayingGallows) game.UpdateGallowWord(false);
+            if (game is { PlayingGallows: true }) game.UpdateGallowWord(false);
         }
         catch (Exception ex)
         {

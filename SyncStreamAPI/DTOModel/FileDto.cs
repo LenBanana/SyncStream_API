@@ -17,6 +17,7 @@ public class FileDto
         FileFolderId = file.DbFileFolderId;
         Temporary = file.Temporary;
         DateToBeDeleted = file.DateToBeDeleted;
+        Public = file.Public;
     }
 
     public int ID { get; set; }
@@ -27,6 +28,7 @@ public class FileDto
     public DateTime? DateToBeDeleted { get; set; }
     public int FileFolderId { get; set; }
     public bool Temporary { get; set; }
+    public bool Public { get; set; }
 
     public long Length =>
         !File.Exists($"{(Temporary ? General.TemporaryFilePath : General.FilePath)}/{FileKey}{FileEnding}")

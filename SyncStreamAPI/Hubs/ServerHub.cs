@@ -42,7 +42,7 @@ public partial class ServerHub : Hub<IServerHub>
     }
 
     private IConfiguration Configuration { get; }
-#nullable enable
+
     public override async Task OnDisconnectedAsync(Exception? ex)
     {
         var rooms = MainManager.GetRooms();
