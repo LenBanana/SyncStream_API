@@ -157,38 +157,38 @@ public class VideoController : Controller
         try
         {
             // Check if the request is valid and contains any files
-            if (Request.Form?.Files?.Count == 0) return Unauthorized();
+            if (Request.Form.Files.Count == 0) return Unauthorized();
 
             // Get the user from the database and verify their token
-            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x =>
-                x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
-            var Token = dbUser?.RememberTokens.SingleOrDefault(x => x.Token == token);
-            if (Token == null) return Unauthorized();
+            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == token));
+            var dbToken = dbUser?.RememberTokens.SingleOrDefault(x => x.Token == token);
+            if (dbToken == null) return Unauthorized();
 
             // Iterate through all the uploaded files
-            foreach (var file in Request.Form.Files)
-            {
-                // Check if the file is valid
-                if (file.Length <= 0) continue; // Skip empty files
-
-                // Create a new DbFile object and save the file to disk
-                var fileInfo = new FileInfo(file.FileName);
-                var dbFile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension, dbUser);
-                var path = Path.Combine(General.FilePath, $"{dbFile.FileKey}{dbFile.FileEnding}");
-                Directory.CreateDirectory(General.FilePath);
-                // Add the temporary file path to the list of uploaded files
-                uploadFiles.Add(path);
-                await using (var fileStream = System.IO.File.Create(path))
+                foreach (var file in Request.Form.Files)
                 {
-                    await file.CopyToAsync(fileStream);
-                }
+                    // Check if the file is valid
+                    if (file.Length <= 0) continue; // Skip empty files
 
-                // Add the DbFile object to the database and save changes
-                _postgres.Files?.Add(dbFile);
-                await _postgres.SaveChangesAsync();
-                await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new FileDto(dbFile));
-                uploadFiles.Remove(path);
-            }
+                    // Create a new DbFile object and save the file to disk
+                    var fileInfo = new FileInfo(file.FileName);
+                    var dbFile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension,
+                        dbUser);
+                    var path = Path.Combine(General.FilePath, $"{dbFile.FileKey}{dbFile.FileEnding}");
+                    Directory.CreateDirectory(General.FilePath);
+                    // Add the temporary file path to the list of uploaded files
+                    uploadFiles.Add(path);
+                    await using (var fileStream = System.IO.File.Create(path))
+                    {
+                        await file.CopyToAsync(fileStream);
+                    }
+
+                    // Add the DbFile object to the database and save changes
+                    _postgres.Files?.Add(dbFile);
+                    await _postgres.SaveChangesAsync();
+                    await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new FileDto(dbFile));
+                    uploadFiles.Remove(path);
+                }
         }
         catch (Exception ex)
         {
@@ -219,21 +219,21 @@ public class VideoController : Controller
             // Save file to temporary location
             var file = Request.Form.Files[0];
             var fileInfo = new FileInfo(file.FileName);
-            var dbfile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension, dbUser, true);
-            var path = General.TemporaryFilePath + $"/{dbfile.FileKey}{dbfile.FileEnding}";
+            var dbFile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension, dbUser, true);
+            var path = General.TemporaryFilePath + $"/{dbFile.FileKey}{dbFile.FileEnding}";
             if (!Directory.Exists(General.TemporaryFilePath)) Directory.CreateDirectory(General.TemporaryFilePath);
 
-            using (var ms = System.IO.File.OpenWrite(path))
+            await using (var ms = System.IO.File.OpenWrite(path))
             {
                 await file.CopyToAsync(ms);
             }
 
             // Save new DbFile object to database
-            _postgres.Files?.Add(dbfile);
+            _postgres.Files.Add(dbFile);
             await _postgres.SaveChangesAsync();
-            await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new FileDto(dbfile));
+            await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new FileDto(dbFile));
             // Return Ok response code
-            return Ok(new { fileKey = dbfile.Name, fileId = dbfile.FileKey });
+            return Ok(new { fileKey = dbFile.Name, fileId = dbFile.FileKey });
         }
         catch (Exception ex)
         {

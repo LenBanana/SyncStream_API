@@ -16,6 +16,7 @@ public class DbFile
         FileKey = user?.GenerateToken(Guid.NewGuid() + name).Token;
         Created = DateTime.UtcNow;
         Temporary = temporary;
+        Public = temporary;
         DateToBeDeleted = dateToBeDeleted;
         if (Temporary && DateToBeDeleted == null)
             DateToBeDeleted = DateTime.UtcNow.AddDays(General.DaysToKeepTemporaryFiles.Days);

@@ -61,7 +61,7 @@ public static class FFmpegTools
                 else if (progress != null)
                 {
                     var match = Regex.Match(e.Data, @"frame=\s*(\d+)");
-                    if (match.Success && match.Groups.Count > 1)
+                    if (match is { Success: true, Groups.Count: > 1 })
                     {
                         var frame = double.Parse(match.Groups[1].Value);
                         progress.Report(frame);
@@ -132,7 +132,7 @@ public static class FFmpegTools
                 await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
                 var fileBytes = await File.ReadAllBytesAsync(function.OutputPath);
                 function.OutputFile.DateToBeDeleted = DateTime.UtcNow.AddMinutes(General.MinutesToKeepFFmpeg.Minutes);
-                var savedFile = postgresContext.Files?.Add(function.OutputFile);
+                postgresContext.Files?.Add(function.OutputFile);
                 await postgresContext.SaveChangesAsync();
                 await serverHub.Clients.Group(dbUser.ApiKey).updateFolders(new FileDto(function.OutputFile));
                 var fileResult = new FileContentResult(fileBytes, mimeType);
