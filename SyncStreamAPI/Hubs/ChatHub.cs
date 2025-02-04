@@ -26,12 +26,16 @@ public partial class ServerHub
 
             switch (room.GameMode)
             {
+                case GameMode.NotPlaying:
+                case GameMode.Blackjack:
+                case GameMode.Chess:
+                    await Clients.Group(mainServer.RoomId).sendmessage(message);
+                    break;
                 case GameMode.Gallows:
                     var sender = mainServer.members.FirstOrDefault(x => Context.ConnectionId == x.ConnectionId);
                     await _gallowGameManager.PlayGallow(room.GallowGame, sender, message, room.GallowGame.GallowTime);
                     break;
             }
-            await Clients.Group(mainServer.RoomId).sendmessage(message);
 
             return;
         }

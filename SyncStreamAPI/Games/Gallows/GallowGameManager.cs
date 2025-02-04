@@ -87,7 +87,11 @@ public class GallowGameManager
     public async Task PlayGallow(GallowLogic game, Member sender, ChatMessage message, int Time)
     {
         var gallowMember = game.members.FirstOrDefault(x => x.username == sender.username);
-        if (gallowMember.isDrawing || gallowMember.guessedGallow) return;
+        if (gallowMember.isDrawing || gallowMember.guessedGallow)
+        {
+            await _hub.Clients.Group(game.RoomId).sendmessage(message);
+            return;
+        }
 
         var msg = message.message.Trim().ToLower();
         var gallowWord = game.GallowWord.ToLower();
