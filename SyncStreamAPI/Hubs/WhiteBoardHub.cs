@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.SignalR;
 using Newtonsoft.Json;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.Models;
+using SyncStreamAPI.ServerData.Helper;
 
 namespace SyncStreamAPI.Hubs;
 
@@ -30,7 +31,6 @@ public partial class ServerHub
     {
         try
         {
-            await Clients.Group(UniqueId).playertype(PlayerType.WhiteBoard);
             var room = GetRoom(UniqueId);
             if (room == null) return;
 
@@ -52,8 +52,11 @@ public partial class ServerHub
                 await Clients.Group(UniqueId).gallowusers(room.GallowGame.members);
                 var startGallowMessage = new SystemMessage("Started a round of gallows, have fun!");
                 await Clients.Group(UniqueId).sendmessage(startGallowMessage);
+                await Clients.Group(UniqueId).playertype(PlayerType.WhiteBoard);
                 return;
             }
+            
+            await RoomManager.SendPlayerType(room);
 
             gallows.drawings = new List<Drawing>();
             gallows.members.ForEach(x =>

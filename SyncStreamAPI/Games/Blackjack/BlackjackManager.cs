@@ -44,21 +44,20 @@ public class BlackjackManager
     {
         var game = blackjackGames.FirstOrDefault(x =>
             x.members.FindIndex(y => y.ConnectionId == member.ConnectionId) != -1);
-        if (game != null)
+        if (game == null) return;
+
+        var memberIdx = game.members.FindIndex(x => x.ConnectionId == member.ConnectionId);
+        if (member.waitingForBet && member is { NewlyJoined: false, notPlaying: false })
         {
-            var memberIdx = game.members.FindIndex(x => x.ConnectionId == member.ConnectionId);
-            if (member.waitingForBet && member is { NewlyJoined: false, notPlaying: false })
-            {
-                member.SetBet(5);
-                game.dealer.money += member.Bet;
-                AskForBet(game, memberIdx + 1);
-                member.waitingForBet = false;
-            }
-            else if (member.waitingForPull && member is { NewlyJoined: false, notPlaying: false })
-            {
-                AskForPull(game, memberIdx + 1);
-                member.waitingForPull = false;
-            }
+            member.SetBet(5);
+            game.dealer.money += member.Bet;
+            AskForBet(game, memberIdx + 1);
+            member.waitingForBet = false;
+        }
+        else if (member.waitingForPull && member is { NewlyJoined: false, notPlaying: false })
+        {
+            AskForPull(game, memberIdx + 1);
+            member.waitingForPull = false;
         }
     }
 
@@ -66,15 +65,14 @@ public class BlackjackManager
     {
         var game = blackjackGames.FirstOrDefault(x =>
             x.members.FindIndex(y => y.ConnectionId == member.ConnectionId) != -1);
-        if (game != null)
-        {
-            await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(1000), TimeSpan.FromMilliseconds(2500));
-            game.DealCard(member);
-            await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(1000), TimeSpan.FromMilliseconds(2500));
-            game.DealSplitCard(member);
-            await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1500));
-            AskForSplitPull(game, game.members.FindIndex(x => x.ConnectionId == member.ConnectionId), false);
-        }
+        if (game == null) return;
+
+        await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1250));
+        game.DealCard(member);
+        await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1250));
+        game.DealSplitCard(member);
+        await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1250));
+        AskForSplitPull(game, game.members.FindIndex(x => x.ConnectionId == member.ConnectionId), false);
     }
 
     private async void Game_RoundEnded(BlackjackLogic game)
@@ -100,7 +98,7 @@ public class BlackjackManager
     private async Task AddMoney(BlackjackLogic game)
     {
         var dealerText = $"Dealer had {game.dealer.pointsDTO}. ";
-        foreach (var member in game.members?.Where(x => x is { notPlaying: false, NewlyJoined: false }).ToList())
+        foreach (var member in game.members.Where(x => x is { notPlaying: false, NewlyJoined: false }).ToList())
         {
             var totalText = $"You had {member.points}";
 
@@ -135,7 +133,6 @@ public class BlackjackManager
 
     private async Task InitRound(BlackjackLogic game, int timeout)
     {
-        await SendAllUsers(game);
         game.members.ForEach(x => x.NewlyJoined = false);
         await Task.Delay(timeout);
         if (!game.GameEnded) AskForBet(game, 0);
@@ -143,11 +140,11 @@ public class BlackjackManager
 
     public async Task SendAllUsers(BlackjackLogic game)
     {
-        foreach (var member in game.members?.Where(x => x.ConnectionId.Length > 0).ToList())
+        foreach (var member in game.members.Where(x => x.ConnectionId.Length > 0).ToList())
         {
             await _hub.Clients.Client(member.ConnectionId).sendblackjackself(member);
             await _hub.Clients.Client(member.ConnectionId)
-                .sendblackjackmembers(game.members?.Where(x => x.ConnectionId != member.ConnectionId).ToList());
+                .sendblackjackmembers(game.members.Where(x => x.ConnectionId != member.ConnectionId).ToList());
         }
 
         await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer);
@@ -159,18 +156,19 @@ public class BlackjackManager
         if (idx < 0)
         {
             var room = MainManager.GetRoom(UniqueId);
-            var bjMember = new List<BlackjackMember>();
-            foreach (var member in room.server.members.Take(5).ToList()) bjMember.Add(member.ToBlackjackMember(this));
+            var bjMember = room.server.members.Take(5).ToList().Select(member => member.ToBlackjackMember(this))
+                .ToList();
 
             if (room.server.members.Count > 5)
-                foreach (var member in room.server.members.Skip(5).ToList())
+                foreach (var bjMem in room.server.members.Skip(5).ToList()
+                             .Select(member => member.ToBlackjackMember(this)))
                 {
-                    var bjMem = member.ToBlackjackMember(this);
                     bjMem.notPlaying = true;
                     bjMember.Add(bjMem);
                 }
 
             var game = new BlackjackLogic(this, UniqueId, bjMember);
+            await SendAllUsers(game);
             blackjackGames.Add(game);
             await _hub.Clients.Group(UniqueId).playblackjack(true);
             await InitRound(game, 500);
@@ -211,7 +209,7 @@ public class BlackjackManager
                 }
                 else
                 {
-                    await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(1250));
+                    await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(500));
                     member.SetBet(5);
                     game.dealer.money += member.Bet;
                     AskForBet(game, memberIdx + 1);
@@ -225,9 +223,9 @@ public class BlackjackManager
         else
         {
             await game.PlayRound();
-            await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(1000), TimeSpan.FromMilliseconds(2500));
+            await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1250));
             await game.PlayRound();
-            await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(1000), TimeSpan.FromMilliseconds(2500));
+            await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1250));
             var idx = game.members.FindIndex(x =>
                 x is { notPlaying: false, NewlyJoined: false } and { blackjack: false, points: < 21 });
             if (idx > -1)
@@ -253,7 +251,7 @@ public class BlackjackManager
                 }
                 else
                 {
-                    await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1500));
+                    await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1250));
                     switch (BlackjackAi.SmartPull(member, game.dealer, true, false))
                     {
                         case BlackjackSmartReaction.Stand:
@@ -301,7 +299,7 @@ public class BlackjackManager
                 }
                 else
                 {
-                    await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1500));
+                    await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1250));
                     switch (BlackjackAi.SmartPull(member, game.dealer, false, pullForSplitHand))
                     {
                         case BlackjackSmartReaction.Stand:
@@ -332,7 +330,7 @@ public class BlackjackManager
             }
             else
             {
-                await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1500));
+                await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1250));
                 switch (BlackjackAi.SmartPull(member, game.dealer, false, pullForSplitHand))
                 {
                     case BlackjackSmartReaction.Stand:
@@ -355,11 +353,11 @@ public class BlackjackManager
     {
         game.dealer.cards[1].FaceUp = true;
         await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer);
-        await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(1000), TimeSpan.FromMilliseconds(2500));
+        await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1250));
         while (game.DealDealerCard())
         {
             await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer);
-            await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(1000), TimeSpan.FromMilliseconds(2500));
+            await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1250));
         }
 
         game.EndRound();

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SyncStreamAPI.Enums;
+using SyncStreamAPI.Enums.Games;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
@@ -226,6 +227,20 @@ public class RoomManager
     {
         using var scope = ServiceProvider.CreateScope();
         var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+
+        switch (room.GameMode)
+        {
+            case GameMode.Blackjack:
+                await hub.Clients.Group(room.uniqueId).playertype(PlayerType.Blackjack);
+                return PlayerType.Blackjack;
+            case GameMode.Chess:
+                await hub.Clients.Group(room.uniqueId).playertype(PlayerType.Chess);
+                return PlayerType.Chess;
+            case GameMode.Gallows:
+                await hub.Clients.Group(room.uniqueId).playertype(PlayerType.WhiteBoard);
+                return PlayerType.WhiteBoard;
+        }
+        
         var uniqueId = room.uniqueId;
         var key = room.server.currentVideo;
         var result = PlayerType.Nothing;

@@ -82,7 +82,7 @@ public partial class ServerHub
                     game.AddMember(newMember, _blackjackManager);
                     await Clients.Caller.playblackjack(true);
                     //give time to build component
-                    await Task.Delay(250);
+                    await Task.Delay(500);
                     await _blackjackManager.SendAllUsers(game);
                 }
 

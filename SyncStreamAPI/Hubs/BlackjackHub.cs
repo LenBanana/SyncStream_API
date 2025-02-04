@@ -14,14 +14,18 @@ public partial class ServerHub
     {
         var playing = await _blackjackManager.PlayNewRound(UniqueId);
         var room = GetRoom(UniqueId);
-        if (playing && room.GallowGame != null)
+        switch (playing)
         {
-            _gallowGameManager.PlayNewRound(UniqueId);
-            await RoomManager.SendPlayerType(room);
-        }
-        else
-        {
-            await Clients.Group(UniqueId).playertype(PlayerType.Blackjack);
+            case true when room.GallowGame != null:
+                _gallowGameManager.PlayNewRound(UniqueId);
+                await RoomManager.SendPlayerType(room);
+                break;
+            case true:
+                await Clients.Group(UniqueId).playertype(PlayerType.Blackjack);
+                break;
+            case false:
+                await RoomManager.SendPlayerType(room);
+                break;
         }
     }
 
