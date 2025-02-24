@@ -146,49 +146,62 @@ public class VideoController : Controller
         }
     }
 
-    [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = int.MaxValue)]
     [DisableRequestSizeLimit]
     [HttpPost("[action]")]
     [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
     public async Task<IActionResult> addFile(string token)
     {
-        // Create a list to track uploaded files during this session
         var uploadFiles = new List<string>();
+
         try
         {
-            // Check if the request is valid and contains any files
-            if (Request.Form.Files.Count == 0) return Unauthorized();
+            if (Request.Form.Files.Count == 0)
+                return Unauthorized();
 
-            // Get the user from the database and verify their token
-            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == token));
-            var dbToken = dbUser?.RememberTokens.SingleOrDefault(x => x.Token == token);
-            if (dbToken == null) return Unauthorized();
+            var dbUser = _postgres.Users
+                .Include(x => x.RememberTokens)
+                .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == token));
+            if (dbUser == null)
+                return Unauthorized();
 
-            // Iterate through all the uploaded files
-                foreach (var file in Request.Form.Files)
+            var dbToken = dbUser.RememberTokens.SingleOrDefault(x => x.Token == token);
+            if (dbToken == null)
+                return Unauthorized();
+
+            foreach (var file in Request.Form.Files)
+            {
+                if (file.Length <= 0)
+                    continue;
+
+                var fileInfo = new FileInfo(file.FileName);
+                var dbFile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension, dbUser);
+                var path = Path.Combine(General.FilePath, $"{dbFile.FileKey}{dbFile.FileEnding}");
+
+                // Ensure the target directory exists
+                Directory.CreateDirectory(General.FilePath);
+                uploadFiles.Add(path);
+
+                try
                 {
-                    // Check if the file is valid
-                    if (file.Length <= 0) continue; // Skip empty files
-
-                    // Create a new DbFile object and save the file to disk
-                    var fileInfo = new FileInfo(file.FileName);
-                    var dbFile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension,
-                        dbUser);
-                    var path = Path.Combine(General.FilePath, $"{dbFile.FileKey}{dbFile.FileEnding}");
-                    Directory.CreateDirectory(General.FilePath);
-                    // Add the temporary file path to the list of uploaded files
-                    uploadFiles.Add(path);
-                    await using (var fileStream = System.IO.File.Create(path))
+                    const int bufferSize = 81920;
+                    await using (var fileStream = new FileStream(path, FileMode.Create, FileAccess.Write,
+                                     FileShare.None, bufferSize, useAsync: true))
                     {
                         await file.CopyToAsync(fileStream);
                     }
 
-                    // Add the DbFile object to the database and save changes
                     _postgres.Files?.Add(dbFile);
                     await _postgres.SaveChangesAsync();
                     await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new FileDto(dbFile));
                     uploadFiles.Remove(path);
                 }
+                catch (Exception ex)
+                {
+                    // Log the error and delete any partially uploaded file
+                    Console.WriteLine(ex.ToString());
+                    System.IO.File.Delete(path);
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -196,7 +209,7 @@ public class VideoController : Controller
             return StatusCode(StatusCodes.Status500InternalServerError);
         }
 
-        // If any files have not been completely uploaded, remove any temporary files not saved to DB
+        // Cleanup any files that were not completely processed
         foreach (var path in uploadFiles) System.IO.File.Delete(path);
         return Ok();
     }
