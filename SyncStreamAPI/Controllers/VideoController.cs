@@ -149,6 +149,8 @@ public class VideoController : Controller
     [DisableRequestSizeLimit]
     [HttpPost("[action]")]
     [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
+    [RequestSizeLimit(long.MaxValue)]
+    [RequestFormLimits(MultipartBodyLengthLimit = long.MaxValue, ValueLengthLimit = int.MaxValue)]
     public async Task<IActionResult> addFile(string token)
     {
         var uploadFiles = new List<string>();
