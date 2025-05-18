@@ -17,24 +17,32 @@ COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "SyncStreamAPI.dll"]
 
 #####################
-#PUPPETEER RECIPE - ARM64 Compatible
+# PUPPETEER RECIPE - Cross-platform (ARM64/AMD64)
 #####################
-# Install latest chrome dev package and fonts to support major charsets (Chinese, Japanese, Arabic, Hebrew, Thai and a few others)
-# Note: this installs the necessary libs to make the bundled version of Chromium that Puppeteer
-# installs, work.
-RUN apt-get update && apt-get -f install && apt-get -y install wget gnupg2 apt-utils python3
+# Install common dependencies first
+RUN apt-get update && apt-get -y install --no-install-recommends \
+    wget apt-utils python3 ca-certificates curl gnupg2 \
+    fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst
 
-# Architecture-aware Chrome installation
-RUN apt-get update \
-    && apt-get install -y ca-certificates curl gnupg \
-    && mkdir -p /etc/apt/keyrings \
+# Install architecture-specific browser
+RUN if [ "$(dpkg --print-architecture)" = "amd64" ]; then \
+    # AMD64: Install Google Chrome unstable from Google's repo \
+    mkdir -p /etc/apt/keyrings \
     && curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /etc/apt/keyrings/google.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/google.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+    && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
-    && apt-get install -y google-chrome-unstable fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst \
-      --no-install-recommends \
+    && apt-get install -y google-chrome-unstable --no-install-recommends \
+    && export PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-unstable \
+    && echo "PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-unstable" > /etc/environment; \
+    else \
+    # ARM64: Install Chromium from Debian repo \
+    apt-get update \
+    && apt-get install -y chromium --no-install-recommends \
+    && export PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
+    && echo "PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium" > /etc/environment; \
+    fi \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
-#####################
-#END PUPPETEER RECIPE
-#####################
-ENV PUPPETEER_EXECUTABLE_PATH "/usr/bin/google-chrome-unstable"
+
+# Set default Puppeteer path that will be overridden by the above script at runtime
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
