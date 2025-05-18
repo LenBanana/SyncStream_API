@@ -36,6 +36,7 @@ public class RtmpController : Controller
     {
         try
         {
+            Console.WriteLine($"onpublish: {rtmpData.name}");
             var dbUser = _postgres.Users?.FirstOrDefault(x =>
                 x.StreamToken != null && x.StreamToken == rtmpData.token &&
                 x.username.ToLower() == rtmpData.name.ToLower());
@@ -66,6 +67,7 @@ public class RtmpController : Controller
     {
         try
         {
+            Console.WriteLine($"onpublishdone: {rtmpData.name}");
             var dbUser = _postgres.Users?.FirstOrDefault(x => x.StreamToken != null && x.StreamToken == rtmpData.token);
             var token = dbUser?.StreamToken;
             if (string.IsNullOrEmpty(token) || dbUser.userprivileges < UserPrivileges.Approved) return Unauthorized();
@@ -94,6 +96,7 @@ public class RtmpController : Controller
     {
         try
         {
+            Console.WriteLine($"onplay: {rtmpData.name}");
             var liveUser = _manager.LiveUsers?.FirstOrDefault(x =>
                 string.Equals(x.userName, rtmpData.name, StringComparison.CurrentCultureIgnoreCase));
             if (liveUser == null) return StatusCode(StatusCodes.Status404NotFound);
@@ -120,6 +123,7 @@ public class RtmpController : Controller
     {
         try
         {
+            Console.WriteLine($"onplaydone: {rtmpData.name}");
             var liveUser = _manager.LiveUsers?.FirstOrDefault(x =>
                 string.Equals(x.userName, rtmpData.name, StringComparison.CurrentCultureIgnoreCase));
             if (liveUser == null) return StatusCode(StatusCodes.Status404NotFound);
