@@ -29,7 +29,25 @@ jobs:
             docker-compose --file docker-compose.test.yml build
             docker-compose --file docker-compose.test.yml run sut
           else
-            docker buildx build . --file Dockerfile --platform linux/amd64,linux/arm64
+            # Add retry logic for docker buildx
+            max_attempts=3
+            attempt=1
+            while [ $attempt -le $max_attempts ]; do
+              echo "Attempt $attempt of $max_attempts for docker buildx build"
+              if docker buildx build . --file Dockerfile --platform linux/amd64; then
+                echo "Build successful!"
+                break
+              else
+                echo "Build failed on attempt $attempt"
+                if [ $attempt -eq $max_attempts ]; then
+                  echo "All attempts failed. Exiting."
+                  exit 1
+                fi
+                echo "Waiting 30 seconds before retrying..."
+                sleep 30
+                ((attempt++))
+              fi
+            done
           fi
   # Push image to GitHub Packages.
   # See also https://docs.docker.com/docker-hub/builds/
@@ -61,9 +79,26 @@ jobs:
           echo IMAGE_ID=$IMAGE_ID
           echo VERSION=$VERSION
           
-          # Build and push multi-arch image
-          docker buildx build . \
-            --platform linux/amd64,linux/arm64 \
-            --file Dockerfile \
-            --tag $IMAGE_ID:$VERSION \
-            --push
+          # Build and push with retry logic
+          max_attempts=3
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            echo "Attempt $attempt of $max_attempts for docker buildx build and push"
+            if docker buildx build . \
+              --platform linux/amd64,linux/arm64 \
+              --file Dockerfile \
+              --tag $IMAGE_ID:$VERSION \
+              --push; then
+              echo "Build and push successful!"
+              break
+            else
+              echo "Build and push failed on attempt $attempt"
+              if [ $attempt -eq $max_attempts ]; then
+                echo "All attempts failed. Exiting."
+                exit 1
+              fi
+              echo "Waiting 30 seconds before retrying..."
+              sleep 30
+              ((attempt++))
+            fi
+          done
