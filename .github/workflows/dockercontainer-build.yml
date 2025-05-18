@@ -42,37 +42,33 @@ jobs:
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
-        
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
-        
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v1
-        with:
-          registry: docker.pkg.github.com
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-          
+
+      - name: Log into registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u ${{ github.actor }} --password-stdin
+
       - name: Prepare image metadata
         id: prep
         run: |
           IMAGE_ID=docker.pkg.github.com/${{ github.repository }}/$IMAGE_NAME
-          
+
           # Change all uppercase to lowercase
           IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-          
+
           # Strip git ref prefix from version
           VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
-          
+
           # Strip "v" prefix from tag name
           [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
-          
+
           # Use Docker `latest` tag convention
           [ "$VERSION" == "master" ] && VERSION=latest
-          
+
           echo "::set-output name=image::$IMAGE_ID"
           echo "::set-output name=version::$VERSION"
-          
+
       - name: Build and push
         uses: docker/build-push-action@v2
         with:
