@@ -9,12 +9,6 @@ on:
       - v*
   # Run tests for any PRs.
   pull_request:
-
-# Sets permissions of the GITHUB_TOKEN
-permissions:
-  contents: read
-  packages: write
-
 env:
   # TODO: Change variable to your image's name.
   IMAGE_NAME: syncstreamapi
@@ -25,66 +19,62 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
       - name: Run tests
         run: |
           if [ -f docker-compose.test.yml ]; then
             docker-compose --file docker-compose.test.yml build
             docker-compose --file docker-compose.test.yml run sut
           else
-            # Test build for amd64 only to save time
-            docker buildx build . --file Dockerfile --platform linux/amd64
+            docker build . --file Dockerfile
           fi
-  # Push image to GitHub Packages.
-  # See also https://docs.docker.com/docker-hub/builds/
+  # Push multi-architecture image to GitHub Packages.
   push:
     # Ensure test job passes before pushing image.
     needs: test
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v2
+
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v1
+        
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-      - name: Prepare
-        id: prep
-        run: |
-          VERSION=noop
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            VERSION=nightly
-          elif [[ $GITHUB_REF == refs/tags/* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/}
-          elif [[ $GITHUB_REF == refs/heads/* ]]; then
-            VERSION=$(echo ${GITHUB_REF#refs/heads/} | sed -r 's#/+#-#g')
-            if [ "${{ github.event.repository.default_branch }}" = "$VERSION" ]; then
-              VERSION=latest
-            fi
-          elif [[ $GITHUB_REF == refs/pull/* ]]; then
-            VERSION=pr-${{ github.event.number }}
-          fi
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "VERSION=${VERSION}" >> $GITHUB_ENV
-          
-          IMAGE_ID=docker.pkg.github.com/${{ github.repository }}/${{ env.IMAGE_NAME }}
-          # Change all uppercase to lowercase
-          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-          echo "image=${IMAGE_ID}" >> $GITHUB_OUTPUT
-          echo "IMAGE_ID=${IMAGE_ID}" >> $GITHUB_ENV
-      - name: Log into registry
-        uses: docker/login-action@v2
+        uses: docker/setup-buildx-action@v1
+        
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v1
         with:
           registry: docker.pkg.github.com
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push image
-        uses: docker/build-push-action@v4
+          
+      - name: Prepare image metadata
+        id: prep
+        run: |
+          IMAGE_ID=docker.pkg.github.com/${{ github.repository }}/$IMAGE_NAME
+          
+          # Change all uppercase to lowercase
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          
+          # Strip git ref prefix from version
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
+          
+          # Strip "v" prefix from tag name
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          
+          # Use Docker `latest` tag convention
+          [ "$VERSION" == "master" ] && VERSION=latest
+          
+          echo "::set-output name=image::$IMAGE_ID"
+          echo "::set-output name=version::$VERSION"
+          
+      - name: Build and push
+        uses: docker/build-push-action@v2
         with:
           context: .
+          file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ env.IMAGE_ID }}:${{ env.VERSION }}
+          tags: ${{ steps.prep.outputs.image }}:${{ steps.prep.outputs.version }}
