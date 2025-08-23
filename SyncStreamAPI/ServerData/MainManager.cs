@@ -313,6 +313,8 @@ public class MainManager
         using var scope = ServiceProvider.CreateScope();
         var postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
         var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+        var cancellationToken = client.CancellationToken;
+        if (cancellationToken.IsCancellationRequested) return;
 
         try
         {
@@ -340,9 +342,9 @@ public class MainManager
                 int bytesRead;
                 var stopwatch = Stopwatch.StartNew(); // Start timing like your original code
 
-                while ((bytesRead = await inputStream.ReadAsync(buffer)) > 0)
+                while ((bytesRead = await inputStream.ReadAsync(buffer, cancellationToken.Token)) > 0)
                 {
-                    await fileStream.WriteAsync(buffer, 0, bytesRead);
+                    await fileStream.WriteAsync(buffer, 0, bytesRead, cancellationToken.Token);
                     totalBytesRead += bytesRead;
 
                     // Progress tracking equivalent to WebClient_DownloadProgressChanged
@@ -353,7 +355,7 @@ public class MainManager
 
                 // Existing database save logic preserved
                 dbUser.Files.Add(dbFile);
-                await postgres.SaveChangesAsync();
+                await postgres.SaveChangesAsync(cancellationToken.Token);
 
                 // Completion equivalent to WebClient_DownloadDataCompleted
                 await ReportDownloadCompleted(hub, client);
