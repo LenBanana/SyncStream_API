@@ -27,7 +27,7 @@ public partial class ServerHub
         if (room.CurrentStreamer != null) await StopWebRtcStream(token, roomId);
 
         room.CurrentStreamer = Context.ConnectionId;
-        await Clients.GroupExcept(room.uniqueId, new[] { Context.ConnectionId })
+        await Clients.GroupExcept(room.uniqueId, [Context.ConnectionId])
             .startWebRtcStream(Context.ConnectionId);
     }
 
@@ -43,7 +43,7 @@ public partial class ServerHub
         var room = MainManager.GetRoom(roomId);
         if (room == null || room.CurrentStreamer?.Length == 0) return;
         if (room.CurrentStreamer != Context.ConnectionId) return;
-        await Clients.GroupExcept(room.uniqueId, new[] { Context.ConnectionId })
+        await Clients.GroupExcept(room.uniqueId, [Context.ConnectionId])
             .stopWebRtcStream(room.CurrentStreamer);
         room.CurrentStreamer = null;
         await RoomManager.SendPlayerType(room);

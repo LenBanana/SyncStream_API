@@ -18,7 +18,7 @@ public class FileCheck
 
         var fileWrittenEvent = new ManualResetEvent(false);
 
-        watcher.Changed += (sender, e) =>
+        watcher.Changed += (_, e) =>
         {
             if (e.FullPath == filePath && !IsFileLocked(file)) fileWrittenEvent.Set();
         };

@@ -368,15 +368,31 @@ public class MainManager
         }
     }
 
-// Equivalent to WebClient_DownloadProgressChanged event handler
     private async Task ReportDownloadProgress(IHubContext<ServerHub, IServerHub> hub, DownloadClientValue client,
         long bytesReceived, long totalBytesToReceive, System.Diagnostics.Stopwatch stopwatch)
     {
         try
         {
             var perc = Math.Max(0, bytesReceived / (double)totalBytesToReceive * 100);
-            var timeLeft = TimeSpan.FromMilliseconds(stopwatch.ElapsedMilliseconds / perc * (100 - perc))
-                .ToString(@"HH\:mm\:ss");
+
+            // Safe time calculation - avoid division by zero and invalid TimeSpan values
+            var timeLeft = "calculating...";
+            if (perc > 0.1 && stopwatch.ElapsedMilliseconds > 1000) // Only calculate after 1 second and > 0.1% progress
+            {
+                try
+                {
+                    var remainingMs = stopwatch.ElapsedMilliseconds / perc * (100 - perc);
+                    if (remainingMs > 0 && remainingMs < TimeSpan.MaxValue.TotalMilliseconds)
+                    {
+                        timeLeft = TimeSpan.FromMilliseconds(remainingMs).ToString(@"HH\:mm\:ss");
+                    }
+                }
+                catch
+                {
+                    timeLeft = "calculating...";
+                }
+            }
+
             var result = new DownloadInfo(
                 $"{Math.Round(bytesReceived / 1048576d, 2)}MB of {Math.Round(totalBytesToReceive / 1048576d, 2)}MB - {timeLeft} remaining",
                 client.FileName, client.UniqueId) { Id = client.UniqueId, Progress = perc };

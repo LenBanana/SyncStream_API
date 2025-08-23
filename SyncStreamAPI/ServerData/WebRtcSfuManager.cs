@@ -32,19 +32,19 @@ public class WebRtcSfuManager
         var turnServer = _configuration.GetSection("WebRtcTurnServer").Value;
         var configuration = new RTCConfiguration
         {
-            IceServers = new[]
-            {
+            IceServers =
+            [
                 new RTCIceServer
                 {
-                    Urls = new[] { stunServer }
+                    Urls = [stunServer]
                 },
                 new RTCIceServer
                 {
-                    Urls = new[] { turnServer },
+                    Urls = [turnServer],
                     Username = credentials.Username,
                     Credential = credentials.Password
                 }
-            }
+            ]
         };
         WebRtcConfiguration = configuration;
         PeerConnection = CreatePeerConnection();
@@ -65,7 +65,7 @@ public class WebRtcSfuManager
         };
         peerConnection.OnNegotiationNeeded += () => { };
         peerConnection.OnIceConnectionStateChange += () => { };
-        peerConnection.OnTrack += trackEvent => { };
+        peerConnection.OnTrack += _ => { };
     }
 
     public async void CreateOffer(RTCPeerConnection peerConnection)

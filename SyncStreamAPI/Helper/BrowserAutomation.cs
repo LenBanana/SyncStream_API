@@ -11,30 +11,30 @@ public class BrowserAutomation
 {
     public BrowserAutomation(IServiceProvider provider)
     {
-        _serviceProvider = provider;
+        ServiceProvider = provider;
     }
 
-    private IServiceProvider _serviceProvider { get; set; }
+    private IServiceProvider ServiceProvider { get; set; }
 
     public static IBrowser Browser { get; } = Puppeteer.LaunchAsync(new LaunchOptions
     {
         Headless = true,
-        Args = new[]
-        {
+        Args =
+        [
             "--no-sandbox",
             $"--load-extension=\"{(RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "/app/ublock" : "C:\\Users\\Len\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Extensions\\cjpalhdlnbpafiamejdnhcphjbkeiagm\\1.51.0_1")}\"",
             "--autoplay-policy=no-user-gesture-required"
-        },
-        IgnoredDefaultArgs = new[] { "--disable-extensions" }
+        ],
+        IgnoredDefaultArgs = ["--disable-extensions"]
     }).Result;
 
-    private static NavigationOptions options { get; set; }
+    private static NavigationOptions? Options { get; set; }
 
     public static async void Init()
     {
         try
         {
-            options = new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.Networkidle2 } };
+            Options = new NavigationOptions { WaitUntil = [WaitUntilNavigation.Networkidle2] };
             var browserFetcher = new BrowserFetcher();
             var dl = await browserFetcher.DownloadAsync(BrowserFetcher.DefaultChromiumRevision);
             var path = dl.FolderPath + "/chrome-linux";
@@ -55,16 +55,16 @@ public class BrowserAutomation
             InputUrl = url
         };
         var page = await Browser.NewPageAsync();
-        page.Response += (sender, e) =>
+        page.Response += (_, e) =>
         {
-            if (e.Response.Url.ToLower().Contains("m3u8")) result.OutputUrls.Add(e.Response.Url.Trim());
+            if (e.Response.Url.Contains("m3u8", StringComparison.CurrentCultureIgnoreCase))
+                result.OutputUrls.Add(e.Response.Url.Trim());
         };
-        await page.GoToAsync(url, options);
+        await page.GoToAsync(url, Options);
         var html = await page.GetContentAsync();
         var doc = new HtmlDocument();
         doc.LoadHtml(html);
-        var videoNodes = doc.DocumentNode.SelectNodes("//video");
-        if (videoNodes == null) videoNodes = doc.DocumentNode.SelectNodes("//a");
+        var videoNodes = doc.DocumentNode.SelectNodes("//video") ?? doc.DocumentNode.SelectNodes("//a");
 
         if (videoNodes == null) return new BrowserM3U8Response();
 

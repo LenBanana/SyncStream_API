@@ -15,7 +15,7 @@ public partial class ServerHub
         var user = await MainManager.GetUser(token);
         if (user == null) return;
         await Groups.AddToGroupAsync(Context.ConnectionId, $"AudioRoom-{roomId}");
-        await Clients.GroupExcept($"AudioRoom-{roomId}", new[] { Context.ConnectionId })
+        await Clients.GroupExcept($"AudioRoom-{roomId}", [Context.ConnectionId])
             .participantJoined(new VoipParticipantDto
                 { ParticipantId = Context.ConnectionId, ParticipantName = user.username });
     }
@@ -24,7 +24,7 @@ public partial class ServerHub
     public async Task LeaveAudioRoom(string token, string roomId)
     {
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"AudioRoom-{roomId}");
-        await Clients.GroupExcept($"AudioRoom-{roomId}", new[] { Context.ConnectionId })
+        await Clients.GroupExcept($"AudioRoom-{roomId}", [Context.ConnectionId])
             .participantLeft(new VoipParticipantDto { ParticipantId = Context.ConnectionId });
     }
 
@@ -32,7 +32,7 @@ public partial class ServerHub
     public async Task SendStatusToParticipant(string token, VoipParticipantDto participantDto, string roomId)
     {
         participantDto.ParticipantId = Context.ConnectionId;
-        await Clients.GroupExcept($"AudioRoom-{roomId}", new[] { Context.ConnectionId })
+        await Clients.GroupExcept($"AudioRoom-{roomId}", [Context.ConnectionId])
             .receiveStatusFromParticipant(participantDto);
     }
 

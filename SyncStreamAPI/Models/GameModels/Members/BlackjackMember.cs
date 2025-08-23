@@ -123,7 +123,7 @@ public class BlackjackMember
     private async void WaitFor()
     {
         cancelWait = new CancellationTokenSource();
-        await Task.Delay(60000, cancelWait.Token).ContinueWith(task =>
+        await Task.Delay(60000, cancelWait.Token).ContinueWith(_ =>
         {
             if (waitingForBet || waitingForPull) FailedToReact?.Invoke(this);
         });

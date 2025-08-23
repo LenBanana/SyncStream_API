@@ -7,8 +7,8 @@ public class BlackjackDealerNames
 {
     public static string DealerName => DealerNames[General.Random.Next(0, DealerNames.Count - 1)];
 
-    private static List<string> DealerNames { get; } = new()
-    {
+    private static List<string> DealerNames { get; } =
+    [
         "Peter",
         "Wolfgang",
         "Michael",
@@ -1010,5 +1010,5 @@ public class BlackjackDealerNames
         "Vittorio",
         "Fredo",
         "Fatih"
-    };
+    ];
 }

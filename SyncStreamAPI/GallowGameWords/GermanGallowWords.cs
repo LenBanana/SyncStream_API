@@ -4,8 +4,8 @@ namespace SyncStreamAPI.GallowGameWords;
 
 public static class GermanGallowWords
 {
-    public static List<string> GermanGallowWordList = new()
-    {
+    public static List<string> GermanGallowWordList =
+    [
         "Ampel",
         "Apfelkuchen",
         "Sonnenaufgang",
@@ -2882,5 +2882,5 @@ public static class GermanGallowWords
         "Magnet",
         "Eisbär",
         "Grabmal"
-    };
+    ];
 }

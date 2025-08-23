@@ -4,8 +4,8 @@ namespace SyncStreamAPI.GallowGameWords;
 
 public static class EnglishGallowWords
 {
-    public static List<string> EnglishGallowWordList { get; set; } = new()
-    {
+    public static List<string> EnglishGallowWordList { get; set; } =
+    [
         "Pac-Man",
         "bow",
         "Apple",
@@ -2304,5 +2304,5 @@ public static class EnglishGallowWords
         "abyss",
         "betray",
         "cicada"
-    };
+    ];
 }

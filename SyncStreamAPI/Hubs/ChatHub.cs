@@ -99,7 +99,7 @@ public partial class ServerHub
                 {
                     if (mainServer.playlist.Count > 1)
                     {
-                        mainServer.playlist = new List<DreckVideo> { mainServer.playlist[0] };
+                        mainServer.playlist = [mainServer.playlist[0]];
                         await Clients.Group(uniqueId).playlistupdate(mainServer.playlist);
                     }
                 }
@@ -166,7 +166,7 @@ public partial class ServerHub
             if (room == null) return;
 
             var MainServer = room.server;
-            MainServer.chatmessages = new List<ChatMessage>();
+            MainServer.chatmessages = [];
             await Clients.Group(UniqueId).sendmessages(MainServer.chatmessages);
         }
         catch (Exception ex)

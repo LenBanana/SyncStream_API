@@ -148,7 +148,7 @@ public static class General
                         if (idx != -1)
                         {
                             var videoInfo =
-                                new YtVideoInfo().FromJson(attributes[idx].Split(new[] { '=' }, 2)[1]);
+                                new YtVideoInfo().FromJson(attributes[idx].Split(['='], 2)[1]);
                             return videoInfo.VideoDetails.Title + " - " + videoInfo.VideoDetails.Author;
                         }
                     }
