@@ -338,9 +338,9 @@ public class MainManager
                 var buffer = new byte[81920]; // 80KB buffer for better performance
                 long totalBytesRead = 0;
                 int bytesRead;
-                var stopwatch = System.Diagnostics.Stopwatch.StartNew(); // Start timing like your original code
+                var stopwatch = Stopwatch.StartNew(); // Start timing like your original code
 
-                while ((bytesRead = await inputStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                while ((bytesRead = await inputStream.ReadAsync(buffer)) > 0)
                 {
                     await fileStream.WriteAsync(buffer, 0, bytesRead);
                     totalBytesRead += bytesRead;
@@ -369,12 +369,12 @@ public class MainManager
     }
 
     private async Task ReportDownloadProgress(IHubContext<ServerHub, IServerHub> hub, DownloadClientValue client,
-        long bytesReceived, long totalBytesToReceive, System.Diagnostics.Stopwatch stopwatch)
+        long bytesReceived, long totalBytesToReceive, Stopwatch stopwatch)
     {
         try
         {
-            var perc = Math.Max(0, bytesReceived / (double)totalBytesToReceive * 100);
-
+            var perc = Math.Round(Math.Max(0, bytesReceived / (double)totalBytesToReceive * 100), 2);
+            
             // Safe time calculation - avoid division by zero and invalid TimeSpan values
             var timeLeft = "calculating...";
             if (perc > 0.1 && stopwatch.ElapsedMilliseconds > 1000) // Only calculate after 1 second and > 0.1% progress
@@ -384,7 +384,8 @@ public class MainManager
                     var remainingMs = stopwatch.ElapsedMilliseconds / perc * (100 - perc);
                     if (remainingMs > 0 && remainingMs < TimeSpan.MaxValue.TotalMilliseconds)
                     {
-                        timeLeft = TimeSpan.FromMilliseconds(remainingMs).ToString(@"HH\:mm\:ss");
+                        var ts = TimeSpan.FromMilliseconds(remainingMs);
+                        timeLeft = $"{(int)ts.TotalHours:D2}:{ts.Minutes:D2}:{ts.Seconds:D2}";
                     }
                 }
                 catch

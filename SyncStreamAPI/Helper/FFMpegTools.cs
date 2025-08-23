@@ -45,9 +45,9 @@ public static class FFmpegTools
         {
             var tcs = new TaskCompletionSource<bool>();
             // Set up the timer to trigger after 10 seconds of no output
-            var timer = new Timer(state => { tcs.TrySetResult(false); }, null, General.FFmpegTimeout, Timeout.Infinite);
+            var timer = new Timer(_ => { tcs.TrySetResult(false); }, null, General.FFmpegTimeout, Timeout.Infinite);
 
-            process.ErrorDataReceived += (sender, e) =>
+            process.ErrorDataReceived += (_, e) =>
             {
                 if (string.IsNullOrEmpty(e.Data)) return;
                 if (errorCondition != null && errorCondition(e))
