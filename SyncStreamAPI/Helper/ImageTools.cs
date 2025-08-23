@@ -64,9 +64,9 @@ public class ImageTools
         if (mediaType == MediaType.PDF)
             await ConvertToPdf(outputPath, file);
         else
-            using (var image = Image.Load(file.OpenReadStream()))
+            using (var image = await Image.LoadAsync(file.OpenReadStream()))
             {
-                image.Save(outputPath, encoder);
+                await image.SaveAsync(outputPath, encoder);
             }
 
         await SaveToDb(dbFile, postgresContext);

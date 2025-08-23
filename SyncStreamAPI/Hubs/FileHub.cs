@@ -215,7 +215,7 @@ public partial class ServerHub
         var dbUser = await _postgres.Users.Include(x => x.RememberTokens)
             .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
         if (dbUser.userprivileges >= UserPrivileges.Administrator)
-            _manager.AddDownload(new DownloadClientValue(dbUser.ID, fileName, token, url, preset));
+            _ = _manager.AddDownload(new DownloadClientValue(dbUser.ID, fileName, token, url, preset));
     }
 
     [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]

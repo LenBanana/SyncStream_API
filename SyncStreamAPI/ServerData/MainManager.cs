@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -170,7 +171,7 @@ public class MainManager
                 if (downloadClient.CancellationToken.IsCancellationRequested)
                     return;
                 await YtDLPHelper.UpdateDownloadProgress(downloadClient, hub, p);
-                progressTimer?.Dispose();
+                progressTimer?.DisposeAsync();
                 progressTimer = null;
             }, null, TimeSpan.FromSeconds(1), TimeSpan.Zero);
         });
@@ -202,62 +203,6 @@ public class MainManager
         await hub.Clients.Group(downloadClient.UserId.ToString()).downloadFinished(downloadClient.UniqueId);
         userDownloads.TryTake(out downloadClient);
         await StartNextYtDownload();
-    }
-
-    public async void AddDownload(DownloadClientValue downloadClient)
-    {
-        using var scope = ServiceProvider.CreateScope();
-        var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-        var ytDownload = false;
-        IStreamDownloader downloader = null;
-        if (downloadClient.Url.StartsWith("https://streamtape.com"))
-            downloader = new StreamTape();
-        if (downloadClient.Url.StartsWith("https://voe.sx") ||
-            downloadClient.Url.StartsWith("https://yodelswartlike.com"))
-            downloader = new Voe();
-        if (downloader != null)
-        {
-            var downloadExtract = await downloader.GetDownloadLink(downloadClient);
-            downloadClient.Url = downloadExtract.DownloadLink;
-            ytDownload = true;
-        }
-
-        if (downloadClient.Url.Contains("m3u8") || ytDownload)
-        {
-            _ = YtDlpDownload(downloadClient);
-            return;
-        }
-
-        var webClient = new WebClient();
-        webClient.DownloadProgressChanged += WebClient_DownloadProgressChanged;
-        webClient.DownloadDataCompleted += WebClient_DownloadDataCompleted;
-        webClient.Headers.Set("User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:106.0) Gecko/20100101 Firefox/106.0");
-        userWebDownloads.Add(webClient, downloadClient);
-        try
-        {
-            await using var stream = webClient.OpenRead(downloadClient.Url);
-            var totalDownload = Convert.ToInt64(webClient.ResponseHeaders["Content-Length"]);
-            if (totalDownload <= 0)
-            {
-                var response = await BrowserAutomation.GetM3U8FromUrl(downloadClient.Url);
-                if (response != null)
-                    await hub.Clients.Group(downloadClient.UserId.ToString())
-                        .browserResults(response.OutputUrls);
-
-                return;
-            }
-
-            webClient.DownloadDataAsync(new Uri(downloadClient.Url));
-        }
-        catch (Exception ex)
-        {
-            userWebDownloads.Remove(webClient);
-            webClient.Dispose();
-            await hub.Clients.Group(downloadClient.UserId.ToString()).dialog(new Dialog(AlertType.Danger)
-                { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
-            Console.WriteLine(ex.ToString());
-        }
     }
 
     public Task CancelDownload(int userId, string downloadId)
@@ -299,69 +244,161 @@ public class MainManager
         }
     }
 
-    private void WebClient_DownloadDataCompleted(object sender, DownloadDataCompletedEventArgs e)
+    public async Task AddDownload(DownloadClientValue downloadClient)
     {
-        var client = sender as WebClient;
-        var id = userWebDownloads[client];
-        userWebDownloads.Remove(client);
-        client.Dispose();
-        SaveFileToFilesystem(id, e.Result);
+        using var scope = ServiceProvider.CreateScope();
+        var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+        var ytDownload = false;
+        IStreamDownloader? downloader = null;
+
+        // Existing downloader logic preserved
+        if (downloadClient.Url.StartsWith("https://streamtape.com"))
+            downloader = new StreamTape();
+        if (downloadClient.Url.StartsWith("https://voe.sx") ||
+            downloadClient.Url.StartsWith("https://yodelswartlike.com"))
+            downloader = new Voe();
+        if (downloader != null)
+        {
+            var downloadExtract = await downloader.GetDownloadLink(downloadClient);
+            downloadClient.Url = downloadExtract.DownloadLink;
+            ytDownload = true;
+        }
+
+        // Existing m3u8/ytDownload logic preserved
+        if (downloadClient.Url.Contains("m3u8") || ytDownload)
+        {
+            _ = YtDlpDownload(downloadClient);
+            return;
+        }
+
+        // REPLACED: WebClient with HttpClient for streaming
+        try
+        {
+            using var httpClient = new HttpClient();
+            httpClient.DefaultRequestHeaders.Add("User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:106.0) Gecko/20100101 Firefox/106.0");
+
+            using var response =
+                await httpClient.GetAsync(downloadClient.Url, HttpCompletionOption.ResponseHeadersRead);
+            response.EnsureSuccessStatusCode();
+
+            var totalBytes = response.Content.Headers.ContentLength ?? 0;
+
+            // Existing zero-length handling preserved
+            if (totalBytes <= 0)
+            {
+                var browserResponse = await BrowserAutomation.GetM3U8FromUrl(downloadClient.Url);
+                if (browserResponse != null)
+                    await hub.Clients.Group(downloadClient.UserId.ToString())
+                        .browserResults(browserResponse.OutputUrls);
+                return;
+            }
+
+            // NEW: Stream the download instead of loading into memory
+            await using var contentStream = await response.Content.ReadAsStreamAsync();
+            await SaveFileToFilesystemStreaming(downloadClient, contentStream, totalBytes);
+        }
+        catch (Exception ex)
+        {
+            // Existing error handling preserved
+            await hub.Clients.Group(downloadClient.UserId.ToString()).dialog(new Dialog(AlertType.Danger)
+                { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
+            Console.WriteLine(ex.ToString());
+        }
     }
 
-    private async void SaveFileToFilesystem(DownloadClientValue client, byte[] file)
+// NEW streaming method with progress tracking (equivalent to WebClient events)
+    private async Task SaveFileToFilesystemStreaming(DownloadClientValue client, Stream inputStream, long totalBytes)
     {
         using var scope = ServiceProvider.CreateScope();
         var postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
         var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
+
         try
         {
-            var dbUser = postgres.Users?.Include(x => x.RememberTokens).Where(x =>
-                x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == client.Token)).FirstOrDefault();
-            if (dbUser == null) return;
+            // All existing database/authentication logic preserved
+            var dbUser = (postgres.Users.Include(x => x.RememberTokens))
+                .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == client.Token));
 
-            var Token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == client.Token);
-            if (Token == null) return;
+            var token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == client.Token);
+            if (token == null) return;
 
-            if (dbUser.userprivileges >= UserPrivileges.Administrator)
+            if (dbUser is { userprivileges: >= UserPrivileges.Administrator })
             {
-                if (!Directory.Exists(General.FilePath)) Directory.CreateDirectory(General.FilePath);
+                // Existing directory creation logic preserved
+                if (!Directory.Exists(General.FilePath))
+                    Directory.CreateDirectory(General.FilePath);
 
+                // Existing file path logic preserved
                 var dbFile = new DbFile(client.FileName, $".{client.Url.Split('.').Last()}", dbUser);
                 var filePath = dbFile.GetPath();
-                File.WriteAllBytes(filePath, file);
+
+                // REPLACED: File.WriteAllBytesAsync with streaming + progress tracking
+                await using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write);
+                var buffer = new byte[81920]; // 80KB buffer for better performance
+                long totalBytesRead = 0;
+                int bytesRead;
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew(); // Start timing like your original code
+
+                while ((bytesRead = await inputStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                {
+                    await fileStream.WriteAsync(buffer, 0, bytesRead);
+                    totalBytesRead += bytesRead;
+
+                    // Progress tracking equivalent to WebClient_DownloadProgressChanged
+                    await ReportDownloadProgress(hub, client, totalBytesRead, totalBytes, stopwatch);
+                }
+
+                stopwatch.Stop();
+
+                // Existing database save logic preserved
                 dbUser.Files.Add(dbFile);
                 await postgres.SaveChangesAsync();
+
+                // Completion equivalent to WebClient_DownloadDataCompleted
+                await ReportDownloadCompleted(hub, client);
             }
         }
         catch (Exception ex)
         {
+            // Existing error handling preserved
             await hub.Clients.Group(client.UserId.ToString()).dialog(new Dialog(AlertType.Danger)
                 { Header = "Error", Question = ex.Message, Answer1 = "Ok" });
             Console.WriteLine(ex.ToString());
         }
-
-        await hub.Clients.Group(client.UserId.ToString()).downloadFinished(client.UniqueId);
     }
 
-    private async void WebClient_DownloadProgressChanged(object sender, DownloadProgressChangedEventArgs e)
+// Equivalent to WebClient_DownloadProgressChanged event handler
+    private async Task ReportDownloadProgress(IHubContext<ServerHub, IServerHub> hub, DownloadClientValue client,
+        long bytesReceived, long totalBytesToReceive, System.Diagnostics.Stopwatch stopwatch)
     {
         try
         {
-            using var scope = ServiceProvider.CreateScope();
-            var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-            var id = userWebDownloads[sender as WebClient];
-            var perc = Math.Max(0, e.BytesReceived / (double)e.TotalBytesToReceive * 100);
-            var timeLeft = TimeSpan.FromMilliseconds(id.Stopwatch.ElapsedMilliseconds / perc * (100 - perc))
+            var perc = Math.Max(0, bytesReceived / (double)totalBytesToReceive * 100);
+            var timeLeft = TimeSpan.FromMilliseconds(stopwatch.ElapsedMilliseconds / perc * (100 - perc))
                 .ToString(@"HH\:mm\:ss");
-            var result =
-                new DownloadInfo(
-                    $"{Math.Round(e.BytesReceived / 1048576d, 2)}MB of {Math.Round(e.TotalBytesToReceive / 1048576d, 2)}MB - {timeLeft} remaining",
-                    id.FileName, id.UniqueId) { Id = id.UniqueId, Progress = perc };
-            await hub.Clients.Group(id.UserId.ToString()).downloadProgress(result);
+            var result = new DownloadInfo(
+                $"{Math.Round(bytesReceived / 1048576d, 2)}MB of {Math.Round(totalBytesToReceive / 1048576d, 2)}MB - {timeLeft} remaining",
+                client.FileName, client.UniqueId) { Id = client.UniqueId, Progress = perc };
+            await hub.Clients.Group(client.UserId.ToString()).downloadProgress(result);
         }
         catch (Exception ex)
         {
             Console.WriteLine(ex.ToString());
         }
+    }
+
+// Equivalent to WebClient_DownloadDataCompleted event handler
+    private async Task ReportDownloadCompleted(IHubContext<ServerHub, IServerHub> hub, DownloadClientValue client)
+    {
+        await hub.Clients.Group(client.UserId.ToString()).downloadFinished(client.UniqueId);
+    }
+
+// OPTIONAL: Keep your original method if other parts of your code still call it
+// This version now also uses streaming internally
+    private async Task SaveFileToFilesystem(DownloadClientValue client, byte[] file)
+    {
+        using var memoryStream = new MemoryStream(file);
+        await SaveFileToFilesystemStreaming(client, memoryStream, file.Length);
     }
 }
