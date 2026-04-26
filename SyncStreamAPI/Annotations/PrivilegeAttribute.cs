@@ -3,6 +3,8 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using AspectInjector.Broker;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,14 +40,15 @@ public class PrivilegeAttribute : Attribute
                                       args[attribute.TokenPosition] is not string))
             {
                 Console.WriteLine("First argument has to be of type 'string'");
-                return Task.FromResult(false);
+                return Task.FromResult<IActionResult>(new UnauthorizedObjectResult("Missing or invalid API key."));
             }
 
             if (attribute != null)
             {
                 var firstArg = args[attribute.TokenPosition];
-                return HasPrivileges(attribute, (string)firstArg).Result ? target(args) : Task.FromResult(false);
-                ;
+                return HasPrivileges(attribute, (string)firstArg).Result
+                    ? target(args)
+                    : Task.FromResult<IActionResult>(new ObjectResult("Insufficient privileges.") { StatusCode = StatusCodes.Status403Forbidden });
             }
         }
         catch (Exception ex)
@@ -54,7 +57,7 @@ public class PrivilegeAttribute : Attribute
             Console.WriteLine(ex.ToString());
         }
 
-        return Task.FromResult(false);
+        return Task.FromResult<IActionResult>(new StatusCodeResult(StatusCodes.Status500InternalServerError));
     }
 
     private async Task<bool> HasPrivileges(PrivilegeAttribute attribute, string authKey)
