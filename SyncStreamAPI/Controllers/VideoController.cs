@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Net.Http.Headers;
 using SyncStreamAPI.Annotations;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.DTOModel;
@@ -44,50 +45,62 @@ public class VideoController : Controller
     {
         try
         {
-            // Fetch the file record from the database based on the unique ID and video key
             var dbFile = _postgres.Files?.FirstOrDefault(x => x.FileKey == fileKey);
             if (dbFile == null)
+                return StatusCode(StatusCodes.Status404NotFound, "The requested file could not be found");
+
+            // Auth check — skip for public files
+            if (!dbFile.Public)
             {
-                // If the file record is not found, return a 404 error with a specific error message
-                var errorMessage = "The requested file could not be found";
-                return StatusCode(StatusCodes.Status404NotFound, errorMessage);
+                var dbUser = _postgres.Users?
+                    .Include(x => x.RememberTokens)
+                    .FirstOrDefault(x => x.RememberTokens != null &&
+                                         x.RememberTokens.Any(y => y.Token == token));
+                if (dbUser == null)
+                    return Unauthorized("You do not have permissions to view this content");
             }
 
-            var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x =>
-                x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
-            // Check if the user is authenticated and has the necessary privileges
-            if (!dbFile.Public && dbUser == null)
-                // If the user is not authorized to view the content, return a 403 error and display an error message
-                return Unauthorized("You do not have permissions to view this content");
-
-            // Check if the file exists on disk
             var generalPath = dbFile.Temporary ? General.TemporaryFilePath : General.FilePath;
             var path = Path.Combine(generalPath, $"{dbFile.FileKey}{dbFile.FileEnding}");
-            if (!System.IO.File.Exists(path))
-            {
-                // If the file does not exist on disk, return a 404 error with a specific error message
-                var errorMessage = "The requested file could not be found on disk";
-                await _hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(AlertType.Danger)
-                    { Question = errorMessage, Answer1 = "Ok" });
-                return StatusCode(StatusCodes.Status404NotFound, errorMessage);
-            }
 
-            // Return the file as a stream
+            if (!System.IO.File.Exists(path))
+                return StatusCode(StatusCodes.Status404NotFound, "The requested file could not be found on disk");
+
+            var fileName = dbFile.Name.EndsWith(dbFile.FileEnding)
+                ? dbFile.Name
+                : dbFile.Name + dbFile.FileEnding;
+
+            if (!_contentTypeProvider.TryGetContentType(path, out var contentType))
+                contentType = "application/octet-stream";
+
+            // Use inline for embeddable types, attachment for everything else
+            bool isEmbeddable = contentType.StartsWith("image/") ||
+                                contentType.StartsWith("video/") ||
+                                contentType.StartsWith("audio/");
+
+            var dispositionType = isEmbeddable ? "inline" : "attachment";
+
+            // Use ContentDispositionHeaderValue for RFC-compliant encoding of the filename
+            var contentDisposition = new ContentDispositionHeaderValue(dispositionType);
+            contentDisposition.SetHttpFileName(fileName);
+            Response.Headers[HeaderNames.ContentDisposition] = contentDisposition.ToString();
+
             var fileStream = System.IO.File.OpenRead(path);
-            var contentType = _contentTypeProvider.TryGetContentType(path, out var contentTypeResult)
-                ? contentTypeResult
-                : "application/octet-stream";
-            if (!dbFile.Temporary)
-                return File(fileStream, contentType,
-                    dbFile.Name.EndsWith(dbFile.FileEnding) ? dbFile.Name : dbFile.Name + dbFile.FileEnding, true);
-            Response.Headers.Add("Content-Disposition", $"inline;filename={dbFile.Name}{dbFile.FileEnding}");
-            return File(fileStream, contentType);
+
+            // EnableRangeProcessing is critical for video/audio — Discord and browsers
+            // use HTTP Range requests (206 Partial Content) to seek/stream media.
+            // Without it, the server returns 200 and playback/embedding breaks.
+            return new FileStreamResult(fileStream, contentType)
+            {
+                EnableRangeProcessing = true,
+                LastModified = System.IO.File.GetLastWriteTimeUtc(path)
+            };
         }
         catch (Exception ex)
         {
             Console.WriteLine(ex.ToString());
-            var errorMessage = "An error occurred while processing the request";
-            return StatusCode(StatusCodes.Status500InternalServerError, errorMessage);
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                "An error occurred while processing the request");
         }
     }
 
