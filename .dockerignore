@@ -19,7 +19,11 @@
 **/node_modules
 **/npm-debug.log
 **/obj
+**/.local-chromium
 **/secrets.dev.yaml
+**/Temp
+**/ublock
 **/values.dev.yaml
+**/VideoFiles
 LICENSE
 README.md

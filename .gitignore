@@ -259,6 +259,12 @@ ServiceFabricBackup/
 *.rptproj.rsuser
 *- Backup*.rdl
 
+# Local runtime artifacts
+SyncStreamAPI/.local-chromium/
+SyncStreamAPI/Temp/
+SyncStreamAPI/VideoFiles/
+ublock/
+
 # Microsoft Fakes
 FakesAssemblies/
 
