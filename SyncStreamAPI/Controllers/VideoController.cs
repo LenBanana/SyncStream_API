@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -31,13 +31,18 @@ public class VideoController : Controller
     private readonly IContentTypeProvider _contentTypeProvider;
     private readonly IHubContext<ServerHub, IServerHub> _hub;
     private readonly PostgresContext _postgres;
+    private readonly IRoomStreamService _roomStreamService;
 
-    public VideoController(IHubContext<ServerHub, IServerHub> hub, PostgresContext postgres,
-        IContentTypeProvider contentTypeProvider)
+    public VideoController(
+        IHubContext<ServerHub, IServerHub> hub,
+        PostgresContext postgres,
+        IContentTypeProvider contentTypeProvider,
+        IRoomStreamService roomStreamService)
     {
         _hub = hub;
         _postgres = postgres;
         _contentTypeProvider = contentTypeProvider;
+        _roomStreamService = roomStreamService;
     }
 
     [HttpGet("[action]")]
@@ -49,7 +54,6 @@ public class VideoController : Controller
             if (dbFile == null)
                 return StatusCode(StatusCodes.Status404NotFound, "The requested file could not be found");
 
-            // Auth check — skip for public files
             if (!dbFile.Public)
             {
                 var dbUser = _postgres.Users?
@@ -73,23 +77,16 @@ public class VideoController : Controller
             if (!_contentTypeProvider.TryGetContentType(path, out var contentType))
                 contentType = "application/octet-stream";
 
-            // Use inline for embeddable types, attachment for everything else
-            bool isEmbeddable = contentType.StartsWith("image/") ||
-                                contentType.StartsWith("video/") ||
-                                contentType.StartsWith("audio/");
+            var isEmbeddable = contentType.StartsWith("image/") ||
+                               contentType.StartsWith("video/") ||
+                               contentType.StartsWith("audio/");
 
             var dispositionType = isEmbeddable ? "inline" : "attachment";
-
-            // Use ContentDispositionHeaderValue for RFC-compliant encoding of the filename
             var contentDisposition = new ContentDispositionHeaderValue(dispositionType);
             contentDisposition.SetHttpFileName(fileName);
             Response.Headers[HeaderNames.ContentDisposition] = contentDisposition.ToString();
 
             var fileStream = System.IO.File.OpenRead(path);
-
-            // EnableRangeProcessing is critical for video/audio — Discord and browsers
-            // use HTTP Range requests (206 Partial Content) to seek/stream media.
-            // Without it, the server returns 200 and playback/embedding breaks.
             return new FileStreamResult(fileStream, contentType)
             {
                 EnableRangeProcessing = true,
@@ -111,13 +108,11 @@ public class VideoController : Controller
     {
         try
         {
-            // Check if the user is authenticated and has the necessary privileges
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x =>
                 x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
             var tokenObj = dbUser?.RememberTokens.SingleOrDefault(x => x.Token == token);
             if (tokenObj == null)
             {
-                // If the user is not authorized to view the content, return a 403 error and display an error message
                 if (dbUser == null) return Unauthorized();
                 const string errorMessage = "You do not have permissions to view this content";
                 await _hub.Clients.Group(dbUser.ID.ToString()).dialog(new Dialog(AlertType.Danger)
@@ -125,18 +120,17 @@ public class VideoController : Controller
                 return Unauthorized(errorMessage);
             }
 
-            // Fetch the video data for the provided YouTube URL using the YouTube DL library
             var ytdl = General.GetYoutubeDl();
             var data = await ytdl.RunVideoDataFetch(url, overrideOptions: new OptionSet
             {
                 ForceIPv4 = true
             });
+
             switch (data)
             {
-                // If the video data was fetched successfully, return a list of available video quality options
                 case { Data: not null }:
                 {
-                    var qualityOptions = data.Data?.Formats
+                    var qualityOptions = data.Data.Formats
                         .Where(x => x.Height is >= 360 and <= 2160)
                         .Select(x => x.Height)
                         .Distinct()
@@ -145,17 +139,15 @@ public class VideoController : Controller
                     return Ok(qualityOptions);
                 }
                 default:
-                {
-                    const string errorMessage = "Video data could not be fetched for the provided URL";
-                    return StatusCode(StatusCodes.Status404NotFound, errorMessage);
-                }
+                    return StatusCode(StatusCodes.Status404NotFound,
+                        "Video data could not be fetched for the provided URL");
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine(ex.ToString());
-            const string errorMessage = "An error occurred while processing the request";
-            return StatusCode(StatusCodes.Status500InternalServerError, errorMessage);
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                "An error occurred while processing the request");
         }
     }
 
@@ -192,7 +184,6 @@ public class VideoController : Controller
                 var dbFile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension, dbUser);
                 var path = Path.Combine(General.FilePath, $"{dbFile.FileKey}{dbFile.FileEnding}");
 
-                // Ensure the target directory exists
                 Directory.CreateDirectory(General.FilePath);
                 uploadFiles.Add(path);
 
@@ -212,7 +203,6 @@ public class VideoController : Controller
                 }
                 catch (Exception ex)
                 {
-                    // Log the error and delete any partially uploaded file
                     Console.WriteLine(ex.ToString());
                     System.IO.File.Delete(path);
                 }
@@ -224,7 +214,6 @@ public class VideoController : Controller
             return StatusCode(StatusCodes.Status500InternalServerError);
         }
 
-        // Cleanup any files that were not completely processed
         foreach (var path in uploadFiles) System.IO.File.Delete(path);
         return Ok();
     }
@@ -237,14 +226,11 @@ public class VideoController : Controller
     {
         try
         {
-            // Ensure request has a file attached
             if (Request.ContentLength <= 0 || Request.Form is not { Files.Count: > 0 }) return Unauthorized();
 
-            // Validate API key against DbUsers API key
             var dbUser = _postgres.Users.SingleOrDefault(u => u.ApiKey == apiKey);
             if (dbUser == null) return Unauthorized();
 
-            // Save file to temporary location
             var file = Request.Form.Files[0];
             var fileInfo = new FileInfo(file.FileName);
             var dbFile = new DbFile(Path.GetFileNameWithoutExtension(fileInfo.Name), fileInfo.Extension, dbUser, true);
@@ -256,11 +242,9 @@ public class VideoController : Controller
                 await file.CopyToAsync(ms);
             }
 
-            // Save new DbFile object to database
             _postgres.Files.Add(dbFile);
             await _postgres.SaveChangesAsync();
             await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new FileDto(dbFile));
-            // Return Ok response code
             return Ok(new { fileKey = dbFile.Name, fileId = dbFile.FileKey });
         }
         catch (Exception ex)
@@ -268,5 +252,88 @@ public class VideoController : Controller
             Console.WriteLine(ex.ToString());
             return StatusCode(StatusCodes.Status500InternalServerError);
         }
+    }
+
+    [DisableRequestSizeLimit]
+    [HttpPost("roomUpload/start")]
+    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
+    public async Task<IActionResult> startRoomUpload(string token, string uniqueId, string name, string fileEnding,
+        long totalSize)
+    {
+        var result = await _roomStreamService.StartRoomUploadAsync(token, uniqueId, name, fileEnding, totalSize);
+        if (string.IsNullOrWhiteSpace(result.ErrorMessage))
+            return StatusCode(result.StatusCode, result);
+
+        return StatusCode(result.StatusCode, result);
+    }
+
+    [DisableRequestSizeLimit]
+    [HttpPut("roomUpload/chunk")]
+    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
+    public async Task<IActionResult> uploadRoomChunk(string token, string uploadId, long startByte)
+    {
+        var result = await _roomStreamService.UploadRoomChunkAsync(Request, token, uploadId, startByte);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    [HttpGet("roomUpload/status")]
+    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
+    public async Task<IActionResult> roomUploadStatus(string token, string uploadId)
+    {
+        var result = await _roomStreamService.GetRoomUploadStatusAsync(token, uploadId);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    [HttpPost("roomUpload/complete")]
+    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
+    public async Task<IActionResult> completeRoomUpload(string token, string uploadId)
+    {
+        var result = await _roomStreamService.CompleteRoomUploadAsync(token, uploadId, Request.Scheme, Request.Host);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    [HttpDelete("roomUpload/cancel")]
+    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
+    public async Task<IActionResult> cancelRoomUpload(string token, string uploadId)
+    {
+        var result = await _roomStreamService.CancelRoomUploadAsync(token, uploadId);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    [DisableRequestSizeLimit]
+    [HttpPost("[action]")]
+    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
+    public async Task<IActionResult> streamToRoom(string token, string uniqueId, string name, string fileEnding)
+    {
+        var result = await _roomStreamService.StreamToRoomAsync(Request, token, uniqueId, name, fileEnding);
+        if (result.StatusCode == StatusCodes.Status200OK)
+            return Ok(new { fileKey = result.FileKey });
+
+        return string.IsNullOrWhiteSpace(result.ErrorMessage)
+            ? StatusCode(result.StatusCode)
+            : StatusCode(result.StatusCode, result.ErrorMessage);
+    }
+
+    [HttpGet("[action]/{fileKey}/{fileName}")]
+    public IActionResult hlsSegment(string fileKey, string fileName)
+    {
+        var result = _roomStreamService.GetHlsSegment(fileKey, fileName);
+        if (result.StatusCode != StatusCodes.Status200OK || result.Stream == null || string.IsNullOrWhiteSpace(result.ContentType))
+            return string.IsNullOrWhiteSpace(result.ErrorMessage)
+                ? StatusCode(result.StatusCode)
+                : StatusCode(result.StatusCode, result.ErrorMessage);
+
+        Response.Headers[HeaderNames.XContentTypeOptions] = "nosniff";
+        if (result.DisableCache)
+        {
+            Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+            Response.Headers["Pragma"] = "no-cache";
+        }
+        else
+        {
+            Response.Headers["Cache-Control"] = "no-cache";
+        }
+
+        return new FileStreamResult(result.Stream, result.ContentType);
     }
 }

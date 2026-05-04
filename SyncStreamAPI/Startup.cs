@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.Server.IIS;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -12,6 +15,7 @@ using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Games.Blackjack;
 using SyncStreamAPI.Games.Gallows;
 using SyncStreamAPI.Helper;
+using SyncStreamAPI.Helper.Streaming;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.ServerData;
@@ -30,7 +34,17 @@ public class Startup
 
     public void ConfigureServices(IServiceCollection services)
     {
+        services.Configure<KestrelServerOptions>(options => { options.Limits.MaxRequestBodySize = null; });
+        services.Configure<IISServerOptions>(options => { options.MaxRequestBodySize = null; });
+        services.Configure<FormOptions>(options =>
+        {
+            options.MultipartBodyLengthLimit = long.MaxValue;
+            options.ValueLengthLimit = int.MaxValue;
+            options.MultipartHeadersLengthLimit = int.MaxValue;
+        });
+
         services.AddSingleton<IContentTypeProvider, FileExtensionContentTypeProvider>();
+        services.AddScoped<IRoomStreamService, RoomStreamService>();
         services.AddHostedService<DataBackgroundService>();
         services.AddHostedService<ServerHealthBackgroundService>();
         services.AddSingleton(provider =>
