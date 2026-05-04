@@ -1,0 +1,66 @@
+version: '3.9'
+
+# ─── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  app-releases:
+  sfu-recordings:
+
+# ─── Services ─────────────────────────────────────────────────────────────────
+services:
+
+  # ── mediasoup SFU ────────────────────────────────────────────────────────────
+  sfu:
+    build:
+      context: ./sfu
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    environment:
+      SFU_HTTP_PORT: "3000"
+      # Set SFU_ANNOUNCED_IP to the public IP of this host at deploy time.
+      SFU_ANNOUNCED_IP: "127.0.0.1" 
+      SFU_RTC_MIN_PORT: "10000"
+      SFU_RTC_MAX_PORT: "10099"
+      SFU_NUM_WORKERS: "1"
+      SFU_RECORDINGS_DIR: "/recordings"
+    volumes:
+      - sfu-recordings:/recordings
+    ports:
+      # HTTP API is NOT exposed outside the Docker network (intentionally).
+      # RTP/RTCP UDP+TCP range exposed to the internet for WebRTC media.
+      - "10000-10099:10000-10099/udp"
+      - "10000-10099:10000-10099/tcp"
+    networks:
+      - internal
+
+  # ── SyncStreamAPI (.NET) ─────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: "http://+:5000"
+      # The SFU service is reachable internally by its service name.
+      SfuUrl: "http://sfu:3000"
+    ports:
+      - "5000:5000"
+    volumes:
+      - app-releases:/var/app-releases
+      - sfu-recordings:/recordings:ro
+    depends_on:
+      sfu:
+        condition: service_healthy
+    networks:
+      - internal
+
+# ─── Networks ─────────────────────────────────────────────────────────────────
+networks:
+  internal:
+    driver: bridge
