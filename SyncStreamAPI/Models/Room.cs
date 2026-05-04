@@ -27,6 +27,9 @@ public class Room
 
     [NotMapped] public string? CurrentStreamer { get; set; }
 
+    /// <summary>True when the current stream is routed through the mediasoup SFU (vs P2P).</summary>
+    [NotMapped] public bool IsStreamingSfu { get; set; }
+
     [NotMapped]
     public Server server
     {

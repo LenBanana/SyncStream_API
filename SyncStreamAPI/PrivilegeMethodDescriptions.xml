@@ -1,0 +1,154 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+    <data name="DownloadUpdate" xml:space="preserve">
+		<value>Downloads an update file for a specified application, given an API key and the application name, by checking for the file in the server and returning it as a file stream</value>
+	</data>
+    <data name="UploadUpdate" xml:space="preserve">
+		<value>Uploads a new version of an application by accepting a file, an API key, the name of the application, and a version number, and then saves the file to the server and updates the version information in the database before returning a success message</value>
+	</data>
+    <data name="GetAudioWaveform" xml:space="preserve">
+    <value>Returns an audio waveform image for a specified audio file, given an API key and a file key, by first retrieving the file from the server and then generating the waveform image using NAudioTools library</value>
+</data>
+    <data name="GetFFmpegPath" xml:space="preserve">
+    <value>Returns the path to the FFmpeg executable, given an API key, by calling the General.GetFFmpegPath method and returning the result in the response</value>
+</data>
+    <data name="CutMedia" xml:space="preserve">
+    <value>Cuts a media file and returns the resulting file, given an API key, a start time in milliseconds, and an end time in milliseconds, by first retrieving the input file from the request and then using FFmpeg to create a new media file with the specified start and end times</value>
+</data>
+    <data name="ConvertMedia" xml:space="preserve">
+    <value>Converts a media file to a specified media type and returns the resulting file, given an API key and a MediaType enum value, by first retrieving the input file from the request and then using FFmpeg or ImageTools to create a new media file with the specified media type</value>
+</data>
+    <data name="fileByToken" xml:space="preserve">
+    <value>Returns a file as a stream, given a file key and a token, by first checking the database for the file record and user authentication, and then returning the file as a stream if it exists on disk and the user is authorized</value>
+</data>
+    <data name="getYoutubeQuality" xml:space="preserve">
+    <value>Returns a list of available video quality options for a given YouTube URL, given the URL and an authentication token, by first checking user authentication and then using the YouTube DL library to fetch the video data and return a list of available quality options</value>
+</data>
+    <data name="addFile" xml:space="preserve">
+	<value>Accepts a file upload and an authentication token, saves the file to the server and creates a corresponding DbFile object in the database, and then returns a success message</value>
+</data>
+    <data name="uploadTemporaryImageFile" xml:space="preserve">
+		<value>Uploads a temporary image file for the user with the specified API key, saves it to a temporary location, and returns the unique file key and ID</value>
+	</data>
+    <data name="GetPermissions" xml:space="preserve">
+		<value>Retrieves the list of privileged methods and their corresponding information, and sends it to the client associated with the provided token</value>
+	</data>
+    <data name="GetUsers" xml:space="preserve">
+		<value>Retrieves a list of all users from the database and sends it to the client with the specified user ID and token</value>
+	</data>
+    <data name="DeleteUser" xml:space="preserve">
+		<value>Deletes the user with the specified removeID from the database if the user with userID has sufficient privileges and is not attempting to delete themselves. Sends a list of all users in the database to all clients</value>
+	</data>
+    <data name="GenerateApiKey" xml:space="preserve">
+		<value>Generates a new API key for the user with the specified token and returns the updated user data</value>
+	</data>
+    <data name="ReloadDownloadConfig" xml:space="preserve">
+	<value>Reloads the download configuration and sends a dialog message to the caller with the result</value>
+</data>
+    <data name="GetAllDownloads" xml:space="preserve">
+	<value>Retrieves a list of all downloads from the database and sends it to the client with the specified token</value>
+</data>
+    <data name="GetStorageInfo" xml:space="preserve">
+	<value>Retrieves information about the file storage locations and sends it to the client with the specified token</value>
+</data>
+    <data name="PrivateChat" xml:space="preserve">
+    <value>Initiates a private chat by allowing a user, identified by a token, to send a message to another user specified by their ID. After validating the existence of both the sender and the receiver, the method creates and stores the conversation in the database. Upon successful message dispatch, the sender is notified with a success message. Simultaneously, the receiver is informed about the new message and the sender's username.</value>
+</data>
+    <data name="PublicAnnouncement" xml:space="preserve">
+    <value>Broadcasts a server announcement to all clients except the sender, characterized by a specific alert type. The announcement contains a message and presents the user with a single acknowledgment option, "Ok".</value>
+</data>
+    <data name="CleanUpFiles" xml:space="preserve">
+	<value>Cleans up files from the file system and/or displays a list of files that would be removed, based on the delete parameter, and sends the result to the client with the specified token</value>
+</data>
+    <data name="SetUserPrivileges" xml:space="preserve">
+    <value>Allows a user, identified by a token and user ID, to modify the privileges of another user. The method checks for valid authorization, ensuring that the user making the change has higher privileges than the target user and is not trying to modify their own privileges. Upon successful privilege change, a list of updated users is sent to all clients.</value>
+</data>
+    <data name="ApproveUser" xml:space="preserve">
+    <value>Allows an administrative user to approve or disapprove another user's account. The method checks for valid authorization and ensures the caller has higher or equivalent elevated privileges but not equal to the target user. If the target user's privileges are "NotApproved" and the action is to approve, their privileges are updated to "Approved". If the target is being disapproved, their privileges revert to "NotApproved". Any attempt to modify one's own approval status or unauthorized access results in an error message to the caller. After any changes, a list of all users is sent to all clients.</value>
+</data>
+    <data name="JoinWebRtcStream" xml:space="preserve">
+    <value>Allows the user to join an existing WebRTC stream. If there's no active streamer in the specified room, the method simply returns.</value>
+</data>
+
+    <data name="StartWebRtcStream" xml:space="preserve">
+    <value>Allows a user to start a WebRTC stream in a specific room using a provided token and room ID. If there's already an active streamer in the room, the previous stream will be stopped before the new one begins.</value>
+</data>
+
+    <data name="SendOfferToViewer" xml:space="preserve">
+    <value>Transmits a WebRTC client offer to a viewer specified by their connection ID. This is achieved using the token of an approved user.</value>
+</data>
+
+    <data name="StopWebRtcStream" xml:space="preserve">
+    <value>Stops the current WebRTC stream in a particular room. The method will only work if the caller is the one currently streaming in the provided room.</value>
+</data>
+
+    <data name="CreateStreamAnswer" xml:space="preserve">
+    <value>Generates a response to a WebRTC client offer, and sends it to the current streamer in a specific room. The method assumes the caller is a viewer and not the current streamer.</value>
+</data>
+
+    <data name="SendIceCandidate" xml:space="preserve">
+    <value>Forwards a WebRTC ICE candidate to the current streamer in the specified room. The method ensures the caller is a viewer and not the streamer.</value>
+</data>
+
+    <data name="SendIceCandidateToViewer" xml:space="preserve">
+    <value>Dispatches a WebRTC ICE candidate directly to a viewer identified by their connection ID. The operation is authorized using an approved user token.</value>
+</data>
+
+    <data name="ChangeDownload" xml:space="preserve">
+	<value>Changes the name of the file with the specified file ID, validates the new name to be at least 3 characters long, and sends the updated file list to the client with the specified token</value>
+</data>
+    <data name="GetDownloads" xml:space="preserve">
+	<value>Retrieves all files uploaded by the user with the specified token from the database, converts them to DTOs, sorts them by name, and sends them to the client</value>
+</data>
+    <data name="GetFolders" xml:space="preserve">
+	<value>Retrieves all folders that belong to the user with the specified token, including folders shared with them, and sends the requested folder to the client</value>
+</data>
+    <data name="AddFolder" xml:space="preserve">
+	<value>Creates a new folder with the name "New Folder" as a child of the folder with the specified ID, if the requesting user has the necessary privileges, and sends the updated list of folders to the client</value>
+</data>
+    <data name="DeleteFolder" xml:space="preserve">
+	<value>Deletes the folder with the specified ID and all its contents, if it is owned by the requesting user or the user has administrator privileges, and sends the updated list of folders to the client</value>
+</data>
+    <data name="DownloadFile" xml:space="preserve">
+	<value>Adds a file download to the manager with the specified URL, file name, and conversion preset, and authorized with the specified token if the user has Administrator privileges</value>
+</data>
+    <data name="DownloadYtVideo" xml:space="preserve">
+	<value>Downloads a YouTube video or playlist with the specified URL and quality, and authorized with the specified token if the user has Administrator privileges. If it is a playlist, it downloads all the videos and adds them to the download manager</value>
+</data>
+    <data name="GetFileInfo" xml:space="preserve">
+	<value>Gets the media information of the file with the specified ID, including video and audio streams, size, checksum, and creation time, and sends it to the client with the specified token</value>
+</data>
+    <data name="ShareFolder" xml:space="preserve">
+	<value>Shares the folder with the specified folder ID with the user with the specified user ID, and sends the updated folder list to the user with the specified token</value>
+</data>
+    <data name="GetFolderFiles" xml:space="preserve">
+	<value>Retrieves the files from the folder with the specified folder ID, checks the user's privileges, and sends the file list to the client with the specified token</value>
+</data>
+    <data name="ChangeFolderName" xml:space="preserve">
+	<value>Changes the name of the folder with the specified folder ID to the specified folder name and sends the updated folder list to the client with the specified token</value>
+</data>
+    <data name="ChangeFolder" xml:space="preserve">
+	<value>Changes the folder location of the file with the specified file ID to the folder with the specified folder ID</value>
+</data>
+    <data name="CancelConversion" xml:space="preserve">
+	<value>Cancels the conversion process of the file with the specified download ID for the user associated with the specified token</value>
+</data>
+    <data name="RemoveFile" xml:space="preserve">
+	<value>Removes the file with the specified ID from the file system and the database for the user associated with the specified token, and sends an update to the client to remove the file from the UI</value>
+</data>
+    <data name="MakeFilePermanent" xml:space="preserve">
+	<value>Makes the temporary file with the specified ID permanent by removing its expiry date for the user associated with the specified token, and sends an update to the client to refresh the file list</value>
+</data>
+    <data name="ToggleFilePublic" xml:space="preserve">
+	<value>Toggles the public status of the file with the specified ID for the user associated with the specified token, and sends an update to the client to refresh the file list</value>
+</data>
+    <data name="GetLiveUsers" xml:space="preserve">
+	<value>Retrieves a list of all live users and sends it to the client with the specified token if the list is not empty</value>
+</data>
+    <data name="GetUsersWatching" xml:space="preserve">
+	<value>Retrieves a list of all members watching a specific user and sends it to the client with the specified token and user name</value>
+</data>
+    <data name="GetWebRtcCredentials" xml:space="preserve">
+    <value>Provides a set of temporary WebRTC credentials by generating them using the current configuration. The method returns these credentials with a successful HTTP status code.</value>
+</data>
+</root>

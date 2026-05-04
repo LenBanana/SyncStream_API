@@ -73,7 +73,7 @@ jobs:
           echo "::set-output name=image::$IMAGE_ID"
           echo "::set-output name=version::$VERSION"
 
-      - name: Build and push
+      - name: Build and push API
         uses: docker/build-push-action@v2
         with:
           context: .
@@ -81,3 +81,14 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.prep.outputs.image }}:${{ steps.prep.outputs.version }}
+      
+      - name: Build and push SFU
+        uses: docker/build-push-action@v2
+        with:
+          context: ./sfu
+          file: ./sfu/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/syncstreamsfu:${{ steps.prep.outputs.version }}
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/syncstreamsfu:cache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/syncstreamsfu:cache,mode=max

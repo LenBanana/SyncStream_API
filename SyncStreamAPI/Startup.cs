@@ -100,6 +100,7 @@ public class Startup
             var manager = new BlackjackManager(hubContext);
             return manager;
         });
+        services.AddSingleton<WebRtcSfuManager>();
         services.AddControllers();
         services.AddSwaggerGen(c =>
         {

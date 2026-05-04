@@ -14,7 +14,7 @@ public partial class ServerHub
     public async Task JoinWebRtcStream(string token, string roomId)
     {
         var room = MainManager.GetRoom(roomId);
-        if (room == null || room.CurrentStreamer?.Length == 0) return;
+        if (room == null || string.IsNullOrEmpty(room.CurrentStreamer)) return;
         if (room.CurrentStreamer == Context.ConnectionId) return;
         await Clients.Client(room.CurrentStreamer).joinWebRtcStream(Context.ConnectionId);
     }
@@ -41,7 +41,7 @@ public partial class ServerHub
     public async Task StopWebRtcStream(string token, string roomId)
     {
         var room = MainManager.GetRoom(roomId);
-        if (room == null || room.CurrentStreamer?.Length == 0) return;
+        if (room == null || string.IsNullOrEmpty(room.CurrentStreamer)) return;
         if (room.CurrentStreamer != Context.ConnectionId) return;
         await Clients.GroupExcept(room.uniqueId, [Context.ConnectionId])
             .stopWebRtcStream(room.CurrentStreamer);
@@ -54,7 +54,7 @@ public partial class ServerHub
     public async Task CreateStreamAnswer(string token, string roomId, WebRtcClientOffer answer)
     {
         var room = MainManager.GetRoom(roomId);
-        if (room == null || room.CurrentStreamer?.Length == 0) return;
+        if (room == null || string.IsNullOrEmpty(room.CurrentStreamer)) return;
         if (room.CurrentStreamer == Context.ConnectionId) return;
         answer.ViewerId = Context.ConnectionId;
         await Clients.Client(room.CurrentStreamer).sendClientAnswer(answer);
@@ -64,14 +64,28 @@ public partial class ServerHub
     public async Task SendIceCandidate(string token, string roomId, object iceCandidate)
     {
         var room = MainManager.GetRoom(roomId);
-        if (room == null || room.CurrentStreamer?.Length == 0) return;
+        if (room == null || string.IsNullOrEmpty(room.CurrentStreamer)) return;
         if (room.CurrentStreamer == Context.ConnectionId) return;
-        await Clients.Client(room.CurrentStreamer).sendIceCandidate(iceCandidate);
+        // Include viewerId so the streamer can route the candidate to the correct RTCPeerConnection.
+        await Clients.Client(room.CurrentStreamer).sendIceCandidateFromViewer(Context.ConnectionId, iceCandidate);
     }
 
     [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
     public async Task SendIceCandidateToViewer(string token, string connectionId, object iceCandidate)
     {
         await Clients.Client(connectionId).sendIceCandidate(iceCandidate);
+    }
+
+    /// <summary>
+    /// Called by a viewer when its ICE connection has failed and it needs the streamer to create a new offer
+    /// with iceRestart:true so both sides re-gather candidates through the TURN server.
+    /// </summary>
+    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
+    public async Task RequestIceRestart(string token, string roomId)
+    {
+        var room = MainManager.GetRoom(roomId);
+        if (room == null || string.IsNullOrEmpty(room.CurrentStreamer)) return;
+        if (room.CurrentStreamer == Context.ConnectionId) return;
+        await Clients.Client(room.CurrentStreamer).joinWebRtcStream(Context.ConnectionId);
     }
 }

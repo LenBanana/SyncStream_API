@@ -307,6 +307,12 @@ public class RoomStreamService : IRoomStreamService
             if (session.State == RoomUploadStates.Ready || session.State == RoomUploadStates.Failed)
                 return ToRoomUploadResult(session, uploadedBytes, StatusCodes.Status200OK);
 
+            if (session.State == RoomUploadStates.Processing)
+                return ToRoomUploadResult(session, uploadedBytes, StatusCodes.Status202Accepted);
+
+            if (session.State != RoomUploadStates.Uploading)
+                return ToRoomUploadResult(session, uploadedBytes, StatusCodes.Status409Conflict);
+
             session.State = RoomUploadStates.Processing;
             session.BaseUrl = $"{scheme}://{host}";
             session.UpdatedUtc = DateTime.UtcNow;
@@ -506,24 +512,7 @@ public class RoomStreamService : IRoomStreamService
             await postgres.SaveChangesAsync();
             await hub.Clients.Group(dbUser.ApiKey).updateFolders(new FileDto(dbFile));
 
-            var directFileUrl = $"{session.BaseUrl}/api/video/fileByToken?fileKey={dbFile.FileKey}";
-            var playbackUrl = directFileUrl;
-
-            if (IsVideoExtension(session.FileEnding))
-            {
-                var hlsDir = Path.Combine(General.TemporaryFilePath, "hls", dbFile.FileKey);
-                Directory.CreateDirectory(hlsDir);
-
-                var hlsSucceeded = await GenerateHlsFromFileAsync(finalFilePath, hlsDir, dbFile.FileKey);
-                if (hlsSucceeded)
-                {
-                    playbackUrl = $"{session.BaseUrl}/api/video/hlsSegment/{dbFile.FileKey}/stream.m3u8";
-                }
-                else
-                {
-                    TryDeleteDirectory(hlsDir);
-                }
-            }
+            var playbackUrl = $"{session.BaseUrl}/api/video/fileByToken?fileKey={dbFile.FileKey}";
 
             var addVideoResult = await RoomManager.AddVideo(
                 new DreckVideo(dbFile.Name, playbackUrl, false, TimeSpan.Zero, dbUser.username),
@@ -546,6 +535,9 @@ public class RoomStreamService : IRoomStreamService
             session.PlaybackUrl = playbackUrl;
             session.UpdatedUtc = DateTime.UtcNow;
             await SaveSessionAsync(session);
+
+            if (IsVideoExtension(session.FileEnding))
+                _ = Task.Run(() => TryGenerateHlsAssetsAsync(finalFilePath, dbFile.FileKey));
         }
         catch (Exception ex)
         {
@@ -674,6 +666,25 @@ public class RoomStreamService : IRoomStreamService
 
         await RunFFmpegProcessAsync(args, fileKey, "finalize-hls");
         return HasUsableHlsOutput(hlsDir);
+    }
+
+    private static async Task TryGenerateHlsAssetsAsync(string inputPath, string fileKey)
+    {
+        var hlsDir = Path.Combine(General.TemporaryFilePath, "hls", fileKey);
+
+        try
+        {
+            Directory.CreateDirectory(hlsDir);
+
+            var hlsSucceeded = await GenerateHlsFromFileAsync(inputPath, hlsDir, fileKey);
+            if (!hlsSucceeded)
+                TryDeleteDirectory(hlsDir);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            TryDeleteDirectory(hlsDir);
+        }
     }
 
     private static async Task RunFFmpegProcessAsync(string args, string fileKey, string step)

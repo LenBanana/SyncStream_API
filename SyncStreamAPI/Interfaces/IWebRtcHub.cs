@@ -12,4 +12,12 @@ public partial interface IServerHub
     Task joinWebRtcStream(string connectionId);
     Task sendClientAnswer(WebRtcClientOffer answer);
     Task sendIceCandidate(object iceCandidate);
+    /// <summary>Sent to the streamer when a viewer sends an ICE candidate, with the viewer's connectionId included.</summary>
+    Task sendIceCandidateFromViewer(string viewerId, object iceCandidate);
+
+    /// <summary>
+    /// Pushed to viewers when the room's active stream is via the SFU.
+    /// The viewer should call JoinSfuRoom(roomId) in response.
+    /// </summary>
+    Task startSfuStream(string roomId, string streamerId);
 }

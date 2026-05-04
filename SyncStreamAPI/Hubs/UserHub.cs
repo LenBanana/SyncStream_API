@@ -102,7 +102,13 @@ public partial class ServerHub
         await Clients.All.getrooms(MainManager.GetRooms());
         await Clients.Caller.adduserupdate((int)UserUpdate.Success);
         if (room.CurrentStreamer != null)
-            await Clients.Client(room.CurrentStreamer).joinWebRtcStream(Context.ConnectionId);
+        {
+            if (room.IsStreamingSfu)
+                // Viewer joins the SFU room directly; streamer is not involved.
+                await Clients.Caller.startSfuStream(room.uniqueId, room.CurrentStreamer);
+            else
+                await Clients.Client(room.CurrentStreamer).joinWebRtcStream(Context.ConnectionId);
+        }
         if (mainServer.playlist.Count > 0) await Clients.Caller.playlistupdate(mainServer.playlist);
     }
 

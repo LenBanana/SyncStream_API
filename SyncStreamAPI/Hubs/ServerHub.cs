@@ -27,15 +27,15 @@ public partial class ServerHub : Hub<IServerHub>
 
     private readonly MainManager _manager;
 
-    //readonly WebRtcSfuManager _webRtcSfuManager;
+    private readonly WebRtcSfuManager _webRtcSfuManager;
     private readonly PostgresContext _postgres;
 
     public ServerHub(IConfiguration configuration, MainManager manager, PostgresContext postgres,
-        GallowGameManager gallowGameManager, BlackjackManager blackjackManager) //WebRtcSfuManager webRtcSfuManager
+        GallowGameManager gallowGameManager, BlackjackManager blackjackManager, WebRtcSfuManager webRtcSfuManager)
     {
         Configuration = configuration;
         _manager = manager;
-        //_webRtcSfuManager = webRtcSfuManager;
+        _webRtcSfuManager = webRtcSfuManager;
         _postgres = postgres;
         _gallowGameManager = gallowGameManager;
         _blackjackManager = blackjackManager;
@@ -114,6 +114,13 @@ public partial class ServerHub : Hub<IServerHub>
                     break;
             }
         }
+
+        // Clean up VoIP room membership if the connection was in an audio room.
+        if (_voipRoomByConnection.TryRemove(Context.ConnectionId, out var voipRoomId))
+            await LeaveAudioRoomInternal(Context.ConnectionId, voipRoomId);
+
+        // Clean up SFU room membership and release server-side resources.
+        await OnSfuDisconnectedAsync(Context.ConnectionId);
 
         await base.OnDisconnectedAsync(ex);
     }

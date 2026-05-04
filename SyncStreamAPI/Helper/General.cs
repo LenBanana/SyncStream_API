@@ -207,7 +207,10 @@ public static class General
 
         using var hmac = new HMACSHA1(Encoding.UTF8.GetBytes(sharedSecret));
         var password = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(username)));
-        return new WebRtcCredentials(username, password);
+
+        var stunServer = configuration.GetSection("WebRtcStunServer").Value ?? string.Empty;
+        var turnServer = configuration.GetSection("WebRtcTurnServer").Value ?? string.Empty;
+        return new WebRtcCredentials(username, password, stunServer, turnServer);
     }
 
     private static async Task<string> YtApiInfo(string url, IConfiguration configuration)
