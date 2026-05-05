@@ -244,6 +244,14 @@ public class RoomManager
         var uniqueId = room.uniqueId;
         var key = room.server.currentVideo;
         var result = PlayerType.Nothing;
+
+        // A file share takes precedence over everything except active game modes (handled above).
+        if (room.IsFileSharingActive)
+        {
+            if (sendToUsers) await hub.Clients.Group(uniqueId).playertype(PlayerType.FileShare);
+            return PlayerType.FileShare;
+        }
+
         if (room.CurrentStreamer != null)
         {
             if (sendToUsers) await hub.Clients.Group(uniqueId).playertype(PlayerType.WebRtc);

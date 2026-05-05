@@ -22,4 +22,19 @@ public partial interface IServerHub
     /// The viewer should call JoinSfuRoom(roomId) in response.
     /// </summary>
     Task startSfuStream(string roomId, string streamerId);
+
+    /// <summary>
+    /// Sent to all room members when a user begins sharing a local file via WebRTC/SFU.
+    /// Viewers should call JoinSfuRoom(roomId) in response.
+    /// </summary>
+    Task fileShareStarted(string streamerId, string username, string roomId);
+
+    /// <summary>Sent to all room members when the active file share ends.</summary>
+    Task fileShareStopped();
+
+    /// <summary>
+    /// Sent by the server to all non-host room members to sync play/pause state
+    /// while a file share is active.
+    /// </summary>
+    Task fileSharePlayPause(bool isPlaying);
 }

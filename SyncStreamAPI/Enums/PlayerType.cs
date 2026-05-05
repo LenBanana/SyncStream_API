@@ -11,5 +11,7 @@ public enum PlayerType
     WhiteBoard,
     Blackjack,
     Chess,
-    WebRtc
+    WebRtc,
+    /// <summary>A room member is streaming a local file via WebRTC/SFU to the room.</summary>
+    FileShare
 }

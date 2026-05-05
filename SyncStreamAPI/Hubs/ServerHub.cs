@@ -52,6 +52,12 @@ public partial class ServerHub : Hub<IServerHub>
         {
             var e = room.server.members.FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
             e?.InvokeKick();
+
+            // If this connection owned an active file share, stop it cleanly before
+            // any other cleanup so all room members receive fileShareStopped.
+            if (room.IsFileSharingActive && room.FileShareInitiator == Context.ConnectionId)
+                await StopFileShareInternalAsync(room);
+
             if (room.CurrentStreamer == Context.ConnectionId)
             {
                 room.CurrentStreamer = null;
@@ -223,6 +229,10 @@ public partial class ServerHub : Hub<IServerHub>
             });
             return;
         }
+
+        // Skipping while a file share is active stops the share first, then proceeds.
+        if (room.IsFileSharingActive)
+            await StopFileShareInternalAsync(room);
 
         var mainServer = room.server;
         switch (room.server.playlist.Count)

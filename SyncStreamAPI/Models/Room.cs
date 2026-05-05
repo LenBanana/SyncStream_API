@@ -31,6 +31,12 @@ public class Room
     /// <summary>True when the current stream is routed through the mediasoup SFU (vs P2P).</summary>
     [NotMapped] public bool IsStreamingSfu { get; set; }
 
+    /// <summary>True while a room member is actively sharing a local file to the room via WebRTC/SFU.</summary>
+    [NotMapped] public bool IsFileSharingActive { get; set; }
+
+    /// <summary>ConnectionId of the member who initiated the current file share (null when none).</summary>
+    [NotMapped] public string? FileShareInitiator { get; set; }
+
     /// <summary>
     /// Set of connectionIds that are currently streaming P2P (Discord-style opt-in).
     /// Multiple concurrent streamers are supported; each viewer connects on-demand.

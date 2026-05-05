@@ -164,6 +164,19 @@ public partial class ServerHub
             return;
         }
 
+        // Prevent host hand-off while a file share is in progress — the initiator
+        // needs to stay as host so they can pause, seek, and stop the share.
+        if (room.IsFileSharingActive)
+        {
+            await Clients.Caller.dialog(new Dialog(AlertType.Warning)
+            {
+                Header = "Host Locked",
+                Question = "The host cannot be changed while a file share is active. Stop the file share first.",
+                Answer1 = "Ok"
+            });
+            return;
+        }
+
         var mainServer = room.server;
         var idxHost = mainServer.members.FindIndex(x => x.ishost);
         var idxMember = mainServer.members.FindIndex(x =>
