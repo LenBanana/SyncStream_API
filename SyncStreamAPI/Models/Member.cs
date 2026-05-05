@@ -49,7 +49,7 @@ public class Member
 
     public MemberDTO ToDTO()
     {
-        return new MemberDTO(username, ishost, IsStreaming);
+        return new MemberDTO(username, ishost, IsStreaming, ConnectionId);
     }
 
     public GallowMember ToGallowMember()

@@ -29,9 +29,6 @@ public partial class ServerHub
         lock (room.ActiveStreamers)
             room.ActiveStreamers.Add(Context.ConnectionId);
 
-        // Keep CurrentStreamer for SFU backward-compat; only set when none active.
-        room.CurrentStreamer ??= Context.ConnectionId;
-
         // Mark the member as streaming so the updated list carries the flag.
         var member = room.server.members.FirstOrDefault(m => m?.ConnectionId == Context.ConnectionId);
         if (member != null) member.IsStreaming = true;
