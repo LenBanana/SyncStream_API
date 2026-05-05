@@ -1,53 +1,52 @@
 name: Docker
+
 on:
   push:
-    # Publish `master` as Docker `latest` image.
     branches:
       - master
-    # Publish `v1.2.3` tags as releases.
     tags:
       - v*
-  # Run tests for any PRs.
   pull_request:
+
 env:
-  # TODO: Change variable to your image's name.
   IMAGE_NAME: syncstreamapi
+
 jobs:
-  # Run tests.
-  # See also https://docs.docker.com/docker-hub/builds/automated-testing/
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+
       - name: Run tests
         run: |
           if [ -f docker-compose.test.yml ]; then
-            docker-compose --file docker-compose.test.yml build
-            docker-compose --file docker-compose.test.yml run sut
+            docker compose --file docker-compose.test.yml build
+            docker compose --file docker-compose.test.yml run sut
           else
             docker build . --file Dockerfile
           fi
-  # Push multi-architecture image to GitHub Container Registry.
+
   push:
-    # Ensure test job passes before pushing image.
     needs: test
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
+
     permissions:
       contents: read
       packages: write
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v1
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -56,39 +55,40 @@ jobs:
       - name: Prepare image metadata
         id: prep
         run: |
-          IMAGE_ID=ghcr.io/${{ github.repository_owner }}/$IMAGE_NAME
+          # Lowercase owner and derive image IDs
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          API_IMAGE="ghcr.io/${OWNER}/${{ env.IMAGE_NAME }}"
+          SFU_IMAGE="ghcr.io/${OWNER}/syncstreamsfu"
 
-          # Change all uppercase to lowercase
-          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-
-          # Strip git ref prefix from version
+          # Derive version from git ref
           VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
-
-          # Strip "v" prefix from tag name
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
-
-          # Use Docker `latest` tag convention
+          # Strip "v" prefix from tag names
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo "$VERSION" | sed -e 's/^v//')
+          # Use "latest" for master branch
           [ "$VERSION" == "master" ] && VERSION=latest
 
-          echo "::set-output name=image::$IMAGE_ID"
-          echo "::set-output name=version::$VERSION"
+          echo "api_image=${API_IMAGE}" >> $GITHUB_OUTPUT
+          echo "sfu_image=${SFU_IMAGE}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Build and push API
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.prep.outputs.image }}:${{ steps.prep.outputs.version }}
-      
+          tags: ${{ steps.prep.outputs.api_image }}:${{ steps.prep.outputs.version }}
+          cache-from: type=registry,ref=${{ steps.prep.outputs.api_image }}:cache
+          cache-to: type=registry,ref=${{ steps.prep.outputs.api_image }}:cache,mode=max
+
       - name: Build and push SFU
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v6
         with:
           context: ./sfu
           file: ./sfu/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/syncstreamsfu:${{ steps.prep.outputs.version }}
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/syncstreamsfu:cache
-          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/syncstreamsfu:cache,mode=max
+          tags: ${{ steps.prep.outputs.sfu_image }}:${{ steps.prep.outputs.version }}
+          cache-from: type=registry,ref=${{ steps.prep.outputs.sfu_image }}:cache
+          cache-to: type=registry,ref=${{ steps.prep.outputs.sfu_image }}:cache,mode=max
