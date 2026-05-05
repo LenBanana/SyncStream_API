@@ -5,7 +5,9 @@ namespace SyncStreamAPI.Interfaces;
 
 public partial interface IServerHub
 {
-    Task startWebRtcStream(string connectionId);
+    Task startWebRtcStream(string connectionId, string roomId);
+    /// <summary>Sent to all room members when a moderator forces a broadcast — viewers should auto-join.</summary>
+    Task broadcastStream(string streamerId, string roomId);
     Task sendOfferToViewer(WebRtcClientOffer offer);
     Task getWebRtcCredentials(WebRtcCredentials credentials);
     Task stopWebRtcStream(string connectionId);

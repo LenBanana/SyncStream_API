@@ -5,6 +5,8 @@ public class WebRtcClientOffer
     public string type { get; set; }
     public string sdp { get; set; }
     public string? ViewerId { get; set; }
+    /// <summary>Room the offer belongs to — set by the streamer so auto-joined viewers know their roomId.</summary>
+    public string? RoomId { get; set; }
 }
 
 public class VoipOffer

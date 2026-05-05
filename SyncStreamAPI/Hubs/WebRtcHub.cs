@@ -28,7 +28,25 @@ public partial class ServerHub
 
         room.CurrentStreamer = Context.ConnectionId;
         await Clients.GroupExcept(room.uniqueId, [Context.ConnectionId])
-            .startWebRtcStream(Context.ConnectionId);
+            .startWebRtcStream(Context.ConnectionId, roomId);
+    }
+
+    /// <summary>
+    /// Moderator-only: forces all room members to join the caller's P2P stream.
+    /// The caller must already have a local stream set up; this notifies every
+    /// member with a <c>broadcastStream</c> event so their clients auto-join.
+    /// </summary>
+    [Privilege(RequiredPrivileges = UserPrivileges.Moderator, AuthenticationType = AuthenticationType.Token)]
+    public async Task ForceBroadcast(string token, string roomId)
+    {
+        var room = MainManager.GetRoom(roomId);
+        if (room == null) return;
+        if (room.CurrentStreamer != null && room.CurrentStreamer != Context.ConnectionId)
+            await StopWebRtcStream(token, roomId);
+
+        room.CurrentStreamer = Context.ConnectionId;
+        await Clients.GroupExcept(room.uniqueId, [Context.ConnectionId])
+            .broadcastStream(Context.ConnectionId, roomId);
     }
 
     [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
