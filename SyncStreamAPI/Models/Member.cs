@@ -42,12 +42,14 @@ public class Member
     }
 
     public bool ishost { get; set; }
+    /// <summary>True while the member is actively streaming (P2P screen-share).</summary>
+    public bool IsStreaming { get; set; }
     public Dictionary<string, List<string>> PrivateMessages { get; set; } = new();
     public event KickEvent Kicked;
 
     public MemberDTO ToDTO()
     {
-        return new MemberDTO(username, ishost);
+        return new MemberDTO(username, ishost, IsStreaming);
     }
 
     public GallowMember ToGallowMember()

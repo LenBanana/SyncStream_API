@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+﻿using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using SyncStreamAPI.Enums.Games;
 using SyncStreamAPI.Games.Blackjack;
@@ -29,6 +30,12 @@ public class Room
 
     /// <summary>True when the current stream is routed through the mediasoup SFU (vs P2P).</summary>
     [NotMapped] public bool IsStreamingSfu { get; set; }
+
+    /// <summary>
+    /// Set of connectionIds that are currently streaming P2P (Discord-style opt-in).
+    /// Multiple concurrent streamers are supported; each viewer connects on-demand.
+    /// </summary>
+    [NotMapped] public HashSet<string> ActiveStreamers { get; } = new HashSet<string>();
 
     [NotMapped]
     public Server server

@@ -104,10 +104,10 @@ public partial class ServerHub
         if (room.CurrentStreamer != null)
         {
             if (room.IsStreamingSfu)
-                // Viewer joins the SFU room directly; streamer is not involved.
+                // SFU: viewer joins the SFU room directly — streamer is not involved.
                 await Clients.Caller.startSfuStream(room.uniqueId, room.CurrentStreamer);
-            else
-                await Clients.Client(room.CurrentStreamer).joinWebRtcStream(Context.ConnectionId);
+            // P2P (Discord-style): do NOT auto-join — the user list shows who is streaming
+            // and the viewer can choose to watch by clicking the user's streaming indicator.
         }
         if (mainServer.playlist.Count > 0) await Clients.Caller.playlistupdate(mainServer.playlist);
     }

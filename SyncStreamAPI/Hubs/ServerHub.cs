@@ -55,7 +55,7 @@ public partial class ServerHub : Hub<IServerHub>
             if (room.CurrentStreamer == Context.ConnectionId)
             {
                 room.CurrentStreamer = null;
-                await Clients.Group(room.uniqueId).stopWebRtcStream(Context.ConnectionId);
+                // stopWebRtcStream sent below via StopWebRtcStreamOnDisconnect
             }
 
             var gameMode = room.GameMode;
@@ -118,6 +118,9 @@ public partial class ServerHub : Hub<IServerHub>
         // Clean up VoIP room membership if the connection was in an audio room.
         if (_voipRoomByConnection.TryRemove(Context.ConnectionId, out var voipRoomId))
             await LeaveAudioRoomInternal(Context.ConnectionId, voipRoomId);
+
+        // Clean up active P2P streaming (Discord-style; handles member list update + stopWebRtcStream).
+        await StopWebRtcStreamOnDisconnect(Context.ConnectionId);
 
         // Clean up SFU room membership and release server-side resources.
         await OnSfuDisconnectedAsync(Context.ConnectionId);
