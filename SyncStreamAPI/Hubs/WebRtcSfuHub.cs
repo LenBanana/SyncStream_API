@@ -262,10 +262,10 @@ public partial class ServerHub
     /// player or auto-join any viewers; it only marks the member as live in the user list.
     /// </summary>
     [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task StartSfuOptInStream(string token, string roomId)
+    public async Task<string> StartSfuOptInStream(string token, string roomId)
     {
         var room = MainManager.GetRoom(roomId);
-        if (room == null) return;
+        if (room == null) return string.Empty;
 
         lock (room.ActiveStreamers)
             room.ActiveStreamers.Add(Context.ConnectionId);
@@ -277,6 +277,8 @@ public partial class ServerHub
 
         await Clients.Group(room.uniqueId)
             .userupdate(room.server.members.ConvertAll(x => x?.ToDTO()));
+
+    return BuildOptInLiveSfuRoomId(roomId, Context.ConnectionId);
     }
 
     /// <summary>
@@ -373,6 +375,7 @@ public partial class ServerHub
 
     private static string SfuGroupName(string roomId) => $"SFURoom-{roomId}";
     private static string SfuPeerRoomKey(string connectionId, string roomId) => $"{connectionId}::{roomId}";
+    private static string BuildOptInLiveSfuRoomId(string roomId, string streamerId) => $"live-watch:{roomId}:{streamerId}";
 
     private async Task CleanupSfuPeerAsync(string connectionId, string roomId)
     {
