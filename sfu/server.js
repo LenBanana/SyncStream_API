@@ -19,6 +19,12 @@ const config = {
   rtcMinPort: parseInt(process.env.SFU_RTC_MIN_PORT ?? '10000', 10),
   rtcMaxPort: parseInt(process.env.SFU_RTC_MAX_PORT ?? '10099', 10),
 
+  // Transport bitrate tuning.  This deployment prioritizes quality over density,
+  // so we start transports with a much higher outgoing budget than mediasoup's
+  // conservative defaults and optionally allow higher ingress from producers.
+  initialAvailableOutgoingBitrate: parseInt(process.env.SFU_INITIAL_OUTGOING_BITRATE ?? '10000000', 10),
+  maxIncomingBitrate: parseInt(process.env.SFU_MAX_INCOMING_BITRATE ?? '20000000', 10),
+
   // Number of mediasoup Worker processes (one per CPU core is recommended).
   numWorkers: parseInt(process.env.SFU_NUM_WORKERS ?? '1', 10),
 
@@ -233,8 +239,12 @@ app.post('/rooms/:roomId/transports', async (req, res) => {
       enableUdp: true,
       enableTcp: true,
       preferUdp: true,
-      initialAvailableOutgoingBitrate: 800_000,
+      initialAvailableOutgoingBitrate: config.initialAvailableOutgoingBitrate,
     });
+
+    if (config.maxIncomingBitrate > 0) {
+      await transport.setMaxIncomingBitrate(config.maxIncomingBitrate);
+    }
 
     room.transports.set(transport.id, transport);
 
