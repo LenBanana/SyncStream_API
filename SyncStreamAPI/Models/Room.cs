@@ -43,6 +43,12 @@ public class Room
     /// </summary>
     [NotMapped] public HashSet<string> ActiveStreamers { get; } = new HashSet<string>();
 
+    /// <summary>
+    /// Subset of <see cref="ActiveStreamers"/> that are routed through the SFU
+    /// rather than the legacy P2P watcher path.
+    /// </summary>
+    [NotMapped] public HashSet<string> ActiveSfuStreamers { get; } = new HashSet<string>();
+
     [NotMapped]
     public Server server
     {

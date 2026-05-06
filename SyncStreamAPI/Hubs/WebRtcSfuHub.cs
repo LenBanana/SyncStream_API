@@ -14,14 +14,14 @@ namespace SyncStreamAPI.Hubs;
 
 public partial class ServerHub
 {
-    // connectionId → roomId (populated when peer joins an SFU room)
-    private static readonly ConcurrentDictionary<string, string> _sfuRoomByConnection = new();
+    // connectionId → set of SFU roomIds the peer currently participates in.
+    private static readonly ConcurrentDictionary<string, HashSet<string>> _sfuRoomsByConnection = new();
 
-    // connectionId → list of transportIds the peer owns
-    private static readonly ConcurrentDictionary<string, List<string>> _sfuTransportsByConnection = new();
+    // composite key `${connectionId}::{roomId}` → list of transportIds the peer owns in that SFU room.
+    private static readonly ConcurrentDictionary<string, List<string>> _sfuTransportsByPeerRoom = new();
 
-    // connectionId → list of producerIds the peer owns
-    private static readonly ConcurrentDictionary<string, List<string>> _sfuProducersByConnection = new();
+    // composite key `${connectionId}::{roomId}` → list of producerIds the peer owns in that SFU room.
+    private static readonly ConcurrentDictionary<string, List<string>> _sfuProducersByPeerRoom = new();
 
     // ---------------------------------------------------------------
     // Capabilities
@@ -51,9 +51,12 @@ public partial class ServerHub
     {
         await SfuManager.EnsureRoomAsync(roomId);
 
-        _sfuRoomByConnection[Context.ConnectionId] = roomId;
-        _sfuTransportsByConnection[Context.ConnectionId] = new List<string>();
-        _sfuProducersByConnection[Context.ConnectionId] = new List<string>();
+        var joinedRooms = _sfuRoomsByConnection.GetOrAdd(Context.ConnectionId, _ => new HashSet<string>());
+        lock (joinedRooms)
+            joinedRooms.Add(roomId);
+
+        _sfuTransportsByPeerRoom.TryAdd(SfuPeerRoomKey(Context.ConnectionId, roomId), new List<string>());
+        _sfuProducersByPeerRoom.TryAdd(SfuPeerRoomKey(Context.ConnectionId, roomId), new List<string>());
 
         await Groups.AddToGroupAsync(Context.ConnectionId, SfuGroupName(roomId));
         return await SfuManager.GetProducersAsync(roomId);
@@ -82,7 +85,7 @@ public partial class ServerHub
         var producing = direction == SfuTransportDirection.Send;
         var consuming = direction == SfuTransportDirection.Recv;
         var info = await SfuManager.CreateTransportAsync(roomId, producing, consuming);
-        _sfuTransportsByConnection.GetOrAdd(Context.ConnectionId, _ => new List<string>()).Add(info.Id);
+        _sfuTransportsByPeerRoom.GetOrAdd(SfuPeerRoomKey(Context.ConnectionId, roomId), _ => new List<string>()).Add(info.Id);
         return info;
     }
 
@@ -110,7 +113,7 @@ public partial class ServerHub
         string token, string roomId, string transportId, string kind, JObject rtpParameters)
     {
         var producerId = await SfuManager.ProduceAsync(roomId, transportId, kind, rtpParameters, Context.ConnectionId);
-        _sfuProducersByConnection.GetOrAdd(Context.ConnectionId, _ => new List<string>()).Add(producerId);
+        _sfuProducersByPeerRoom.GetOrAdd(SfuPeerRoomKey(Context.ConnectionId, roomId), _ => new List<string>()).Add(producerId);
 
         // Notify every other peer so they can consume the new track.
         await Clients.GroupExcept(SfuGroupName(roomId), new[] { Context.ConnectionId })
@@ -129,7 +132,7 @@ public partial class ServerHub
     [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
     public async Task CloseProducer(string token, string roomId, string producerId)
     {
-        if (_sfuProducersByConnection.TryGetValue(Context.ConnectionId, out var list))
+        if (_sfuProducersByPeerRoom.TryGetValue(SfuPeerRoomKey(Context.ConnectionId, roomId), out var list))
             list.Remove(producerId);
 
         await SfuManager.CloseProducerAsync(roomId, producerId);
@@ -253,15 +256,86 @@ public partial class ServerHub
         await RoomManager.SendPlayerType(room);
     }
 
+    /// <summary>
+    /// Starts an opt-in live screen-share routed through the SFU.
+    /// Unlike <see cref="StartSfuStream"/>, this does not affect the room's main
+    /// player or auto-join any viewers; it only marks the member as live in the user list.
+    /// </summary>
+    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
+    public async Task StartSfuOptInStream(string token, string roomId)
+    {
+        var room = MainManager.GetRoom(roomId);
+        if (room == null) return;
+
+        lock (room.ActiveStreamers)
+            room.ActiveStreamers.Add(Context.ConnectionId);
+        lock (room.ActiveSfuStreamers)
+            room.ActiveSfuStreamers.Add(Context.ConnectionId);
+
+        var member = room.server.members.Find(m => m?.ConnectionId == Context.ConnectionId);
+        if (member != null) member.IsStreaming = true;
+
+        await Clients.Group(room.uniqueId)
+            .userupdate(room.server.members.ConvertAll(x => x?.ToDTO()));
+    }
+
+    /// <summary>
+    /// Stops the caller's opt-in SFU live screen-share and dismisses any viewers
+    /// currently watching via the popout/live-watch path.
+    /// </summary>
+    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
+    public async Task StopSfuOptInStream(string token, string roomId)
+    {
+        var room = MainManager.GetRoom(roomId);
+        if (room == null) return;
+
+        bool wasStreaming;
+        lock (room.ActiveSfuStreamers)
+            wasStreaming = room.ActiveSfuStreamers.Remove(Context.ConnectionId);
+        if (!wasStreaming) return;
+
+        lock (room.ActiveStreamers)
+            room.ActiveStreamers.Remove(Context.ConnectionId);
+
+        var member = room.server.members.Find(m => m?.ConnectionId == Context.ConnectionId);
+        if (member != null) member.IsStreaming = false;
+
+        await Clients.Group(room.uniqueId)
+            .userupdate(room.server.members.ConvertAll(x => x?.ToDTO()));
+        await Clients.Group(room.uniqueId).stopWebRtcStream(Context.ConnectionId);
+    }
+
+    /// <summary>
+    /// Returns true when the specified streamer is currently sharing an opt-in live
+    /// screen-share through the SFU rather than the legacy P2P watcher path.
+    /// </summary>
+    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
+    public Task<bool> IsSfuOptInStreamActive(string token, string roomId, string streamerId)
+    {
+        var room = MainManager.GetRoom(roomId);
+        if (room == null) return Task.FromResult(false);
+
+        lock (room.ActiveSfuStreamers)
+            return Task.FromResult(room.ActiveSfuStreamers.Contains(streamerId));
+    }
+
     // ---------------------------------------------------------------
     // Disconnect cleanup (called from ServerHub.OnDisconnectedAsync)
     // ---------------------------------------------------------------
 
     internal async Task OnSfuDisconnectedAsync(string connectionId)
     {
-        if (!_sfuRoomByConnection.TryRemove(connectionId, out var roomId))
+        if (!_sfuRoomsByConnection.TryGetValue(connectionId, out var roomIds))
             return;
-        await CleanupSfuPeerAsync(connectionId, roomId);
+
+        List<string> joinedRooms;
+        lock (roomIds)
+            joinedRooms = new List<string>(roomIds);
+
+        foreach (var roomId in joinedRooms)
+            await CleanupSfuPeerAsync(connectionId, roomId);
+
+        _sfuRoomsByConnection.TryRemove(connectionId, out _);
 
         // If this peer was the active SFU streamer for any room, clean up.
         var rooms = MainManager.GetRooms();
@@ -274,6 +348,22 @@ public partial class ServerHub
                 await Clients.Group(room.uniqueId).stopWebRtcStream(connectionId);
                 await RoomManager.SendPlayerType(room);
             }
+
+            bool stoppedOptInStream;
+            lock (room.ActiveSfuStreamers)
+                stoppedOptInStream = room.ActiveSfuStreamers.Remove(connectionId);
+
+            if (!stoppedOptInStream) continue;
+
+            lock (room.ActiveStreamers)
+                room.ActiveStreamers.Remove(connectionId);
+
+            var member = room.server.members.Find(m => m?.ConnectionId == connectionId);
+            if (member != null) member.IsStreaming = false;
+
+            await Clients.Group(room.uniqueId)
+                .userupdate(room.server.members.ConvertAll(x => x?.ToDTO()));
+            await Clients.Group(room.uniqueId).stopWebRtcStream(connectionId);
         }
     }
 
@@ -282,11 +372,14 @@ public partial class ServerHub
     // ---------------------------------------------------------------
 
     private static string SfuGroupName(string roomId) => $"SFURoom-{roomId}";
+    private static string SfuPeerRoomKey(string connectionId, string roomId) => $"{connectionId}::{roomId}";
 
     private async Task CleanupSfuPeerAsync(string connectionId, string roomId)
     {
+        var peerRoomKey = SfuPeerRoomKey(connectionId, roomId);
+
         // Close all producers owned by this peer and notify the room.
-        if (_sfuProducersByConnection.TryRemove(connectionId, out var producers))
+        if (_sfuProducersByPeerRoom.TryRemove(peerRoomKey, out var producers))
         {
             foreach (var pid in producers)
             {
@@ -304,7 +397,7 @@ public partial class ServerHub
         }
 
         // Close all transports owned by this peer.
-        if (_sfuTransportsByConnection.TryRemove(connectionId, out var transports))
+        if (_sfuTransportsByPeerRoom.TryRemove(peerRoomKey, out var transports))
         {
             foreach (var tid in transports)
             {
@@ -319,7 +412,12 @@ public partial class ServerHub
             }
         }
 
-        _sfuRoomByConnection.TryRemove(connectionId, out _);
+        if (_sfuRoomsByConnection.TryGetValue(connectionId, out var roomIds))
+        {
+            lock (roomIds)
+                roomIds.Remove(roomId);
+        }
+
         await Groups.RemoveFromGroupAsync(connectionId, SfuGroupName(roomId));
     }
 
