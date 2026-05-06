@@ -321,6 +321,31 @@ public partial class ServerHub
             return Task.FromResult(room.ActiveSfuStreamers.Contains(streamerId));
     }
 
+    /// <summary>
+    /// Moderator-only: notifies all room members that the caller has an active SFU opt-in
+    /// broadcast so they can auto-join as viewers through the SFU path.
+    /// The caller must already have set up SFU producers via <c>StartSfuOptInStream</c>
+    /// before invoking this — the method verifies that precondition and does nothing if
+    /// the caller is not found in <see cref="Models.Room.ActiveSfuStreamers"/>.
+    /// </summary>
+    [Privilege(RequiredPrivileges = UserPrivileges.Moderator, AuthenticationType = AuthenticationType.Token)]
+    public async Task ForceSfuBroadcast(string token, string roomId)
+    {
+        var room = MainManager.GetRoom(roomId);
+        if (room == null) return;
+
+        // Only proceed if the caller already has active SFU producers in this room.
+        bool isActive;
+        lock (room.ActiveSfuStreamers)
+            isActive = room.ActiveSfuStreamers.Contains(Context.ConnectionId);
+        if (!isActive) return;
+
+        // Push the notification so viewers auto-join via the SFU watcher path
+        // (broadcastStream listener → startWatching → IsSfuOptInStreamActive=true → startWatchingSfu).
+        await Clients.GroupExcept(room.uniqueId, new[] { Context.ConnectionId })
+            .broadcastStream(Context.ConnectionId, roomId);
+    }
+
     // ---------------------------------------------------------------
     // Disconnect cleanup (called from ServerHub.OnDisconnectedAsync)
     // ---------------------------------------------------------------
