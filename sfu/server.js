@@ -466,7 +466,7 @@ app.post('/rooms/:roomId/server-stream', async (req, res) => {
 
 // Play / pause / seek the active server file stream.
 // Body: { action: 'play' | 'pause' | 'seek', position?: number }
-app.post('/rooms/:roomId/server-stream/control', (req, res) => {
+app.post('/rooms/:roomId/server-stream/control', async (req, res) => {
   const room = rooms.get(req.params.roomId);
   if (!room) return res.status(404).json({ error: 'Room not found' });
   if (!room.serverFileStream) return res.status(404).json({ error: 'No active server stream' });
@@ -474,19 +474,23 @@ app.post('/rooms/:roomId/server-stream/control', (req, res) => {
   const { action, position } = req.body;
   const stream = room.serverFileStream;
 
-  if (action === 'pause') {
-    pauseServerFileStream(stream);
-  } else if (action === 'play') {
-    if (!stream.paused) return res.json({ ok: true, position: stream.currentPositionSec });
-    resumeServerFileStream(stream, null);
-  } else if (action === 'seek') {
-    const seekPos = typeof position === 'number' ? position : stream.positionSec;
-    resumeServerFileStream(stream, seekPos);
-  } else {
-    return res.status(400).json({ error: `Unknown action: ${action}` });
+  try {
+    if (action === 'pause') {
+      await pauseServerFileStream(stream);
+    } else if (action === 'play') {
+      if (!stream.paused) return res.json({ ok: true, position: stream.currentPositionSec });
+      await resumeServerFileStream(stream, null);
+    } else if (action === 'seek') {
+      const seekPos = typeof position === 'number' ? position : stream.positionSec;
+      await resumeServerFileStream(stream, seekPos);
+    } else {
+      return res.status(400).json({ error: `Unknown action: ${action}` });
+    }
+    res.json({ ok: true, position: stream.currentPositionSec });
+  } catch (err) {
+    console.error(`[server-stream] control action=${action} failed:`, err);
+    res.status(500).json({ error: String(err) });
   }
-
-  res.json({ ok: true, position: stream.currentPositionSec });
 });
 
 // Stop the server file stream and clean up all resources.

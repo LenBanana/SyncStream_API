@@ -274,73 +274,48 @@ async function startServerFileStream(room, filePath, targetBitrate, onProducerCr
 }
 
 /**
- * Pauses the stream by killing ffmpeg and recording the position.
+ * Pauses the stream by killing ffmpeg and pausing the mediasoup producers.
+ * Pausing producers signals all consumers to enter producer-paused state so
+ * they get a clean reset when resume() is called.
  * @param {ServerFileStream} stream
  */
-function pauseServerFileStream(stream) {
+async function pauseServerFileStream(stream) {
   if (stream.paused) return;
   stream.positionSec = stream.currentPositionSec;
   stream.paused = true;
   stream.pausedAt = Date.now();
   stream.startedAt = 0;
+
+  // Pause mediasoup producers BEFORE killing ffmpeg so consumers enter
+  // producerPaused state cleanly.
+  try { await stream.videoProducer.pause(); } catch (e) {
+    console.error(`[server-stream] ${ts()} video producer.pause() failed: ${e.message}`);
+  }
+  try { await stream.audioProducer.pause(); } catch (e) {
+    console.error(`[server-stream] ${ts()} audio producer.pause() failed: ${e.message}`);
+  }
+
   if (stream.ffmpeg && !stream.ffmpeg.killed) {
-    // SIGSTOP suspends without terminating: RTP packets stop flowing but sequence
-    // numbers / SSRC / codec state are fully preserved.  SIGCONT later resumes
-    // the same stream, so the browser decoder never needs to reset.
-    try {
-      console.log(`[server-stream] ${ts()} SIGSTOP pid=${stream.ffmpeg.pid}`);
-      process.kill(stream.ffmpeg.pid, 'SIGSTOP');
-    } catch (e) {
-      // Fallback: process already gone — treat as already paused.
-      console.error(`[server-stream] ${ts()} SIGSTOP failed: ${e.message}`);
-      stream.ffmpeg = null;
-    }
+    stream.ffmpeg.kill('SIGKILL');
+    stream.ffmpeg = null;
   }
   console.log(`[server-stream] ${ts()} paused at ${stream.positionSec.toFixed(2)}s`);
 }
 
 /**
- * Resumes / seeks: restarts ffmpeg at the given position.
+ * Resumes / seeks: kills any running ffmpeg, restarts at the target position,
+ * then resumes the mediasoup producers so all consumers exit producer-paused
+ * state with a clean RTP-sequence reset.
  * @param {ServerFileStream} stream
  * @param {number|null} seekToSec  - null = resume from pause position
  */
-function resumeServerFileStream(stream, seekToSec) {
+async function resumeServerFileStream(stream, seekToSec) {
   const isSeeking = seekToSec != null;
-
   stream.positionSec = isSeeking ? seekToSec : stream.positionSec;
   stream.paused = false;
   stream.startedAt = Date.now();
 
-  if (!isSeeking && stream.ffmpeg && !stream.ffmpeg.killed) {
-    // Only SIGCONT for short pauses (< 3 s).  For longer pauses, -re pacing
-    // would burst-send all the "owed" frames on wakeup, causing a fast-forward
-    // artefact.  In that case restart at the paused position instead.
-    const pauseDurationMs = Date.now() - stream.pausedAt;
-    if (pauseDurationMs < 3000) {
-      try {
-        const pid = stream.ffmpeg.pid;
-        console.log(`[server-stream] ${ts()} SIGCONT pid=${pid} pauseMs=${pauseDurationMs}`);
-        process.kill(pid, 'SIGCONT');
-        console.log(`[server-stream] ${ts()} resumed at ${stream.positionSec.toFixed(2)}s`);
-        // Confirm the process is still alive 1 second later.
-        setTimeout(() => {
-          try { process.kill(pid, 0); console.log(`[server-stream] ${ts()} health: pid=${pid} alive`); }
-          catch { console.log(`[server-stream] ${ts()} health: pid=${pid} GONE`); }
-        }, 1000);
-        return;
-      } catch (e) {
-        console.error(`[server-stream] ${ts()} SIGCONT failed, restarting: ${e.message}`);
-        stream.ffmpeg = null;
-      }
-    } else {
-      // Pause was long enough to cause a burst — kill and restart cleanly.
-      console.log(`[server-stream] ${ts()} SIGKILL pid=${stream.ffmpeg.pid} (pauseMs=${pauseDurationMs})`);
-      stream.ffmpeg.kill('SIGKILL');
-      stream.ffmpeg = null;
-    }
-  }
-
-  // Seek (or fallback when process is gone): kill old ffmpeg and restart at new position.
+  // Kill any running ffmpeg first.
   if (stream.ffmpeg && !stream.ffmpeg.killed) {
     stream.ffmpeg.kill('SIGKILL');
     stream.ffmpeg = null;
@@ -367,12 +342,17 @@ function resumeServerFileStream(stream, seekToSec) {
     }
   });
 
-  console.log(`[server-stream] ${ts()} resumed (restart) at ${stream.positionSec.toFixed(2)}s pid=${newPid}`);
-  // Confirm the process is still alive 1 second later.
-  setTimeout(() => {
-    try { process.kill(newPid, 0); console.log(`[server-stream] ${ts()} health: pid=${newPid} alive`); }
-    catch { console.log(`[server-stream] ${ts()} health: pid=${newPid} GONE`); }
-  }, 1000);
+  // Resume mediasoup producers. This signals every consumer to exit
+  // producerPaused state with a fresh RTP-sequence-number window, so the
+  // browser decoder receives the new keyframe and continues playing.
+  try { await stream.videoProducer.resume(); } catch (e) {
+    console.error(`[server-stream] ${ts()} video producer.resume() failed: ${e.message}`);
+  }
+  try { await stream.audioProducer.resume(); } catch (e) {
+    console.error(`[server-stream] ${ts()} audio producer.resume() failed: ${e.message}`);
+  }
+
+  console.log(`[server-stream] ${ts()} resumed at ${stream.positionSec.toFixed(2)}s pid=${newPid}`);
 }
 
 /**
