@@ -100,6 +100,7 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
 
   const args = [
     ...seekArgs,
+    '-stats_period', '1',
     '-re',                        // real-time pacing
     '-i', filePath,
     // Video: transcode to VP8 real-time (VP8 is ~3× faster than VP9 to encode)
@@ -134,11 +135,12 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
   // Log ALL stderr lines for the first 30 (startup + first keyframe), then errors only.
   let stderrCount = 0;
   proc.stderr.on('data', (d) => {
-    for (const raw of d.toString().split('\n')) {
+    for (const raw of d.toString().split(/[\r\n]+/)) {
       const line = raw.trim();
       if (!line) continue;
       stderrCount++;
-      if (stderrCount <= 30 || line.includes('rror') || line.includes('ail') || line.includes('nvalid')) {
+      const isProgressLine = line.includes('frame=') || line.includes('fps=') || line.includes('speed=');
+      if (stderrCount <= 30 || isProgressLine || line.includes('rror') || line.includes('ail') || line.includes('nvalid')) {
         console.error(`[ffmpeg|${proc.pid}] ${line}`);
       }
     }

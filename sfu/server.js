@@ -211,6 +211,23 @@ app.get('/rtp-capabilities', (_req, res) => {
   res.json(capabilitiesRouter.rtpCapabilities);
 });
 
+function requestKeyFrameForProducerConsumers(room, producerId, reason) {
+  let matchedConsumers = 0;
+
+  for (const consumer of room.consumers.values()) {
+    if (consumer.closed || consumer.kind !== 'video' || consumer.producerId !== producerId) {
+      continue;
+    }
+
+    matchedConsumers++;
+    consumer.requestKeyFrame().catch((err) => {
+      console.warn(`[server-stream] keyframe request failed producer=${producerId.slice(0, 8)} consumer=${consumer.id.slice(0, 8)} reason=${reason}: ${err.message}`);
+    });
+  }
+
+  console.log(`[server-stream] keyframe requests producer=${producerId.slice(0, 8)} consumers=${matchedConsumers} reason=${reason}`);
+}
+
 // Create / ensure room
 app.post('/rooms/:roomId', async (req, res) => {
   try {
@@ -366,6 +383,9 @@ app.post('/rooms/:roomId/transports/:transportId/consume', async (req, res) => {
       room.consumers.delete(consumer.id);
       consumer.close();
     });
+    consumer.on('score', (score) => {
+      console.log(`[consumer] peer=${peerId || '-'} kind=${consumer.kind} producer=${consumer.producerId.slice(0, 8)} consumer=${consumer.id.slice(0, 8)} score=${JSON.stringify(score)}`);
+    });
 
     // Request a keyframe immediately so the consumer renders without waiting for
     // Chrome's natural VP8 keyframe interval (which can be up to ~4 seconds).
@@ -480,9 +500,11 @@ app.post('/rooms/:roomId/server-stream/control', async (req, res) => {
     } else if (action === 'play') {
       if (!stream.paused) return res.json({ ok: true, position: stream.currentPositionSec });
       await resumeServerFileStream(stream, null);
+      requestKeyFrameForProducerConsumers(room, stream.videoProducer.id, 'play');
     } else if (action === 'seek') {
       const seekPos = typeof position === 'number' ? position : stream.positionSec;
       await resumeServerFileStream(stream, seekPos);
+      requestKeyFrameForProducerConsumers(room, stream.videoProducer.id, 'seek');
     } else {
       return res.status(400).json({ error: `Unknown action: ${action}` });
     }
