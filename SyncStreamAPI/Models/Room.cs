@@ -45,6 +45,13 @@ public class Room
     [NotMapped] public bool IsServerFileShare { get; set; }
 
     /// <summary>
+    /// The uploadId of the in-progress chunked upload that is feeding the active server-side
+    /// file stream.  Set when the stream is started early (before the full upload completes)
+    /// so the upload temp directory can be cleaned up when the stream stops.
+    /// </summary>
+    [NotMapped] public string? FileShareUploadId { get; set; }
+
+    /// <summary>
     /// Set of connectionIds that are currently streaming P2P (Discord-style opt-in).
     /// Multiple concurrent streamers are supported; each viewer connects on-demand.
     /// </summary>

@@ -155,6 +155,82 @@ public partial class ServerHub
     }
 
     /// <summary>
+    /// Variant of <see cref="StartServerFileShare"/> for the early-stream path: the client
+    /// has uploaded the first chunk and wants to start ffmpeg immediately, continuing to
+    /// upload the remaining chunks in the background while viewers already watch.
+    /// The upload temp file at <c>{uploads}/{uploadId}/data</c> is used directly by ffmpeg;
+    /// no DB record is created until <c>CompleteRoomUpload</c> is later called.
+    /// </summary>
+    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
+    public async Task StartServerFileShareFromUpload(string token, string roomId, string uploadId)
+    {
+        var room = MainManager.GetRoom(roomId);
+        if (room == null) return;
+
+        if (room.IsFileSharingActive)
+        {
+            await Clients.Caller.dialog(new Dialog(AlertType.Warning)
+            {
+                Header = "File Share Unavailable",
+                Question = "Someone is already sharing a file in this room. Please wait until they finish.",
+                Answer1 = "Ok"
+            });
+            return;
+        }
+
+        var member = room.server.members.FirstOrDefault(m => m?.ConnectionId == Context.ConnectionId);
+        if (member == null) return;
+
+        // uploadId is a GUID (32 hex chars) — cryptographically unguessable; no separate
+        // ownership query needed.  File must already exist (first chunk was written).
+        var filePath = Path.Combine(General.TemporaryFilePath, "uploads", uploadId, "data");
+        if (!File.Exists(filePath))
+        {
+            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+                { Header = "Upload Not Found", Question = "The upload session could not be found. Please try again.", Answer1 = "Ok" });
+            return;
+        }
+
+        room.IsFileSharingActive = true;
+        room.FileShareInitiator  = Context.ConnectionId;
+        room.CurrentStreamer      = Context.ConnectionId;
+        room.IsStreamingSfu      = true;
+        room.IsServerFileShare   = true;
+        room.FileShareUploadId   = uploadId;
+
+        await SfuManager.EnsureRoomAsync(roomId);
+
+        try
+        {
+            var (videoProducerId, audioProducerId) = await SfuManager.StartServerFileStreamAsync(roomId, filePath);
+
+            var serverPeerId = $"server-file:{roomId}";
+            await Clients.Group(SfuGroupName(roomId))
+                .sfuNewProducer(new SfuNewProducerNotification
+                    { ProducerId = videoProducerId, PeerId = serverPeerId, Kind = "video", RoomId = roomId });
+            await Clients.Group(SfuGroupName(roomId))
+                .sfuNewProducer(new SfuNewProducerNotification
+                    { ProducerId = audioProducerId, PeerId = serverPeerId, Kind = "audio", RoomId = roomId });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[FileShare] StartServerFileShareFromUpload failed: {ex.Message}");
+            room.IsFileSharingActive = false;
+            room.FileShareInitiator  = null;
+            room.CurrentStreamer     = null;
+            room.IsStreamingSfu     = false;
+            room.IsServerFileShare  = false;
+            room.FileShareUploadId  = null;
+            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+                { Header = "Error", Question = "Failed to start the server-side file stream.", Answer1 = "Ok" });
+            return;
+        }
+
+        await RoomManager.SendPlayerType(room);
+        await Clients.Group(roomId).fileShareStarted(Context.ConnectionId, member.username, roomId);
+    }
+
+    /// <summary>
     /// Called by the file-share initiator to cleanly stop the active share.
     /// The initiator should call <c>stopStreamingSfu</c> on the client side after
     /// this returns to tear down their SFU send-transport and producers.
@@ -222,6 +298,15 @@ public partial class ServerHub
             try { await SfuManager.StopServerFileStreamAsync(room.uniqueId); }
             catch (Exception ex) { Console.WriteLine($"[FileShare] StopServerFileStream failed: {ex.Message}"); }
             room.IsServerFileShare = false;
+        }
+
+        // Clean up the upload temp directory left by an early-stream upload.
+        if (!string.IsNullOrWhiteSpace(room.FileShareUploadId))
+        {
+            var uploadDir = Path.Combine(General.TemporaryFilePath, "uploads", room.FileShareUploadId);
+            try { if (Directory.Exists(uploadDir)) Directory.Delete(uploadDir, recursive: true); }
+            catch (Exception ex) { Console.WriteLine($"[FileShare] Failed to delete upload dir: {ex.Message}"); }
+            room.FileShareUploadId = null;
         }
 
         room.IsFileSharingActive = false;

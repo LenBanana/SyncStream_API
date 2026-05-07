@@ -481,12 +481,23 @@ public class RoomStreamService : IRoomStreamService
             if (session == null || session.State != RoomUploadStates.Processing)
                 return;
 
-            if (string.IsNullOrWhiteSpace(session.BaseUrl))
-                throw new InvalidOperationException("Upload session is missing the playback base URL");
-
             var uploadFilePath = GetUploadDataPath(uploadId);
             if (!System.IO.File.Exists(uploadFilePath))
                 throw new FileNotFoundException("Upload session file could not be found", uploadFilePath);
+
+            // For skipPlaylist (early-stream) uploads the file stays at the upload path so ffmpeg
+            // can keep reading it.  No DB record, no file move, no HLS — just mark it complete.
+            if (session.SkipPlaylist)
+            {
+                session.State = RoomUploadStates.Ready;
+                session.FileKey = uploadId;
+                session.UpdatedUtc = DateTime.UtcNow;
+                await SaveSessionAsync(session);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(session.BaseUrl))
+                throw new InvalidOperationException("Upload session is missing the playback base URL");
 
             if (RoomManager.GetRoom(session.UniqueId) == null)
             {
