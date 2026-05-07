@@ -58,6 +58,7 @@ class ServerFileStream {
     this.ffmpeg         = null;
     this.positionSec    = 0;   // last known position (updated on pause/seek)
     this.startedAt      = 0;   // Date.now() when current ffmpeg started at positionSec
+    this.pausedAt       = 0;   // Date.now() when stream was paused (for burst detection)
     this.paused         = false;
   }
 
@@ -239,10 +240,19 @@ function pauseServerFileStream(stream) {
   if (stream.paused) return;
   stream.positionSec = stream.currentPositionSec;
   stream.paused = true;
+  stream.pausedAt = Date.now();
   stream.startedAt = 0;
   if (stream.ffmpeg && !stream.ffmpeg.killed) {
-    stream.ffmpeg.kill('SIGKILL');
-    stream.ffmpeg = null;
+    // SIGSTOP suspends without terminating: RTP packets stop flowing but sequence
+    // numbers / SSRC / codec state are fully preserved.  SIGCONT later resumes
+    // the same stream, so the browser decoder never needs to reset.
+    try {
+      process.kill(stream.ffmpeg.pid, 'SIGSTOP');
+    } catch (e) {
+      // Fallback: process already gone — treat as already paused.
+      console.error('[server-stream] SIGSTOP failed:', e.message);
+      stream.ffmpeg = null;
+    }
   }
   console.log(`[server-stream] paused at ${stream.positionSec.toFixed(2)}s`);
 }
@@ -253,15 +263,38 @@ function pauseServerFileStream(stream) {
  * @param {number|null} seekToSec  - null = resume from pause position
  */
 function resumeServerFileStream(stream, seekToSec) {
-  // Kill any running ffmpeg first.
+  const isSeeking = seekToSec != null;
+
+  stream.positionSec = isSeeking ? seekToSec : stream.positionSec;
+  stream.paused = false;
+  stream.startedAt = Date.now();
+
+  if (!isSeeking && stream.ffmpeg && !stream.ffmpeg.killed) {
+    // Only SIGCONT for short pauses (< 3 s).  For longer pauses, -re pacing
+    // would burst-send all the "owed" frames on wakeup, causing a fast-forward
+    // artefact.  In that case restart at the paused position instead.
+    const pauseDurationMs = Date.now() - stream.pausedAt;
+    if (pauseDurationMs < 3000) {
+      try {
+        process.kill(stream.ffmpeg.pid, 'SIGCONT');
+        console.log(`[server-stream] resumed at ${stream.positionSec.toFixed(2)}s`);
+        return;
+      } catch (e) {
+        console.error('[server-stream] SIGCONT failed, restarting ffmpeg:', e.message);
+        stream.ffmpeg = null;
+      }
+    } else {
+      // Pause was long enough to cause a burst — kill and restart cleanly.
+      stream.ffmpeg.kill('SIGKILL');
+      stream.ffmpeg = null;
+    }
+  }
+
+  // Seek (or fallback when process is gone): kill old ffmpeg and restart at new position.
   if (stream.ffmpeg && !stream.ffmpeg.killed) {
     stream.ffmpeg.kill('SIGKILL');
     stream.ffmpeg = null;
   }
-
-  stream.positionSec = seekToSec != null ? seekToSec : stream.positionSec;
-  stream.paused = false;
-  stream.startedAt = Date.now();
 
   stream.ffmpeg = spawnFfmpeg({
     filePath:         stream.filePath,
@@ -281,7 +314,7 @@ function resumeServerFileStream(stream, seekToSec) {
     }
   });
 
-  console.log(`[server-stream] resumed at ${stream.positionSec.toFixed(2)}s`);
+  console.log(`[server-stream] resumed (seek) at ${stream.positionSec.toFixed(2)}s`);
 }
 
 /**
