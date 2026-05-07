@@ -46,13 +46,15 @@ function freePort(port) {
 /** State for one active server-side file stream in a room. */
 class ServerFileStream {
   constructor({ videoTransport, audioTransport, videoProducer, audioProducer,
-                videoPort, audioPort, filePath, targetBitrate }) {
+                videoPort, audioPort, videoLocalPort, audioLocalPort, filePath, targetBitrate }) {
     this.videoTransport = videoTransport;
     this.audioTransport = audioTransport;
     this.videoProducer  = videoProducer;
     this.audioProducer  = audioProducer;
-    this.videoPort      = videoPort;
+    this.videoPort      = videoPort;       // mediasoup listening port (RTP destination)
     this.audioPort      = audioPort;
+    this.videoLocalPort = videoLocalPort;  // fixed ffmpeg source port (stays same on restart)
+    this.audioLocalPort = audioLocalPort;
     this.filePath       = filePath;
     this.targetBitrate  = targetBitrate;
     this.ffmpeg         = null;
@@ -80,6 +82,7 @@ class ServerFileStream {
  * Returns the ChildProcess.
  */
 function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
+                       videoLocalPort, audioLocalPort,
                        videoPayloadType, audioPayloadType, videoSsrc, audioSsrc }) {
   const bitrateK = Math.round(targetBitrate / 1000);
   const seekArgs = startSec > 0.5 ? ['-ss', String(startSec.toFixed(3))] : [];
@@ -102,7 +105,7 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
     '-pix_fmt', 'yuv420p',
     '-ssrc', String(videoSsrc),
     '-payload_type', String(videoPayloadType),
-    '-f', 'rtp', `rtp://127.0.0.1:${videoPort}?pkt_size=1200`,
+    '-f', 'rtp', `rtp://127.0.0.1:${videoPort}?pkt_size=1200&localport=${videoLocalPort}`,
     // Audio: transcode to Opus
     '-map', '0:a:0',
     '-c:a', 'libopus',
@@ -111,7 +114,7 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
     '-ac', '2',
     '-ssrc', String(audioSsrc),
     '-payload_type', String(audioPayloadType),
-    '-f', 'rtp', `rtp://127.0.0.1:${audioPort}?pkt_size=1200`,
+    '-f', 'rtp', `rtp://127.0.0.1:${audioPort}?pkt_size=1200&localport=${audioLocalPort}`,
   ];
 
   const proc = spawn(FFMPEG_PATH, args, {stdio: ['ignore', 'ignore', 'pipe']});
@@ -128,13 +131,19 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
  * Returns { transport, producer, port, payloadType, ssrc }.
  */
 async function createPlainProducer(router, kind, payloadType, ssrc) {
-  // comedia=true: mediasoup auto-detects ffmpeg's source address from the
-  // first incoming RTP packet, so we don't need to know ffmpeg's source port.
+  // We use comedia=false and a fixed ffmpeg source port so that on pause+restart
+  // the new ffmpeg process binds to the same local port (via ?localport=N in the
+  // RTP URL).  mediasoup therefore continues to accept packets from the same
+  // source address and does not lock out the resumed stream.
+  const localPort = allocatePort();   // fixed port ffmpeg will bind to
   const transport = await router.createPlainTransport({
     listenInfo: { protocol: 'udp', ip: '127.0.0.1' },
     rtcpMux:     true,
-    comedia:     true,
+    comedia:     false,
   });
+
+  // Tell mediasoup where RTCP should be sent and which source to accept.
+  await transport.connect({ ip: '127.0.0.1', port: localPort });
 
   // transport.tuple.localPort is mediasoup's UDP listening port (in the RTC
   // port range).  This is what ffmpeg must TARGET with its rtp:// URL.
@@ -163,7 +172,7 @@ async function createPlainProducer(router, kind, payloadType, ssrc) {
 
   const producer = await transport.produce({kind, rtpParameters, paused: false});
 
-  return {transport, producer, port, payloadType, ssrc};
+  return {transport, producer, port, localPort, payloadType, ssrc};
 }
 
 /**
@@ -192,6 +201,8 @@ async function startServerFileStream(room, filePath, targetBitrate, onProducerCr
     audioProducer:  aResult.producer,
     videoPort:      vResult.port,
     audioPort:      aResult.port,
+    videoLocalPort: vResult.localPort,
+    audioLocalPort: aResult.localPort,
     filePath,
     targetBitrate,
   });
@@ -212,10 +223,12 @@ async function startServerFileStream(room, filePath, targetBitrate, onProducerCr
   stream.startedAt = Date.now();
   stream.ffmpeg = spawnFfmpeg({
     filePath,
-    startSec: 0,
+    startSec:         0,
     targetBitrate,
     videoPort:        vResult.port,
     audioPort:        aResult.port,
+    videoLocalPort:   vResult.localPort,
+    audioLocalPort:   aResult.localPort,
     videoPayloadType: videoPt,
     audioPayloadType: audioPt,
     videoSsrc,
@@ -268,6 +281,8 @@ function resumeServerFileStream(stream, seekToSec) {
     targetBitrate:    stream.targetBitrate,
     videoPort:        stream.videoPort,
     audioPort:        stream.audioPort,
+    videoLocalPort:   stream.videoLocalPort,
+    audioLocalPort:   stream.audioLocalPort,
     videoPayloadType: 96,
     audioPayloadType: 97,
     videoSsrc:        stream.videoProducer.rtpParameters.encodings[0].ssrc,
@@ -304,14 +319,14 @@ function stopServerFileStream(room, stream) {
     room.producers.delete(stream.audioProducer.id);
   }
 
-  // Close transports and free ports.
+  // Close transports and free the ffmpeg local ports we allocated.
   if (stream.videoTransport && !stream.videoTransport.closed) {
     stream.videoTransport.close();
-    freePort(stream.videoPort);
+    freePort(stream.videoLocalPort);
   }
   if (stream.audioTransport && !stream.audioTransport.closed) {
     stream.audioTransport.close();
-    freePort(stream.audioPort);
+    freePort(stream.audioLocalPort);
   }
 
   console.log(`[server-stream] stopped room=${room.id}`);

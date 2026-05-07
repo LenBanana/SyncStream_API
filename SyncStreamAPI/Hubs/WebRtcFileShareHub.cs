@@ -296,6 +296,22 @@ public partial class ServerHub
         catch (Exception ex) { Console.WriteLine($"[FileShare] Seek failed: {ex.Message}"); }
     }
 
+    /// <summary>
+    /// Called by the file-share initiator after the background chunk upload has
+    /// finished (i.e. after POST /api/video/roomUpload/complete returns 200/202).
+    /// Clears the upload-in-progress guard so seeking becomes available.
+    /// </summary>
+    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
+    public Task MarkFileShareUploadComplete(string token, string roomId, string uploadId)
+    {
+        var room = MainManager.GetRoom(roomId);
+        if (room == null) return Task.CompletedTask;
+        if (room.FileShareInitiator != Context.ConnectionId) return Task.CompletedTask;
+        if (room.FileShareUploadId == uploadId)
+            room.FileShareUploadId = null;
+        return Task.CompletedTask;
+    }
+
     // ---------------------------------------------------------------
     // Shared internal teardown — also called from OnDisconnectedAsync
     // and NextVideo so the room state is always consistent.
