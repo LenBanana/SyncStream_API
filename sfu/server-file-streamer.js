@@ -29,17 +29,22 @@ const FFMPEG_PATH = process.env.FFMPEG_PATH ??
 // Port allocator for fixed ffmpeg source ports used with comedia=false.
 // Range 20000-29999 is safely below the Linux ephemeral port range (32768-60999)
 // so these ports will never be grabbed by the OS as ephemeral sockets.
+//
+// IMPORTANT: allocate in steps of 2.  ffmpeg's RTP muxer opens TWO sockets per
+// stream: RTP on localport=N and RTCP on localport=N+1.  By only handing out
+// even port numbers, each stream's auto-RTCP port (odd, N+1) never collides
+// with another stream's RTP allocation.
 let _nextPort = 20000;
 const _usedPorts = new Set();
 
 function allocatePort() {
   const start = _nextPort;
   while (_usedPorts.has(_nextPort)) {
-    _nextPort = (_nextPort >= 29999) ? 20000 : _nextPort + 1;
+    _nextPort = (_nextPort >= 29998) ? 20000 : _nextPort + 2;
     if (_nextPort === start) throw new Error('No available streaming port');
   }
   const port = _nextPort;
-  _nextPort = (port >= 29999) ? 20000 : port + 1;
+  _nextPort = (port >= 29998) ? 20000 : port + 2;
   _usedPorts.add(port);
   return port;
 }
