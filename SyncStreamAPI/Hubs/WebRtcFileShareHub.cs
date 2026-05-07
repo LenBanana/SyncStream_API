@@ -183,7 +183,7 @@ public partial class ServerHub
 
         // uploadId is a GUID (32 hex chars) — cryptographically unguessable; no separate
         // ownership query needed.  File must already exist (first chunk was written).
-        var filePath = Path.Combine(General.TemporaryFilePath, "uploads", uploadId, "data");
+        var filePath = Path.Combine(General.TemporaryFilePath, "room-uploads", uploadId, "upload.bin");
         if (!File.Exists(filePath))
         {
             await Clients.Caller.dialog(new Dialog(AlertType.Danger)
@@ -278,6 +278,20 @@ public partial class ServerHub
         if (room.FileShareInitiator != Context.ConnectionId) return;
         if (!room.IsServerFileShare) return;
 
+        // Seek guard: if the background upload is still in progress the file is
+        // incomplete on disk.  FFmpeg would hit EOF at the current write head and
+        // die silently, freezing all viewers.  Reject the seek and tell the host.
+        if (!string.IsNullOrWhiteSpace(room.FileShareUploadId))
+        {
+            await Clients.Caller.dialog(new Dialog(AlertType.Warning)
+            {
+                Header = "Upload In Progress",
+                Question = "The file is still uploading. Seeking will be available once the full upload completes.",
+                Answer1 = "Ok"
+            });
+            return;
+        }
+
         try { await SfuManager.ControlServerFileStreamAsync(roomId, "seek", positionSec); }
         catch (Exception ex) { Console.WriteLine($"[FileShare] Seek failed: {ex.Message}"); }
     }
@@ -303,7 +317,7 @@ public partial class ServerHub
         // Clean up the upload temp directory left by an early-stream upload.
         if (!string.IsNullOrWhiteSpace(room.FileShareUploadId))
         {
-            var uploadDir = Path.Combine(General.TemporaryFilePath, "uploads", room.FileShareUploadId);
+            var uploadDir = Path.Combine(General.TemporaryFilePath, "room-uploads", room.FileShareUploadId);
             try { if (Directory.Exists(uploadDir)) Directory.Delete(uploadDir, recursive: true); }
             catch (Exception ex) { Console.WriteLine($"[FileShare] Failed to delete upload dir: {ex.Message}"); }
             room.FileShareUploadId = null;
