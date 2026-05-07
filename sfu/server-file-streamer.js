@@ -131,15 +131,17 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
  * Returns { transport, producer, port, payloadType, ssrc }.
  */
 async function createPlainProducer(router, kind, payloadType, ssrc) {
-  const port = allocatePort();
-
+  // comedia=true: mediasoup auto-detects ffmpeg's source address from the
+  // first incoming RTP packet, so we don't need to know ffmpeg's source port.
   const transport = await router.createPlainTransport({
     listenInfo: { protocol: 'udp', ip: '127.0.0.1' },
     rtcpMux:     true,
-    comedia:     false,
+    comedia:     true,
   });
 
-  await transport.connect({ip: '127.0.0.1', port});
+  // transport.tuple.localPort is mediasoup's UDP listening port (in the RTC
+  // port range).  This is what ffmpeg must TARGET with its rtp:// URL.
+  const port = transport.tuple.localPort;
 
   const rtpParameters = kind === 'video'
     ? {
@@ -163,10 +165,6 @@ async function createPlainProducer(router, kind, payloadType, ssrc) {
       };
 
   const producer = await transport.produce({kind, rtpParameters, paused: false});
-
-  transport.on('routerclose', () => {
-    freePort(port);
-  });
 
   return {transport, producer, port, payloadType, ssrc};
 }
