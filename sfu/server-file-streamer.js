@@ -20,6 +20,9 @@ const { spawn } = require('child_process');
 const path = require('path');
 const os   = require('os');
 
+// ISO timestamp prefix for all log lines so events can be correlated.
+const ts = () => new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm
+
 const FFMPEG_PATH = process.env.FFMPEG_PATH ??
   (os.platform() === 'win32' ? path.join(__dirname, '..', 'SyncStreamAPI', 'ffmpeg.exe') : 'ffmpeg');
 
@@ -116,10 +119,19 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
   ];
 
   const proc = spawn(FFMPEG_PATH, args, {stdio: ['ignore', 'ignore', 'pipe']});
+  console.log(`[ffmpeg|${proc.pid}] ${ts()} spawned startSec=${startSec} vPort=${videoPort} aPort=${audioPort}`);
+
+  // Log ALL stderr lines for the first 30 (startup + first keyframe), then errors only.
+  let stderrCount = 0;
   proc.stderr.on('data', (d) => {
-    const line = d.toString().trim();
-    // Only log errors and frame progress at reduced rate.
-    if (line.includes('Error') || line.includes('error')) console.error('[ffmpeg]', line);
+    for (const raw of d.toString().split('\n')) {
+      const line = raw.trim();
+      if (!line) continue;
+      stderrCount++;
+      if (stderrCount <= 30 || line.includes('rror') || line.includes('ail') || line.includes('nvalid')) {
+        console.error(`[ffmpeg|${proc.pid}] ${line}`);
+      }
+    }
   });
   return proc;
 }
@@ -206,6 +218,12 @@ async function startServerFileStream(room, filePath, targetBitrate, onProducerCr
   vResult.producer.on('transportclose', () => room.producers.delete(vResult.producer.id));
   aResult.producer.on('transportclose', () => room.producers.delete(aResult.producer.id));
 
+  // Score events: score 0 means no RTP is reaching the producer from ffmpeg.
+  vResult.producer.on('score', scores =>
+    console.log(`[server-stream] ${ts()} video producer score: ${JSON.stringify(scores)}`));
+  aResult.producer.on('score', scores =>
+    console.log(`[server-stream] ${ts()} audio producer score: ${JSON.stringify(scores)}`));
+
   // Notify the caller so it can signal clients via SignalR.
   onProducerCreated(vResult.producer.id, 'video', serverPeerId);
   onProducerCreated(aResult.producer.id, 'audio', serverPeerId);
@@ -224,11 +242,11 @@ async function startServerFileStream(room, filePath, targetBitrate, onProducerCr
     audioSsrc,
   });
 
-  stream.ffmpeg.on('exit', (code) => {
-    console.log(`[server-stream] ffmpeg exited code=${code} room=${room.id}`);
+  stream.ffmpeg.on('exit', (code, signal) => {
+    console.log(`[server-stream] ${ts()} ffmpeg exited code=${code} signal=${signal} room=${room.id}`);
   });
 
-  console.log(`[server-stream] started room=${room.id} file=${filePath}`);
+  console.log(`[server-stream] ${ts()} started room=${room.id} file=${filePath}`);
   return stream;
 }
 
@@ -247,14 +265,15 @@ function pauseServerFileStream(stream) {
     // numbers / SSRC / codec state are fully preserved.  SIGCONT later resumes
     // the same stream, so the browser decoder never needs to reset.
     try {
+      console.log(`[server-stream] ${ts()} SIGSTOP pid=${stream.ffmpeg.pid}`);
       process.kill(stream.ffmpeg.pid, 'SIGSTOP');
     } catch (e) {
       // Fallback: process already gone — treat as already paused.
-      console.error('[server-stream] SIGSTOP failed:', e.message);
+      console.error(`[server-stream] ${ts()} SIGSTOP failed: ${e.message}`);
       stream.ffmpeg = null;
     }
   }
-  console.log(`[server-stream] paused at ${stream.positionSec.toFixed(2)}s`);
+  console.log(`[server-stream] ${ts()} paused at ${stream.positionSec.toFixed(2)}s`);
 }
 
 /**
@@ -276,15 +295,23 @@ function resumeServerFileStream(stream, seekToSec) {
     const pauseDurationMs = Date.now() - stream.pausedAt;
     if (pauseDurationMs < 3000) {
       try {
-        process.kill(stream.ffmpeg.pid, 'SIGCONT');
-        console.log(`[server-stream] resumed at ${stream.positionSec.toFixed(2)}s`);
+        const pid = stream.ffmpeg.pid;
+        console.log(`[server-stream] ${ts()} SIGCONT pid=${pid} pauseMs=${pauseDurationMs}`);
+        process.kill(pid, 'SIGCONT');
+        console.log(`[server-stream] ${ts()} resumed at ${stream.positionSec.toFixed(2)}s`);
+        // Confirm the process is still alive 1 second later.
+        setTimeout(() => {
+          try { process.kill(pid, 0); console.log(`[server-stream] ${ts()} health: pid=${pid} alive`); }
+          catch { console.log(`[server-stream] ${ts()} health: pid=${pid} GONE`); }
+        }, 1000);
         return;
       } catch (e) {
-        console.error('[server-stream] SIGCONT failed, restarting ffmpeg:', e.message);
+        console.error(`[server-stream] ${ts()} SIGCONT failed, restarting: ${e.message}`);
         stream.ffmpeg = null;
       }
     } else {
       // Pause was long enough to cause a burst — kill and restart cleanly.
+      console.log(`[server-stream] ${ts()} SIGKILL pid=${stream.ffmpeg.pid} (pauseMs=${pauseDurationMs})`);
       stream.ffmpeg.kill('SIGKILL');
       stream.ffmpeg = null;
     }
@@ -308,13 +335,19 @@ function resumeServerFileStream(stream, seekToSec) {
     audioSsrc:        stream.audioProducer.rtpParameters.encodings[0].ssrc,
   });
 
-  stream.ffmpeg.on('exit', (code) => {
+  const newPid = stream.ffmpeg.pid;
+  stream.ffmpeg.on('exit', (code, signal) => {
     if (!stream.paused) {
-      console.log(`[server-stream] ffmpeg ended code=${code}`);
+      console.log(`[server-stream] ${ts()} ffmpeg ended code=${code} signal=${signal} pid=${newPid}`);
     }
   });
 
-  console.log(`[server-stream] resumed (seek) at ${stream.positionSec.toFixed(2)}s`);
+  console.log(`[server-stream] ${ts()} resumed (restart) at ${stream.positionSec.toFixed(2)}s pid=${newPid}`);
+  // Confirm the process is still alive 1 second later.
+  setTimeout(() => {
+    try { process.kill(newPid, 0); console.log(`[server-stream] ${ts()} health: pid=${newPid} alive`); }
+    catch { console.log(`[server-stream] ${ts()} health: pid=${newPid} GONE`); }
+  }, 1000);
 }
 
 /**
