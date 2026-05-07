@@ -88,13 +88,11 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
     ...seekArgs,
     '-re',                        // real-time pacing
     '-i', filePath,
-    // Video: transcode to VP9 real-time
+    // Video: transcode to VP8 real-time (VP8 is ~3× faster than VP9 to encode)
     '-map', '0:v:0',
-    '-c:v', 'libvpx-vp9',
+    '-c:v', 'libvpx',
     '-deadline', 'realtime',
-    '-cpu-used', '8',             // fastest encode, acceptable quality
-    '-row-mt', '1',
-    '-tile-columns', '2',
+    '-cpu-used', '16',            // maximum speed for libvpx VP8
     '-threads', '4',
     '-b:v', `${bitrateK}k`,
     '-maxrate', `${bitrateK}k`,
@@ -102,7 +100,6 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
     '-keyint_min', '60',
     '-g', '60',
     '-pix_fmt', 'yuv420p',
-    '-strict', 'experimental',    // required for VP9→RTP muxing
     '-ssrc', String(videoSsrc),
     '-payload_type', String(videoPayloadType),
     '-f', 'rtp', `rtp://127.0.0.1:${videoPort}?pkt_size=1200`,
@@ -146,7 +143,7 @@ async function createPlainProducer(router, kind, payloadType, ssrc) {
   const rtpParameters = kind === 'video'
     ? {
         codecs: [{
-          mimeType:    'video/VP9',
+          mimeType:    'video/VP8',
           payloadType,
           clockRate:   90000,
           parameters:  {},
