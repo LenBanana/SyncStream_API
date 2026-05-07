@@ -25,6 +25,9 @@ const ts = () => new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm
 
 const FFMPEG_PATH = process.env.FFMPEG_PATH ??
   (os.platform() === 'win32' ? path.join(__dirname, '..', 'SyncStreamAPI', 'ffmpeg.exe') : 'ffmpeg');
+const FFPROBE_PATH = process.env.FFPROBE_PATH ??
+  (os.platform() === 'win32' ? path.join(__dirname, '..', 'SyncStreamAPI', 'ffprobe.exe') : 'ffprobe');
+const SERVER_STREAM_MAX_WIDTH = parseInt(process.env.SERVER_STREAM_MAX_WIDTH ?? '1920', 10);
 
 // Port allocator for fixed ffmpeg source ports used with comedia=false.
 // Range 20000-29999 is safely below the Linux ephemeral port range (32768-60999)
@@ -56,7 +59,8 @@ function freePort(port) {
 /** State for one active server-side file stream in a room. */
 class ServerFileStream {
   constructor({ videoTransport, audioTransport, videoProducer, audioProducer,
-                videoPort, audioPort, videoLocalPort, audioLocalPort, filePath, targetBitrate }) {
+                videoPort, audioPort, videoLocalPort, audioLocalPort, filePath, targetBitrate,
+                audioMapSpecifier, selectedAudioLabel }) {
     this.videoTransport = videoTransport;
     this.audioTransport = audioTransport;
     this.videoProducer  = videoProducer;
@@ -67,6 +71,8 @@ class ServerFileStream {
     this.audioLocalPort = audioLocalPort;
     this.filePath       = filePath;
     this.targetBitrate  = targetBitrate;
+    this.audioMapSpecifier = audioMapSpecifier;
+    this.selectedAudioLabel = selectedAudioLabel;
     this.ffmpeg         = null;
     this.positionSec    = 0;   // last known position (updated on pause/seek)
     this.startedAt      = 0;   // Date.now() when current ffmpeg started at positionSec
@@ -88,15 +94,147 @@ class ServerFileStream {
   }
 }
 
+function normalizeLanguage(value) {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function getLanguagePreferenceRank(language) {
+  switch (language) {
+    case 'jpn':
+    case 'ja':
+    case 'jp':
+      return 0;
+    case 'eng':
+    case 'en':
+      return 1;
+    case 'deu':
+    case 'ger':
+    case 'de':
+      return 2;
+    default:
+      return 3;
+  }
+}
+
+function describeTrack(stream) {
+  const language = normalizeLanguage(stream?.tags?.language) || 'und';
+  const title = String(stream?.tags?.title ?? '').trim();
+  const isDefault = Boolean(stream?.disposition?.default);
+  return `stream=${stream?.index ?? '?'} lang=${language}${title ? ` title=${JSON.stringify(title)}` : ''}${isDefault ? ' default=1' : ''}`;
+}
+
+function choosePreferredAudioStream(streams) {
+  const audioStreams = streams.filter((stream) => stream.codec_type === 'audio');
+  if (audioStreams.length === 0) {
+    return {
+      audioMapSpecifier: '0:a:0',
+      selectedAudioLabel: 'first audio fallback (no ffprobe audio metadata)',
+    };
+  }
+
+  const ranked = [...audioStreams].sort((left, right) => {
+    const leftRank = getLanguagePreferenceRank(normalizeLanguage(left.tags?.language));
+    const rightRank = getLanguagePreferenceRank(normalizeLanguage(right.tags?.language));
+    if (leftRank !== rightRank) return leftRank - rightRank;
+
+    const leftDefault = left.disposition?.default ? 0 : 1;
+    const rightDefault = right.disposition?.default ? 0 : 1;
+    if (leftDefault !== rightDefault) return leftDefault - rightDefault;
+
+    return (left.index ?? 0) - (right.index ?? 0);
+  });
+
+  const selectedAudio = ranked[0];
+  return {
+    audioMapSpecifier: `0:${selectedAudio.index}`,
+    selectedAudioLabel: describeTrack(selectedAudio),
+  };
+}
+
+function getVideoFilterArgs() {
+  if (!Number.isFinite(SERVER_STREAM_MAX_WIDTH) || SERVER_STREAM_MAX_WIDTH <= 0) {
+    return { filterArgs: [], scaleLabel: 'source-size' };
+  }
+
+  return {
+    filterArgs: ['-vf', `scale=w=min(iw\\,${SERVER_STREAM_MAX_WIDTH}):h=-2`],
+    scaleLabel: `maxWidth=${SERVER_STREAM_MAX_WIDTH}`,
+  };
+}
+
+async function probeSourceSelection(filePath) {
+  return await new Promise((resolve) => {
+    const args = [
+      '-v', 'error',
+      '-print_format', 'json',
+      '-show_entries', 'stream=index,codec_type,width,height:stream_tags=language,title:stream_disposition=default,forced',
+      filePath,
+    ];
+
+    const proc = spawn(FFPROBE_PATH, args, {stdio: ['ignore', 'pipe', 'pipe']});
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
+    proc.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+
+    proc.on('error', (err) => {
+      console.warn(`[server-stream] ${ts()} ffprobe spawn failed, using default audio track: ${err.message}`);
+      resolve({
+        audioMapSpecifier: '0:a:0',
+        selectedAudioLabel: 'first audio fallback (ffprobe spawn failed)',
+        videoSourceLabel: 'unknown',
+      });
+    });
+
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        const errorText = stderr.trim() || `exit code ${code}`;
+        console.warn(`[server-stream] ${ts()} ffprobe failed, using default audio track: ${errorText}`);
+        resolve({
+          audioMapSpecifier: '0:a:0',
+          selectedAudioLabel: 'first audio fallback (ffprobe failed)',
+          videoSourceLabel: 'unknown',
+        });
+        return;
+      }
+
+      try {
+        const json = JSON.parse(stdout);
+        const streams = Array.isArray(json.streams) ? json.streams : [];
+        const selectedAudio = choosePreferredAudioStream(streams);
+        const videoStream = streams.find((stream) => stream.codec_type === 'video');
+        const videoSourceLabel = videoStream
+          ? `${videoStream.width ?? '?'}x${videoStream.height ?? '?'} stream=${videoStream.index ?? '?'}`
+          : 'unknown';
+
+        resolve({
+          ...selectedAudio,
+          videoSourceLabel,
+        });
+      } catch (err) {
+        console.warn(`[server-stream] ${ts()} ffprobe JSON parse failed, using default audio track: ${err.message}`);
+        resolve({
+          audioMapSpecifier: '0:a:0',
+          selectedAudioLabel: 'first audio fallback (ffprobe parse failed)',
+          videoSourceLabel: 'unknown',
+        });
+      }
+    });
+  });
+}
+
 /**
  * Starts an ffmpeg process that sends RTP to the given ports.
  * Returns the ChildProcess.
  */
 function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
                        videoLocalPort, audioLocalPort,
-                       videoPayloadType, audioPayloadType, videoSsrc, audioSsrc }) {
+                       videoPayloadType, audioPayloadType, videoSsrc, audioSsrc,
+                       audioMapSpecifier, selectedAudioLabel, videoSourceLabel }) {
   const bitrateK = Math.round(targetBitrate / 1000);
   const seekArgs = startSec > 0.5 ? ['-ss', String(startSec.toFixed(3))] : [];
+  const { filterArgs, scaleLabel } = getVideoFilterArgs();
 
   const args = [
     ...seekArgs,
@@ -105,6 +243,7 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
     '-i', filePath,
     // Video: transcode to VP8 real-time (VP8 is ~3× faster than VP9 to encode)
     '-map', '0:v:0',
+    ...filterArgs,
     '-c:v', 'libvpx',
     '-deadline', 'realtime',
     '-cpu-used', '16',            // maximum speed for libvpx VP8
@@ -119,7 +258,7 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
     '-payload_type', String(videoPayloadType),
     '-f', 'rtp', `rtp://127.0.0.1:${videoPort}?pkt_size=1200&localport=${videoLocalPort}`,
     // Audio: transcode to Opus
-    '-map', '0:a:0',
+    '-map', audioMapSpecifier,
     '-c:a', 'libopus',
     '-b:a', '128k',
     '-ar', '48000',
@@ -130,7 +269,7 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
   ];
 
   const proc = spawn(FFMPEG_PATH, args, {stdio: ['ignore', 'ignore', 'pipe']});
-  console.log(`[ffmpeg|${proc.pid}] ${ts()} spawned startSec=${startSec} vPort=${videoPort} aPort=${audioPort}`);
+  console.log(`[ffmpeg|${proc.pid}] ${ts()} spawned startSec=${startSec} vPort=${videoPort} aPort=${audioPort} source=${videoSourceLabel} scale=${scaleLabel} audio=${selectedAudioLabel}`);
 
   // Log ALL stderr lines for the first 30 (startup + first keyframe), then errors only.
   let stderrCount = 0;
@@ -210,6 +349,8 @@ async function createPlainProducer(router, kind, payloadType, ssrc) {
  * @returns {Promise<ServerFileStream>}
  */
 async function startServerFileStream(room, filePath, targetBitrate, onProducerCreated) {
+  const sourceSelection = await probeSourceSelection(filePath);
+
   // Fixed payload types outside the browser-registered range.
   const videoPt = 96, audioPt = 97;
   const videoSsrc = Math.floor(Math.random() * 0xFFFFFF) + 1;
@@ -231,6 +372,8 @@ async function startServerFileStream(room, filePath, targetBitrate, onProducerCr
     audioLocalPort: aResult.localPort,
     filePath,
     targetBitrate,
+    audioMapSpecifier: sourceSelection.audioMapSpecifier,
+    selectedAudioLabel: sourceSelection.selectedAudioLabel,
   });
 
   // Register producers in the room so consumers can subscribe.
@@ -265,6 +408,9 @@ async function startServerFileStream(room, filePath, targetBitrate, onProducerCr
     audioPayloadType: audioPt,
     videoSsrc,
     audioSsrc,
+    audioMapSpecifier: sourceSelection.audioMapSpecifier,
+    selectedAudioLabel: sourceSelection.selectedAudioLabel,
+    videoSourceLabel: sourceSelection.videoSourceLabel,
   });
 
   stream.ffmpeg.on('exit', (code, signal) => {
@@ -335,6 +481,9 @@ async function resumeServerFileStream(stream, seekToSec) {
     audioPayloadType: 97,
     videoSsrc:        stream.videoProducer.rtpParameters.encodings[0].ssrc,
     audioSsrc:        stream.audioProducer.rtpParameters.encodings[0].ssrc,
+    audioMapSpecifier: stream.audioMapSpecifier,
+    selectedAudioLabel: stream.selectedAudioLabel,
+    videoSourceLabel: 'resume',
   });
 
   const newPid = stream.ffmpeg.pid;
