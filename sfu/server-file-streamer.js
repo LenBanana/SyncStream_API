@@ -102,6 +102,7 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
     '-keyint_min', '60',
     '-g', '60',
     '-pix_fmt', 'yuv420p',
+    '-strict', 'experimental',    // required for VP9→RTP muxing
     '-ssrc', String(videoSsrc),
     '-payload_type', String(videoPayloadType),
     '-f', 'rtp', `rtp://127.0.0.1:${videoPort}?pkt_size=1200`,
