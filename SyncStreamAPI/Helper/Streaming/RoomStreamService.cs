@@ -53,7 +53,8 @@ public class RoomStreamService : IRoomStreamService
         string uniqueId,
         string name,
         string fileEnding,
-        long totalSize)
+        long totalSize,
+        bool skipPlaylist = false)
     {
         try
         {
@@ -104,6 +105,7 @@ public class RoomStreamService : IRoomStreamService
                 FileEnding = normalizedExtension,
                 TotalSize = totalSize,
                 State = RoomUploadStates.Uploading,
+                SkipPlaylist = skipPlaylist,
                 CreatedUtc = DateTime.UtcNow,
                 UpdatedUtc = DateTime.UtcNow
             };
@@ -514,19 +516,24 @@ public class RoomStreamService : IRoomStreamService
 
             var playbackUrl = $"{session.BaseUrl}/api/video/fileByToken?fileKey={dbFile.FileKey}";
 
-            var addVideoResult = await RoomManager.AddVideo(
-                new DreckVideo(dbFile.Name, playbackUrl, false, TimeSpan.Zero, dbUser.username),
-                session.UniqueId);
-
-            if (!string.IsNullOrWhiteSpace(addVideoResult))
+            // Server-side file-share uploads (SkipPlaylist) intentionally bypass the playlist:
+            // the file is consumed by the SFU ffmpeg pipeline, not played by clients directly.
+            if (!session.SkipPlaylist)
             {
-                session.State = RoomUploadStates.Failed;
-                session.ErrorMessage = addVideoResult;
-                session.FileKey = dbFile.FileKey;
-                session.PlaybackUrl = playbackUrl;
-                session.UpdatedUtc = DateTime.UtcNow;
-                await SaveSessionAsync(session);
-                return;
+                var addVideoResult = await RoomManager.AddVideo(
+                    new DreckVideo(dbFile.Name, playbackUrl, false, TimeSpan.Zero, dbUser.username),
+                    session.UniqueId);
+
+                if (!string.IsNullOrWhiteSpace(addVideoResult))
+                {
+                    session.State = RoomUploadStates.Failed;
+                    session.ErrorMessage = addVideoResult;
+                    session.FileKey = dbFile.FileKey;
+                    session.PlaybackUrl = playbackUrl;
+                    session.UpdatedUtc = DateTime.UtcNow;
+                    await SaveSessionAsync(session);
+                    return;
+                }
             }
 
             session.State = RoomUploadStates.Ready;
@@ -536,7 +543,9 @@ public class RoomStreamService : IRoomStreamService
             session.UpdatedUtc = DateTime.UtcNow;
             await SaveSessionAsync(session);
 
-            if (IsVideoExtension(session.FileEnding))
+            // HLS pre-generation is also unnecessary for server-side ffmpeg shares;
+            // the file is read directly by ffmpeg, not via HLS segments.
+            if (!session.SkipPlaylist && IsVideoExtension(session.FileEnding))
                 _ = Task.Run(() => TryGenerateHlsAssetsAsync(finalFilePath, dbFile.FileKey));
         }
         catch (Exception ex)
@@ -759,6 +768,11 @@ public class RoomStreamService : IRoomStreamService
         public string? FileKey { get; set; }
         public string? PlaybackUrl { get; set; }
         public string? BaseUrl { get; set; }
+        /// <summary>
+        /// When true, the file is uploaded for purposes other than playlist playback
+        /// (e.g. server-side WebRTC file share) and must NOT be added to the room's video playlist.
+        /// </summary>
+        public bool SkipPlaylist { get; set; }
         public DateTime CreatedUtc { get; set; }
         public DateTime UpdatedUtc { get; set; }
     }

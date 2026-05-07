@@ -7,7 +7,7 @@ namespace SyncStreamAPI.Interfaces;
 public interface IRoomStreamService
 {
     Task<RoomUploadSessionResult> StartRoomUploadAsync(string token, string uniqueId, string name, string fileEnding,
-        long totalSize);
+        long totalSize, bool skipPlaylist = false);
 
     Task<RoomUploadSessionResult> UploadRoomChunkAsync(HttpRequest request, string token, string uploadId,
         long startByte);

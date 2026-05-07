@@ -82,6 +82,11 @@ public static class General
         return RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "/app/ffmpeg" : "ffmpeg.exe";
     }
 
+    public static string GetFFprobePath()
+    {
+        return RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "/app/ffprobe" : "ffprobe.exe";
+    }
+
     private static string GetYtDlpPath()
     {
         return RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "/app/yt-dlp" : "yt-dlp.exe";
@@ -210,7 +215,8 @@ public static class General
 
         var stunServer = configuration.GetSection("WebRtcStunServer").Value ?? string.Empty;
         var turnServer = configuration.GetSection("WebRtcTurnServer").Value ?? string.Empty;
-        return new WebRtcCredentials(username, password, stunServer, turnServer);
+        long expiresAtUnixSec = unixTimestamp + ttlInSeconds;
+        return new WebRtcCredentials(username, password, stunServer, turnServer, expiresAtUnixSec);
     }
 
     private static async Task<string> YtApiInfo(string url, IConfiguration configuration)

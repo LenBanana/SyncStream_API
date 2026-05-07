@@ -6,6 +6,14 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const os = require('os');
+const { RoomAbr } = require('./abr');
+const {
+  startServerFileStream,
+  pauseServerFileStream,
+  resumeServerFileStream,
+  stopServerFileStream,
+} = require('./server-file-streamer');
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -25,8 +33,12 @@ const config = {
   initialAvailableOutgoingBitrate: parseInt(process.env.SFU_INITIAL_OUTGOING_BITRATE ?? '10000000', 10),
   maxIncomingBitrate: parseInt(process.env.SFU_MAX_INCOMING_BITRATE ?? '20000000', 10),
 
-  // Number of mediasoup Worker processes (one per CPU core is recommended).
-  numWorkers: parseInt(process.env.SFU_NUM_WORKERS ?? '1', 10),
+  // Number of mediasoup Worker processes.  Defaults to the number of logical CPU
+  // cores so multiple rooms are spread across workers and no single thread becomes
+  // the bottleneck.  Override with SFU_NUM_WORKERS env var.
+  numWorkers: process.env.SFU_NUM_WORKERS
+    ? parseInt(process.env.SFU_NUM_WORKERS, 10)
+    : os.cpus().length,
 
   // Directory where recordings are written.  Mount this as a shared volume
   // so the .NET API can serve finished files.
@@ -116,6 +128,10 @@ class Room {
     // Recording state
     /** @type {{ process: import('child_process').ChildProcess, filename: string, startedAtUnixMs: number } | null} */
     this.recording = null;
+    /** @type {RoomAbr | null} */
+    this.abr = null;
+    /** @type {import('./server-file-streamer').ServerFileStream | null} */
+    this.serverFileStream = null;
   }
 
   toJSON() {
@@ -167,6 +183,15 @@ async function getOrCreateRoom(roomId) {
   const router = await worker.createRouter({ mediaCodecs: config.mediaCodecs });
   const room = new Room(roomId, router);
   rooms.set(roomId, room);
+
+  // Start the per-room adaptive bitrate loop.
+  room.abr = new RoomAbr(room, async (consumerId, spatial, temporal) => {
+    const consumer = room.consumers.get(consumerId);
+    if (!consumer) return;
+    await consumer.setPreferredLayers({ spatialLayer: spatial, temporalLayer: temporal });
+    consumer.requestKeyFrame().catch(() => {});
+  });
+
   console.log(`Room created: ${roomId}`);
   return room;
 }
@@ -201,6 +226,11 @@ app.post('/rooms/:roomId', async (req, res) => {
 app.delete('/rooms/:roomId', (req, res) => {
   const room = rooms.get(req.params.roomId);
   if (!room) return res.status(404).json({ error: 'Room not found' });
+  room.abr?.stop();
+  if (room.serverFileStream) {
+    stopServerFileStream(room, room.serverFileStream);
+    room.serverFileStream = null;
+  }
   room.router.close();
   rooms.delete(req.params.roomId);
   console.log(`Room closed: ${req.params.roomId}`);
@@ -296,7 +326,12 @@ app.post('/rooms/:roomId/transports/:transportId/produce', async (req, res) => {
     room.producers.set(producer.id, { producer, peerId });
 
     producer.on('transportclose', () => room.producers.delete(producer.id));
-    producer.on('score', () => { /* optionally forward score events */ });
+    producer.on('score', (scores) => {
+      const worst = Math.min(...scores.map(s => s.score));
+      if (worst <= 4) {
+        console.warn(`[score] producer ${producer.id.slice(0, 8)} score=${worst} (encoder bottleneck)`);
+      }
+    });
 
     res.json({ id: producer.id });
   } catch (err) {
@@ -332,6 +367,10 @@ app.post('/rooms/:roomId/transports/:transportId/consume', async (req, res) => {
       room.consumers.delete(consumer.id);
       consumer.close();
     });
+
+    // Request a keyframe immediately so the consumer renders without waiting for
+    // Chrome's natural VP8 keyframe interval (which can be up to ~4 seconds).
+    consumer.requestKeyFrame().catch(() => {});
 
     res.json({
       id: consumer.id,
@@ -375,10 +414,90 @@ app.post('/rooms/:roomId/consumers/:consumerId/preferred-layers', async (req, re
     if (!consumer) return res.status(404).json({ error: 'Consumer not found' });
     const { spatialLayer, temporalLayer } = req.body;
     await consumer.setPreferredLayers({ spatialLayer, temporalLayer });
+    // Inform the ABR loop of the user's ceiling so it never auto-exceeds it.
+    room.abr?.onUserSetLayers(req.params.consumerId, spatialLayer, temporalLayer);
+    // Force a keyframe so the spatial-layer switch completes immediately.
+    consumer.requestKeyFrame().catch(() => {});
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
+});
+
+// ─── Server-side file streaming ──────────────────────────────────────────────
+//
+// The .NET hub calls these endpoints to stream an arbitrary local file to all
+// room participants via ffmpeg → PlainTransport → mediasoup producers.
+// Consumers receive it identically to a regular peer producer.
+
+// Start streaming a file from the server into the room.
+// Body: { filePath: string, targetBitrate?: number }
+// Response: { videoProducerId, audioProducerId }
+app.post('/rooms/:roomId/server-stream', async (req, res) => {
+  try {
+    const room = await getOrCreateRoom(req.params.roomId);
+    if (room.serverFileStream) {
+      return res.status(409).json({ error: 'A server file stream is already active in this room' });
+    }
+
+    const { filePath, targetBitrate = 4_000_000 } = req.body;
+    if (!filePath) return res.status(400).json({ error: 'filePath is required' });
+
+    // Accumulate new producer IDs so we can return them in the response.
+    const newProducers = [];
+
+    room.serverFileStream = await startServerFileStream(
+      room,
+      filePath,
+      targetBitrate,
+      (producerId, kind, peerId) => {
+        newProducers.push({ producerId, kind, peerId });
+      }
+    );
+
+    res.json({
+      videoProducerId: room.serverFileStream.producerIds.video,
+      audioProducerId: room.serverFileStream.producerIds.audio,
+    });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// Play / pause / seek the active server file stream.
+// Body: { action: 'play' | 'pause' | 'seek', position?: number }
+app.post('/rooms/:roomId/server-stream/control', (req, res) => {
+  const room = rooms.get(req.params.roomId);
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+  if (!room.serverFileStream) return res.status(404).json({ error: 'No active server stream' });
+
+  const { action, position } = req.body;
+  const stream = room.serverFileStream;
+
+  if (action === 'pause') {
+    pauseServerFileStream(stream);
+  } else if (action === 'play') {
+    if (!stream.paused) return res.json({ ok: true, position: stream.currentPositionSec });
+    resumeServerFileStream(stream, null);
+  } else if (action === 'seek') {
+    const seekPos = typeof position === 'number' ? position : stream.positionSec;
+    resumeServerFileStream(stream, seekPos);
+  } else {
+    return res.status(400).json({ error: `Unknown action: ${action}` });
+  }
+
+  res.json({ ok: true, position: stream.currentPositionSec });
+});
+
+// Stop the server file stream and clean up all resources.
+app.delete('/rooms/:roomId/server-stream', (req, res) => {
+  const room = rooms.get(req.params.roomId);
+  if (!room) return res.status(404).json({ error: 'Room not found' });
+  if (!room.serverFileStream) return res.status(404).json({ error: 'No active server stream' });
+
+  stopServerFileStream(room, room.serverFileStream);
+  room.serverFileStream = null;
+  res.json({ ok: true });
 });
 
 // ─── Recording ────────────────────────────────────────────────────────────────

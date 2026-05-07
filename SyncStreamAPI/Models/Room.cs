@@ -38,6 +38,13 @@ public class Room
     [NotMapped] public string? FileShareInitiator { get; set; }
 
     /// <summary>
+    /// True when the active file share is driven by the server-side ffmpeg pipeline
+    /// (i.e. the file is on the server and mediasoup produces RTP directly).
+    /// False means the browser host is doing captureStream() and producing from their end.
+    /// </summary>
+    [NotMapped] public bool IsServerFileShare { get; set; }
+
+    /// <summary>
     /// Set of connectionIds that are currently streaming P2P (Discord-style opt-in).
     /// Multiple concurrent streamers are supported; each viewer connects on-demand.
     /// </summary>

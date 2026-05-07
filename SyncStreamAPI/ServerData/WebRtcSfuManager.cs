@@ -182,6 +182,49 @@ public class WebRtcSfuManager
     }
 
     // ---------------------------------------------------------------
+    // Server-side file streaming
+    // ---------------------------------------------------------------
+
+    /// <summary>
+    /// Starts an ffmpeg-based server-side file stream into the SFU room.
+    /// The SFU transcodes the file to VP9+Opus and injects it as producers
+    /// that all room consumers can subscribe to — no client changes needed.
+    /// Returns the video and audio producer IDs.
+    /// </summary>
+    public async Task<(string VideoProducerId, string AudioProducerId)> StartServerFileStreamAsync(
+        string roomId, string filePath, long targetBitrate = 4_000_000)
+    {
+        var body = new JObject
+        {
+            ["filePath"]       = filePath,
+            ["targetBitrate"]  = targetBitrate
+        };
+        var response = await Post(
+            $"{_sfuBaseUrl}/rooms/{Uri.EscapeDataString(roomId)}/server-stream", body);
+        return (
+            response["videoProducerId"]?.Value<string>() ?? string.Empty,
+            response["audioProducerId"]?.Value<string>() ?? string.Empty
+        );
+    }
+
+    /// <summary>Controls an active server file stream (play / pause / seek).</summary>
+    public async Task ControlServerFileStreamAsync(string roomId, string action, double? positionSec = null)
+    {
+        var body = new JObject {["action"] = action};
+        if (positionSec.HasValue) body["position"] = positionSec.Value;
+        var response = await Post(
+            $"{_sfuBaseUrl}/rooms/{Uri.EscapeDataString(roomId)}/server-stream/control", body);
+        EnsureOk(response);
+    }
+
+    /// <summary>Stops the active server file stream and releases SFU resources.</summary>
+    public async Task StopServerFileStreamAsync(string roomId)
+    {
+        await _http.DeleteAsync(
+            $"{_sfuBaseUrl}/rooms/{Uri.EscapeDataString(roomId)}/server-stream");
+    }
+
+    // ---------------------------------------------------------------
     // Recording
     // ---------------------------------------------------------------
 

@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Http;
@@ -258,9 +261,9 @@ public class VideoController : Controller
     [HttpPost("roomUpload/start")]
     [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
     public async Task<IActionResult> startRoomUpload(string token, string uniqueId, string name, string fileEnding,
-        long totalSize)
+        long totalSize, bool skipPlaylist = false)
     {
-        var result = await _roomStreamService.StartRoomUploadAsync(token, uniqueId, name, fileEnding, totalSize);
+        var result = await _roomStreamService.StartRoomUploadAsync(token, uniqueId, name, fileEnding, totalSize, skipPlaylist);
         if (string.IsNullOrWhiteSpace(result.ErrorMessage))
             return StatusCode(result.StatusCode, result);
 
@@ -312,6 +315,104 @@ public class VideoController : Controller
         return string.IsNullOrWhiteSpace(result.ErrorMessage)
             ? StatusCode(result.StatusCode)
             : StatusCode(result.StatusCode, result.ErrorMessage);
+    }
+
+    /// <summary>
+    /// Runs ffprobe on a server-side file and reports whether its codecs are natively
+    /// playable in a browser.  The client uses this to decide whether to stream via the
+    /// existing captureStream() path or request the server-side ffmpeg transcode pipeline.
+    /// </summary>
+    [HttpGet("[action]")]
+    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
+    public async Task<IActionResult> probeForShare(string token, string fileKey)
+    {
+        var dbFile = _postgres.Files?.FirstOrDefault(x => x.FileKey == fileKey);
+        if (dbFile == null)
+            return NotFound("File not found");
+
+        var generalPath = dbFile.Temporary ? General.TemporaryFilePath : General.FilePath;
+        var filePath = Path.Combine(generalPath, $"{dbFile.FileKey}{dbFile.FileEnding}");
+
+        if (!System.IO.File.Exists(filePath))
+            return NotFound("File not found on disk");
+
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = General.GetFFprobePath(),
+                Arguments = $"-v quiet -print_format json -show_streams \"{filePath}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var proc = Process.Start(psi)!;
+            var stdout = await proc.StandardOutput.ReadToEndAsync();
+            await proc.WaitForExitAsync();
+
+            var doc = JsonNode.Parse(stdout);
+            var streams = doc?["streams"]?.AsArray() ?? new JsonArray();
+
+            string? videoCodec = null, audioCodec = null;
+            int width = 0, height = 0;
+            double durationSec = 0;
+
+            foreach (var s in streams)
+            {
+                var type = s?["codec_type"]?.GetValue<string>();
+                if (type == "video" && videoCodec == null)
+                {
+                    videoCodec = s!["codec_name"]?.GetValue<string>();
+                    width  = s["width"]?.GetValue<int>()  ?? 0;
+                    height = s["height"]?.GetValue<int>() ?? 0;
+                    var durStr = s["duration"]?.GetValue<string>();
+                    if (double.TryParse(durStr, System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out var d))
+                        durationSec = d;
+                }
+                else if (type == "audio" && audioCodec == null)
+                {
+                    audioCodec = s!["codec_name"]?.GetValue<string>();
+                    if (durationSec == 0)
+                    {
+                        var durStr = s["duration"]?.GetValue<string>();
+                        if (double.TryParse(durStr, System.Globalization.NumberStyles.Float,
+                                System.Globalization.CultureInfo.InvariantCulture, out var d))
+                            durationSec = d;
+                    }
+                }
+            }
+
+            // Codecs browsers can decode natively via <video> / captureStream().
+            var nativeVideo = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {"h264", "avc", "avc1", "vp8", "vp9", "av1"};
+            var nativeAudio = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {"aac", "mp3", "opus", "vorbis", "flac", "pcm_s16le", "pcm_s24le", "mp4a"};
+
+            var videoOk = videoCodec == null || nativeVideo.Contains(videoCodec);
+            var audioOk = audioCodec == null || nativeAudio.Contains(audioCodec);
+
+            return Ok(new
+            {
+                nativelyPlayable = videoOk && audioOk,
+                videoCodec,
+                audioCodec,
+                width,
+                height,
+                durationSec,
+                videoNative = videoOk,
+                audioNative = audioOk
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"probeForShare error: {ex}");
+            // If ffprobe fails, assume natively playable so we fall back gracefully.
+            return Ok(new {nativelyPlayable = true, videoCodec = (string?)null, audioCodec = (string?)null,
+                width = 0, height = 0, durationSec = 0.0, videoNative = true, audioNative = true});
+        }
     }
 
     [HttpGet("[action]/{fileKey}/{fileName}")]
