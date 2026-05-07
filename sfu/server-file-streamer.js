@@ -21,7 +21,7 @@ const path = require('path');
 const os   = require('os');
 
 const FFMPEG_PATH = process.env.FFMPEG_PATH ??
-  (os.platform() === 'win32' ? path.join(__dirname, '..', 'SyncStreamAPI', 'ffmpeg.exe') : '/app/ffmpeg');
+  (os.platform() === 'win32' ? path.join(__dirname, '..', 'SyncStreamAPI', 'ffmpeg.exe') : 'ffmpeg');
 
 // Shared port allocator used by recording.js too — avoid 40000-49999 range used by recording.
 let _nextPort = 50000;
@@ -133,7 +133,7 @@ async function createPlainProducer(router, kind, payloadType, ssrc) {
   const port = allocatePort();
 
   const transport = await router.createPlainTransport({
-    listenIp:    {ip: '127.0.0.1'},
+    listenInfo: { protocol: 'udp', ip: '127.0.0.1' },
     rtcpMux:     true,
     comedia:     false,
   });

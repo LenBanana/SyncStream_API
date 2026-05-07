@@ -460,6 +460,7 @@ app.post('/rooms/:roomId/server-stream', async (req, res) => {
       audioProducerId: room.serverFileStream.producerIds.audio,
     });
   } catch (err) {
+    console.error('[server-stream] Failed to start:', err);
     res.status(500).json({ error: String(err) });
   }
 });
@@ -550,7 +551,7 @@ async function startRoomRecording(room) {
     if (!room.router.canConsume({ producerId, rtpCapabilities: room.router.rtpCapabilities })) continue;
 
     const plainTransport = await room.router.createPlainTransport({
-      listenIp: { ip: '127.0.0.1' },
+      listenInfo: { protocol: 'udp', ip: '127.0.0.1' },
       rtcpMux: false,
       comedia: false,
     });
