@@ -15,6 +15,8 @@ RUN npm install --ignore-scripts=false --production
 
 # ── Copy source ───────────────────────────────────────────────────────────────
 COPY server.js ./
+COPY abr.js ./
+COPY server-file-streamer.js ./
 
 # ── Runtime ───────────────────────────────────────────────────────────────────
 EXPOSE 3000
