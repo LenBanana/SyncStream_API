@@ -80,7 +80,9 @@ public class RoomStreamService : IRoomStreamService
                 };
             }
 
-            var normalizedExtension = NormalizeAndValidateExtension(fileEnding);
+            var normalizedExtension = skipPlaylist
+                ? NormalizeExtensionForServerShare(fileEnding)
+                : NormalizeAndValidateExtension(fileEnding);
             if (normalizedExtension == null)
             {
                 return new RoomUploadSessionResult
@@ -571,6 +573,22 @@ public class RoomStreamService : IRoomStreamService
         return await _postgres.Users
             .Include(x => x.RememberTokens)
             .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
+    }
+
+    private static readonly HashSet<string> FfmpegContainerExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".mkv", ".mp4", ".mov", ".avi", ".flv", ".wmv", ".ts", ".m2ts", ".mts",
+        ".hevc", ".webm", ".ogv", ".3gp", ".rm", ".rmvb", ".divx", ".asf",
+        ".mp3", ".aac", ".flac", ".ogg", ".wav", ".m4a", ".opus", ".wma"
+    };
+
+    private static string? NormalizeExtensionForServerShare(string fileEnding)
+    {
+        if (string.IsNullOrWhiteSpace(fileEnding)) return null;
+        if (!fileEnding.StartsWith('.')) fileEnding = '.' + fileEnding;
+        fileEnding = Path.GetExtension("x" + fileEnding);
+        if (string.IsNullOrWhiteSpace(fileEnding) || fileEnding == ".") return null;
+        return FfmpegContainerExtensions.Contains(fileEnding) ? fileEnding : null;
     }
 
     private string? NormalizeAndValidateExtension(string fileEnding)
