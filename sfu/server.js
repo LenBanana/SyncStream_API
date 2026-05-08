@@ -45,6 +45,19 @@ const config = {
   recordingsDir: process.env.SFU_RECORDINGS_DIR ?? '/recordings',
 
   // Media codecs supported by the router.
+  //
+  // rtcpFeedback is REQUIRED on every video codec — without it, mediasoup never
+  // synthesises an RTX (retransmission) entry for browser consumers, and a
+  // single packet lost on the SFU→browser leg becomes a visible decode stutter
+  // that no encoder tuning can recover.  With the feedback list below:
+  //   * `nack` enables RTX: mediasoup buffers ~1s of producer packets and
+  //     retransmits on browser NACK from a paired RTX SSRC.
+  //   * `nack pli` and `ccm fir` let consumers request a fresh keyframe when
+  //     their decoder gets stuck (mediasoup forwards these to live producers;
+  //     for our PlainTransport file source it can't act on them, but the path
+  //     must be open for browser-source streams in the same room).
+  //   * `transport-cc` and `goog-remb` give the browser bandwidth-estimation
+  //     feedback so it sizes its jitter buffer correctly.
   mediaCodecs: [
     {
       kind: 'audio',
@@ -57,6 +70,13 @@ const config = {
       mimeType: 'video/VP8',
       clockRate: 90000,
       parameters: { 'x-google-start-bitrate': 1000 },
+      rtcpFeedback: [
+        { type: 'nack' },
+        { type: 'nack', parameter: 'pli' },
+        { type: 'ccm', parameter: 'fir' },
+        { type: 'goog-remb' },
+        { type: 'transport-cc' },
+      ],
     },
     {
       kind: 'video',
@@ -65,6 +85,13 @@ const config = {
       parameters: {
         'x-google-start-bitrate': 1000,
       },
+      rtcpFeedback: [
+        { type: 'nack' },
+        { type: 'nack', parameter: 'pli' },
+        { type: 'ccm', parameter: 'fir' },
+        { type: 'goog-remb' },
+        { type: 'transport-cc' },
+      ],
     },
     {
       kind: 'video',
@@ -76,6 +103,13 @@ const config = {
         'level-asymmetry-allowed': 1,
         'x-google-start-bitrate': 1000,
       },
+      rtcpFeedback: [
+        { type: 'nack' },
+        { type: 'nack', parameter: 'pli' },
+        { type: 'ccm', parameter: 'fir' },
+        { type: 'goog-remb' },
+        { type: 'transport-cc' },
+      ],
     },
     {
       kind: 'video',
@@ -87,6 +121,13 @@ const config = {
         'level-asymmetry-allowed': 1,
         'x-google-start-bitrate': 1000,
       },
+      rtcpFeedback: [
+        { type: 'nack' },
+        { type: 'nack', parameter: 'pli' },
+        { type: 'ccm', parameter: 'fir' },
+        { type: 'goog-remb' },
+        { type: 'transport-cc' },
+      ],
     },
   ],
 };

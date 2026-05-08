@@ -372,6 +372,18 @@ async function createPlainProducer(router, kind, payloadType, ssrc) {
           'profile-level-id': '42e01f',
           'level-asymmetry-allowed': 1,
         },
+        // Must mirror the router's mediaCodecs entry (server.js).  Even though
+        // ffmpeg can't act on PLI/FIR (it doesn't read RTCP feedback), the
+        // `nack` entry is what makes mediasoup synthesise the RTX pseudo-codec
+        // for browser consumers — losing a single video packet between SFU and
+        // browser then heals via retransmission instead of corrupting a frame.
+        rtcpFeedback: [
+          { type: 'nack' },
+          { type: 'nack', parameter: 'pli' },
+          { type: 'ccm', parameter: 'fir' },
+          { type: 'goog-remb' },
+          { type: 'transport-cc' },
+        ],
       }],
       encodings: [{ ssrc }],
     }
