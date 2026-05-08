@@ -459,7 +459,7 @@ app.post('/rooms/:roomId/server-stream', async (req, res) => {
       return res.status(409).json({ error: 'A server file stream is already active in this room' });
     }
 
-    const { filePath, targetBitrate = 4_000_000 } = req.body;
+    const { filePath, targetBitrate = 3_000_000 } = req.body;
     if (!filePath) return res.status(400).json({ error: 'filePath is required' });
 
     // Accumulate new producer IDs so we can return them in the response.

@@ -249,7 +249,7 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
     '-deadline', 'realtime',
     '-lag-in-frames', '0',
     '-cpu-used', '16',            // maximum speed for libvpx VP8
-    '-threads', '4',
+    '-threads', '8',
     '-b:v', `${bitrateK}k`,
     '-maxrate', `${bitrateK}k`,
     // Keep the VBV buffer tight so complex scenes do not burst far above target

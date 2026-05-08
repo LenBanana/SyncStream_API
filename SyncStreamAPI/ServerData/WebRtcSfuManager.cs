@@ -192,7 +192,7 @@ public class WebRtcSfuManager
     /// Returns the video and audio producer IDs.
     /// </summary>
     public async Task<(string VideoProducerId, string AudioProducerId)> StartServerFileStreamAsync(
-        string roomId, string filePath, long targetBitrate = 4_000_000)
+        string roomId, string filePath, long targetBitrate = 3_000_000)
     {
         var body = new JObject
         {
