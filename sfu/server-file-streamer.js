@@ -251,7 +251,6 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
     '-lag-in-frames', '0',
     '-cpu-used', '15',
     '-threads', '8',
-    '-token-parts', '2',         // enables parallel coefficient encoding for HD; confirmed in VP8 docs
     '-error-resilient', '1',     // recommended for RTP streaming with potential packet loss
     '-b:v', `${bitrateK}k`,
     '-maxrate', `${bitrateK}k`,
