@@ -8,6 +8,7 @@ using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Helper.Streaming;
 using SyncStreamAPI.Models;
+using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
 
 namespace SyncStreamAPI.Hubs;
