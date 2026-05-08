@@ -235,10 +235,17 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
   const bitrateK = Math.round(targetBitrate / 1000);
   const seekArgs = startSec > 0.5 ? ['-ss', String(startSec.toFixed(3))] : [];
   const { filterArgs, scaleLabel } = getVideoFilterArgs();
-  // VBV buffer of 2× target bitrate gives x264 enough headroom to spread bits
-  // across complex/simple frames without average bitrate inflation, smoothing
-  // out q-spikes that cause visible quality flicker.
-  const bufferSizeK = bitrateK * 2;
+  // CRF (constant rate factor) keeps perceptual quality stable while bitrate
+  // flexes with content complexity.  Pure CBR at this target produced a 1-second
+  // q=44+ patch after every keyframe (the encoder squeezing P-frames hard to
+  // pay back the I-frame's VBV cost), which on low-complexity content like
+  // animated dialogue scenes reads as "constantly choppy" picture quality.
+  // CRF eliminates that pattern: easy scenes stay at low bitrate, hard scenes
+  // borrow up to maxRate.  bufsize 4× maxrate gives x264 a wide window to
+  // smooth keyframe spikes without bursting the network.
+  const maxRateK = Math.max(bitrateK, Math.round(bitrateK * 1.5));
+  const bufferSizeK = maxRateK * 4;
+  const crf = '22';
 
   const args = [
     ...seekArgs,
@@ -286,8 +293,8 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
     '-profile:v', 'baseline',
     '-level:v', '5.0',
     '-pix_fmt', 'yuv420p',
-    '-b:v', `${bitrateK}k`,
-    '-maxrate', `${bitrateK}k`,
+    '-crf', crf,
+    '-maxrate', `${maxRateK}k`,
     '-bufsize', `${bufferSizeK}k`,
     '-g', '60',
     '-keyint_min', '60',
@@ -309,7 +316,7 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
   ];
 
   const proc = spawn(FFMPEG_PATH, args, { stdio: ['ignore', 'ignore', 'pipe'] });
-  console.log(`[ffmpeg|${proc.pid}] ${ts()} spawned startSec=${startSec} vPort=${videoPort} aPort=${audioPort} source=${videoSourceLabel} scale=${scaleLabel} audio=${selectedAudioLabel} codec=h264 preset=veryfast vbv=${bufferSizeK}k`);
+  console.log(`[ffmpeg|${proc.pid}] ${ts()} spawned startSec=${startSec} vPort=${videoPort} aPort=${audioPort} source=${videoSourceLabel} scale=${scaleLabel} audio=${selectedAudioLabel} codec=h264 preset=veryfast crf=${crf} maxrate=${maxRateK}k vbv=${bufferSizeK}k`);
 
   // Log ALL stderr lines for the first 30 (startup + first keyframe), then errors only.
   let stderrCount = 0;

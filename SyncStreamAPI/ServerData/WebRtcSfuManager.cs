@@ -187,7 +187,7 @@ public class WebRtcSfuManager
 
     /// <summary>
     /// Starts an ffmpeg-based server-side file stream into the SFU room.
-    /// The SFU transcodes the file to VP9+Opus and injects it as producers
+    /// The SFU transcodes the file to H.264+Opus and injects it as producers
     /// that all room consumers can subscribe to — no client changes needed.
     /// Returns the video and audio producer IDs.
     /// </summary>
