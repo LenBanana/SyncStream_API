@@ -8,6 +8,7 @@ using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Helper.Streaming;
 using SyncStreamAPI.Models;
+using SyncStreamAPI.Models.RTMP;
 using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
 
@@ -27,7 +28,11 @@ public partial class ServerHub
     /// OBS/RTMP infrastructure (ON_PUBLISH fires automatically from nginx-rtmp).
     /// </summary>
     [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task StartRtmpFileShareFromUpload(string token, string roomId, string uploadId)
+    public async Task StartRtmpFileShareFromUpload(
+        string token,
+        string roomId,
+        string uploadId,
+        RtmpPlaybackPreferences? playbackPreferences = null)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null) return;
@@ -83,7 +88,7 @@ public partial class ServerHub
         {
             var session = await _rtmpFileShareManager.StartAsync(
                 roomId, Context.ConnectionId, dbUser.ID, dbUser.username,
-                dbUser.StreamToken, filePath, uploadId);
+                dbUser.StreamToken, filePath, uploadId, playbackPreferences);
 
             // Build the viewer HLS/FLV URL using the same format as the live-stream view.
             var liveBase = Configuration["LiveStreamBaseUrl"]?.TrimEnd('/') ?? "https://live.drecktu.be/live";

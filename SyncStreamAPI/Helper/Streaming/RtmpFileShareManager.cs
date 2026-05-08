@@ -23,6 +23,13 @@ namespace SyncStreamAPI.Helper.Streaming;
 /// </summary>
 public class RtmpFileShareManager : IDisposable
 {
+    private static readonly string[] DefaultAudioLanguagePriority =
+    {
+        RtmpPlaybackPreferences.JapaneseLanguage,
+        RtmpPlaybackPreferences.EnglishLanguage,
+        RtmpPlaybackPreferences.GermanLanguage,
+        RtmpPlaybackPreferences.OtherLanguage,
+    };
     private static readonly HashSet<string> JapaneseAudioLanguages = new(StringComparer.OrdinalIgnoreCase)
         { "jpn", "ja", "jp" };
     private static readonly HashSet<string> EnglishLanguages = new(StringComparer.OrdinalIgnoreCase)
@@ -91,9 +98,10 @@ public class RtmpFileShareManager : IDisposable
     /// </summary>
     public async Task<RtmpFileShareSession> StartAsync(
         string roomId, string ownerConnectionId, int userId, string username,
-        string streamToken, string filePath, string? uploadId)
+        string streamToken, string filePath, string? uploadId, RtmpPlaybackPreferences? playbackPreferences)
     {
-        var playbackSelection = await ProbePlaybackSelectionAsync(filePath);
+        var normalizedPreferences = NormalizePlaybackPreferences(playbackPreferences);
+        var playbackSelection = await ProbePlaybackSelectionAsync(filePath, normalizedPreferences);
 
         var session = new RtmpFileShareSession
         {
@@ -339,7 +347,9 @@ public class RtmpFileShareManager : IDisposable
 
     // ── ffprobe duration probe ────────────────────────────────────────────────
 
-    private async Task<RtmpPlaybackSelection> ProbePlaybackSelectionAsync(string filePath)
+    private async Task<RtmpPlaybackSelection> ProbePlaybackSelectionAsync(
+        string filePath,
+        RtmpPlaybackPreferences playbackPreferences)
     {
         try
         {
@@ -394,9 +404,9 @@ public class RtmpFileShareManager : IDisposable
                 parsedStreams.Add(parsed);
             }
 
-            var subtitle = SelectSubtitleTrack(parsedStreams);
-            var preferJapaneseWithSubtitles = subtitle != null;
-            var audio = SelectAudioTrack(parsedStreams, preferJapaneseWithSubtitles);
+            var preferredSubtitle = SelectSubtitleTrack(parsedStreams);
+            var audio = SelectAudioTrack(parsedStreams, playbackPreferences, preferredSubtitle != null);
+            var subtitle = ResolveSubtitleTrack(preferredSubtitle, audio, playbackPreferences);
 
             return new RtmpPlaybackSelection
             {
@@ -453,7 +463,10 @@ public class RtmpFileShareManager : IDisposable
         return await tcs.Task;
     }
 
-    private static RtmpProbeStream? SelectAudioTrack(IEnumerable<RtmpProbeStream> streams, bool preferJapaneseWithSubtitles)
+    private static RtmpProbeStream? SelectAudioTrack(
+        IEnumerable<RtmpProbeStream> streams,
+        RtmpPlaybackPreferences playbackPreferences,
+        bool subtitleAvailable)
     {
         var audioStreams = streams
             .Where(stream => string.Equals(stream.CodecType, "audio", StringComparison.OrdinalIgnoreCase) && stream.StreamIndex >= 0)
@@ -463,10 +476,30 @@ public class RtmpFileShareManager : IDisposable
             return null;
 
         return audioStreams
-            .OrderBy(stream => GetAudioLanguagePreferenceRank(stream.Language, preferJapaneseWithSubtitles))
+            .OrderBy(stream => GetAudioLanguagePreferenceRank(stream.Language, playbackPreferences, subtitleAvailable))
             .ThenBy(stream => stream.IsDefault ? 0 : 1)
             .ThenBy(stream => stream.StreamIndex)
             .FirstOrDefault();
+    }
+
+    private static RtmpProbeStream? ResolveSubtitleTrack(
+        RtmpProbeStream? preferredSubtitle,
+        RtmpProbeStream? selectedAudio,
+        RtmpPlaybackPreferences playbackPreferences)
+    {
+        if (preferredSubtitle == null)
+            return null;
+
+        if (string.Equals(playbackPreferences.SubtitleMode, RtmpPlaybackPreferences.SubtitleModeNever, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        if (string.Equals(playbackPreferences.SubtitleMode, RtmpPlaybackPreferences.SubtitleModeAlways, StringComparison.OrdinalIgnoreCase))
+            return preferredSubtitle;
+
+        return selectedAudio != null &&
+               string.Equals(GetPreferenceLanguageKey(selectedAudio.Language), RtmpPlaybackPreferences.JapaneseLanguage, StringComparison.OrdinalIgnoreCase)
+            ? preferredSubtitle
+            : null;
     }
 
     private static RtmpProbeStream? SelectSubtitleTrack(IEnumerable<RtmpProbeStream> streams)
@@ -489,13 +522,24 @@ public class RtmpFileShareManager : IDisposable
             .FirstOrDefault();
     }
 
-    private static int GetAudioLanguagePreferenceRank(string language, bool preferJapaneseWithSubtitles)
+    private static int GetAudioLanguagePreferenceRank(
+        string language,
+        RtmpPlaybackPreferences playbackPreferences,
+        bool subtitleAvailable)
     {
-        if (preferJapaneseWithSubtitles && JapaneseAudioLanguages.Contains(language)) return 0;
-        if (EnglishLanguages.Contains(language)) return preferJapaneseWithSubtitles ? 1 : 0;
-        if (GermanLanguages.Contains(language)) return preferJapaneseWithSubtitles ? 2 : 1;
-        if (JapaneseAudioLanguages.Contains(language)) return preferJapaneseWithSubtitles ? 0 : 2;
-        return 3;
+        var languageKey = GetPreferenceLanguageKey(language);
+        var index = playbackPreferences.AudioLanguagePriority
+            .FindIndex(item => string.Equals(item, languageKey, StringComparison.OrdinalIgnoreCase));
+
+        if (index < 0)
+            index = playbackPreferences.AudioLanguagePriority.Count;
+
+        var japaneseNeedsSubtitle =
+            string.Equals(playbackPreferences.SubtitleMode, RtmpPlaybackPreferences.SubtitleModeAuto, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(languageKey, RtmpPlaybackPreferences.JapaneseLanguage, StringComparison.OrdinalIgnoreCase) &&
+            !subtitleAvailable;
+
+        return japaneseNeedsSubtitle ? index + playbackPreferences.AudioLanguagePriority.Count : index;
     }
 
     private static int GetSubtitleLanguagePreferenceRank(string language)
@@ -503,6 +547,59 @@ public class RtmpFileShareManager : IDisposable
         if (EnglishLanguages.Contains(language)) return 0;
         if (GermanLanguages.Contains(language)) return 1;
         return 2;
+    }
+
+    private static string GetPreferenceLanguageKey(string language)
+    {
+        if (JapaneseAudioLanguages.Contains(language)) return RtmpPlaybackPreferences.JapaneseLanguage;
+        if (EnglishLanguages.Contains(language)) return RtmpPlaybackPreferences.EnglishLanguage;
+        if (GermanLanguages.Contains(language)) return RtmpPlaybackPreferences.GermanLanguage;
+        return RtmpPlaybackPreferences.OtherLanguage;
+    }
+
+    private static RtmpPlaybackPreferences NormalizePlaybackPreferences(RtmpPlaybackPreferences? playbackPreferences)
+    {
+        var normalized = new List<string>();
+        foreach (var item in playbackPreferences?.AudioLanguagePriority ?? Enumerable.Empty<string>())
+        {
+            var key = NormalizePreferenceLanguage(item);
+            if (key != null && !normalized.Contains(key, StringComparer.OrdinalIgnoreCase))
+                normalized.Add(key);
+        }
+
+        foreach (var fallback in DefaultAudioLanguagePriority)
+        {
+            if (!normalized.Contains(fallback, StringComparer.OrdinalIgnoreCase))
+                normalized.Add(fallback);
+        }
+
+        return new RtmpPlaybackPreferences
+        {
+            SubtitleMode = NormalizeSubtitleMode(playbackPreferences?.SubtitleMode),
+            AudioLanguagePriority = normalized,
+        };
+    }
+
+    private static string NormalizeSubtitleMode(string? subtitleMode)
+    {
+        return subtitleMode?.Trim().ToLowerInvariant() switch
+        {
+            RtmpPlaybackPreferences.SubtitleModeAlways => RtmpPlaybackPreferences.SubtitleModeAlways,
+            RtmpPlaybackPreferences.SubtitleModeNever => RtmpPlaybackPreferences.SubtitleModeNever,
+            _ => RtmpPlaybackPreferences.SubtitleModeAuto,
+        };
+    }
+
+    private static string? NormalizePreferenceLanguage(string? language)
+    {
+        return language?.Trim().ToLowerInvariant() switch
+        {
+            RtmpPlaybackPreferences.JapaneseLanguage => RtmpPlaybackPreferences.JapaneseLanguage,
+            RtmpPlaybackPreferences.EnglishLanguage => RtmpPlaybackPreferences.EnglishLanguage,
+            RtmpPlaybackPreferences.GermanLanguage => RtmpPlaybackPreferences.GermanLanguage,
+            RtmpPlaybackPreferences.OtherLanguage => RtmpPlaybackPreferences.OtherLanguage,
+            _ => null,
+        };
     }
 
     private static string NormalizeLanguage(string? language)
