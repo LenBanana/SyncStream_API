@@ -235,29 +235,55 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
   const bitrateK = Math.round(targetBitrate / 1000);
   const seekArgs = startSec > 0.5 ? ['-ss', String(startSec.toFixed(3))] : [];
   const { filterArgs, scaleLabel } = getVideoFilterArgs();
-  const bufferSizeK = bitrateK;
+  // VBV buffer of 2× target bitrate gives x264 enough headroom to spread bits
+  // across complex/simple frames without average bitrate inflation, smoothing
+  // out q-spikes that cause visible quality flicker.
+  const bufferSizeK = bitrateK * 2;
 
   const args = [
     ...seekArgs,
     '-stats_period', '1',
+    // Decoder threading: 0 = auto (libavcodec picks based on cpu count). HEVC 10-bit
+    // software decode is the heavy operation alongside encoding, so we let it use
+    // every core; libx264's sliced-threads (enabled by zerolatency tune) shares
+    // cores cooperatively rather than statically partitioning them.
+    '-threads', '0',
     '-re',
     '-i', filePath,
 
-    // Video
+    // Video — libx264 with zerolatency tune.
+    //
+    // Why H.264 over VP8/VP9 here:
+    //   * libx264 is dramatically faster than libvpx on the SFU's arm64 CPU,
+    //     and that CPU is the bottleneck (ffmpeg speed was hovering 0.95-0.99x
+    //     on libvpx, causing constant RTP underruns).
+    //   * The router advertises Main profile @ level 5.0 (4d0032), which all
+    //     modern WebRTC browsers support.  Quality at the same bitrate is on
+    //     par with VP8 and visibly more consistent (less q-swing).
+    //
+    // Notes:
+    //   * `repeat-headers=1` makes x264 emit SPS+PPS NALs before EVERY IDR.
+    //     Required so consumers that join mid-stream can initialise their
+    //     decoder on the next natural keyframe (every 60 frames ≈ 2.5 s).
+    //   * `scenecut=0` disables scene-change keyframes so the GOP is a clean
+    //     fixed cadence — predictable for RTP and bandwidth.
+    //   * `-tune zerolatency` disables b-frames and lookahead (incompatible
+    //     with sub-second streaming) and switches to slice-based threading
+    //     so encoder latency is well below one frame.
     '-map', '0:v:0',
     ...filterArgs,
-    '-c:v', 'libvpx',
-    '-deadline', 'realtime',
-    '-lag-in-frames', '0',
-    '-cpu-used', '15',
-    '-threads', '8',
-    '-error-resilient', '1',     // recommended for RTP streaming with potential packet loss
+    '-c:v', 'libx264',
+    '-preset', 'veryfast',
+    '-tune', 'zerolatency',
+    '-profile:v', 'main',
+    '-level:v', '5.0',
+    '-pix_fmt', 'yuv420p',
     '-b:v', `${bitrateK}k`,
     '-maxrate', `${bitrateK}k`,
     '-bufsize', `${bufferSizeK}k`,
-    '-keyint_min', '60',
     '-g', '60',
-    '-pix_fmt', 'yuv420p',
+    '-keyint_min', '60',
+    '-x264-params', 'scenecut=0:repeat-headers=1',
     '-ssrc', String(videoSsrc),
     '-payload_type', String(videoPayloadType),
     '-f', 'rtp', `rtp://127.0.0.1:${videoPort}?pkt_size=1200&localport=${videoLocalPort}`,
@@ -275,7 +301,7 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
   ];
 
   const proc = spawn(FFMPEG_PATH, args, { stdio: ['ignore', 'ignore', 'pipe'] });
-  console.log(`[ffmpeg|${proc.pid}] ${ts()} spawned startSec=${startSec} vPort=${videoPort} aPort=${audioPort} source=${videoSourceLabel} scale=${scaleLabel} audio=${selectedAudioLabel} vbv=${bufferSizeK}k lag=0`);
+  console.log(`[ffmpeg|${proc.pid}] ${ts()} spawned startSec=${startSec} vPort=${videoPort} aPort=${audioPort} source=${videoSourceLabel} scale=${scaleLabel} audio=${selectedAudioLabel} codec=h264 preset=veryfast vbv=${bufferSizeK}k`);
 
   // Log ALL stderr lines for the first 30 (startup + first keyframe), then errors only.
   let stderrCount = 0;
@@ -322,11 +348,20 @@ async function createPlainProducer(router, kind, payloadType, ssrc) {
 
   const rtpParameters = kind === 'video'
     ? {
+      // H.264 Main profile @ level 5.0 — matches the first H.264 entry in the
+      // router's mediaCodecs (server.js).  level-asymmetry-allowed=1 lets the
+      // bitstream's actual SPS level differ from the signalled level, which
+      // matters because x264 puts the real level into the SPS regardless of
+      // what we tell it via -level:v.
       codecs: [{
-        mimeType: 'video/VP8',
+        mimeType: 'video/H264',
         payloadType,
         clockRate: 90000,
-        parameters: {},
+        parameters: {
+          'packetization-mode': 1,
+          'profile-level-id': '4d0032',
+          'level-asymmetry-allowed': 1,
+        },
       }],
       encodings: [{ ssrc }],
     }

@@ -387,8 +387,9 @@ app.post('/rooms/:roomId/transports/:transportId/consume', async (req, res) => {
       console.log(`[consumer] peer=${peerId || '-'} kind=${consumer.kind} producer=${consumer.producerId.slice(0, 8)} consumer=${consumer.id.slice(0, 8)} score=${JSON.stringify(score)}`);
     });
 
-    // Request a keyframe immediately so the consumer renders without waiting for
-    // Chrome's natural VP8 keyframe interval (which can be up to ~4 seconds).
+    // Request a keyframe immediately so the consumer renders without waiting
+    // for the next natural keyframe (every ~2.5 s for server file streams,
+    // up to several seconds for browser-source producers).
     consumer.requestKeyFrame().catch(() => {});
 
     res.json({
