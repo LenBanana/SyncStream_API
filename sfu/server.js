@@ -368,7 +368,25 @@ app.post('/rooms/:roomId/transports/:transportId/consume', async (req, res) => {
     if (!entry) return res.status(404).json({ error: 'Producer not found' });
 
     if (!room.router.canConsume({ producerId, rtpCapabilities })) {
-      return res.status(400).json({ error: 'Cannot consume: incompatible RTP capabilities' });
+      // Most common cause: the producer's codec (e.g. H.264 Main 4d0032) has no
+      // compatible match in the consumer's device caps.  Log enough detail to
+      // diagnose without re-deploying.
+      const producerCodecs = entry.producer.rtpParameters?.codecs?.map(
+        (c) => `${c.mimeType}${c.parameters?.['profile-level-id'] ? ` (${c.parameters['profile-level-id']})` : ''}`
+      ) ?? [];
+      const consumerVideoCodecs = (rtpCapabilities?.codecs ?? [])
+        .filter((c) => c.kind === 'video')
+        .map((c) => `${c.mimeType}${c.parameters?.['profile-level-id'] ? ` (${c.parameters['profile-level-id']})` : ''}`);
+      console.warn(
+        `[consume] canConsume=false producer=${producerId.slice(0, 8)} ` +
+        `producerCodecs=[${producerCodecs.join(', ')}] ` +
+        `consumerVideoCodecs=[${consumerVideoCodecs.join(', ')}]`
+      );
+      return res.status(400).json({
+        error: 'Cannot consume: incompatible RTP capabilities',
+        producerCodecs,
+        consumerVideoCodecs,
+      });
     }
 
     const consumer = await transport.consume({

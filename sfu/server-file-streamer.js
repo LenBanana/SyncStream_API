@@ -275,7 +275,15 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
     '-c:v', 'libx264',
     '-preset', 'veryfast',
     '-tune', 'zerolatency',
-    '-profile:v', 'main',
+    // Constrained Baseline is the H.264 profile every WebRTC-capable browser
+    // is guaranteed to decode (it's mandatory in the spec).  Main profile would
+    // compress ~10% better, but mediasoup-client filters the router's codec
+    // list through `RTCRtpReceiver.getCapabilities('video')` and many browsers
+    // (notably Linux Chrome with sw decode and mobile Chrome) advertise only
+    // 42e01f — picking Main here causes router.canConsume() to reject every
+    // viewer with HTTP 400.  Level 5.0 is needed for 1080p; the SDP signals
+    // 3.1 with level-asymmetry-allowed=1 so the actual SPS level can be higher.
+    '-profile:v', 'baseline',
     '-level:v', '5.0',
     '-pix_fmt', 'yuv420p',
     '-b:v', `${bitrateK}k`,
@@ -348,18 +356,20 @@ async function createPlainProducer(router, kind, payloadType, ssrc) {
 
   const rtpParameters = kind === 'video'
     ? {
-      // H.264 Main profile @ level 5.0 — matches the first H.264 entry in the
-      // router's mediaCodecs (server.js).  level-asymmetry-allowed=1 lets the
-      // bitstream's actual SPS level differ from the signalled level, which
-      // matters because x264 puts the real level into the SPS regardless of
-      // what we tell it via -level:v.
+      // H.264 Constrained Baseline @ level 3.1 — matches the second H.264 entry
+      // in the router's mediaCodecs (server.js) and is the only H.264 profile
+      // every WebRTC-capable browser is guaranteed to decode.  Picking Main
+      // here would cause router.canConsume() to reject viewers whose device
+      // caps don't include 4d0032 (common on Linux Chrome and mobile).
+      // level-asymmetry-allowed=1 lets the actual bitstream level (5.0 for
+      // 1080p output) exceed the signalled level (3.1) without renegotiation.
       codecs: [{
         mimeType: 'video/H264',
         payloadType,
         clockRate: 90000,
         parameters: {
           'packetization-mode': 1,
-          'profile-level-id': '4d0032',
+          'profile-level-id': '42e01f',
           'level-asymmetry-allowed': 1,
         },
       }],
