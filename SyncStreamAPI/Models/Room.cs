@@ -51,6 +51,17 @@ public class Room
     /// </summary>
     [NotMapped] public string? FileShareUploadId { get; set; }
 
+    // ── RTMP file-share state ──────────────────────────────────────────────────
+
+    /// <summary>True while an RTMP file-share is active in this room.</summary>
+    [NotMapped] public bool IsRtmpFileShareActive { get; set; }
+    /// <summary>ConnectionId of the member who initiated the RTMP file-share (null when none).</summary>
+    [NotMapped] public string? RtmpFileShareInitiator { get; set; }
+    /// <summary>uploadId that is still being chunked; null once the upload is finalised.</summary>
+    [NotMapped] public string? RtmpFileShareUploadId { get; set; }
+    /// <summary>HLS/FLV stream URL broadcast to late-joining viewers.</summary>
+    [NotMapped] public string? RtmpStreamUrl { get; set; }
+
     /// <summary>
     /// Set of connectionIds that are currently streaming P2P (Discord-style opt-in).
     /// Multiple concurrent streamers are supported; each viewer connects on-demand.

@@ -37,4 +37,18 @@ public partial interface IServerHub
     /// while a file share is active.
     /// </summary>
     Task fileSharePlayPause(bool isPlaying);
+
+    // ── RTMP file-share events ─────────────────────────────────────────────────
+
+    /// <summary>Sent to all room members when the host starts an RTMP file-share.</summary>
+    Task rtmpFileShareStarted(string streamerId, string username, string roomId,
+                              string streamUrl, double? durationSec);
+    /// <summary>Sent to all room members when the RTMP file-share ends.</summary>
+    Task rtmpFileShareStopped();
+    /// <summary>Sent to viewers when the host pauses or resumes the RTMP stream.</summary>
+    Task rtmpFileSharePlayPause(bool isPlaying, double positionSec);
+    /// <summary>Sent to viewers when the host seeks; clients should reconnect their player.</summary>
+    Task rtmpFileShareSeek(double positionSec);
+    /// <summary>Periodic position broadcast so viewers can sync their seek bar.</summary>
+    Task rtmpFileSharePosition(double positionSec);
 }

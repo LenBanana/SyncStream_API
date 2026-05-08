@@ -101,6 +101,7 @@ public class Startup
             return manager;
         });
         services.AddSingleton<WebRtcSfuManager>();
+        services.AddSingleton<RtmpFileShareManager>();
         services.AddControllers();
         services.AddSwaggerGen(c =>
         {

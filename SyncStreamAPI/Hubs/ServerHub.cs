@@ -14,6 +14,7 @@ using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.GameModels.Chess;
 using SyncStreamAPI.PostgresModels;
+using SyncStreamAPI.Helper.Streaming;
 using SyncStreamAPI.ServerData;
 using SyncStreamAPI.ServerData.Helper;
 
@@ -31,11 +32,13 @@ public partial class ServerHub : Hub<IServerHub>
     private readonly PostgresContext _postgres;
 
     public ServerHub(IConfiguration configuration, MainManager manager, PostgresContext postgres,
-        GallowGameManager gallowGameManager, BlackjackManager blackjackManager, WebRtcSfuManager webRtcSfuManager)
+        GallowGameManager gallowGameManager, BlackjackManager blackjackManager,
+        WebRtcSfuManager webRtcSfuManager, RtmpFileShareManager rtmpFileShareManager)
     {
         Configuration = configuration;
         _manager = manager;
         _webRtcSfuManager = webRtcSfuManager;
+        _rtmpFileShareManager = rtmpFileShareManager;
         _postgres = postgres;
         _gallowGameManager = gallowGameManager;
         _blackjackManager = blackjackManager;
@@ -53,10 +56,13 @@ public partial class ServerHub : Hub<IServerHub>
             var e = room.server.members.FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
             e?.InvokeKick();
 
-            // If this connection owned an active file share, stop it cleanly before
-            // any other cleanup so all room members receive fileShareStopped.
+            // If this connection owned an active WebRTC file share, stop it cleanly.
             if (room.IsFileSharingActive && room.FileShareInitiator == Context.ConnectionId)
                 await StopFileShareInternalAsync(room);
+
+            // If this connection owned an active RTMP file share, stop it cleanly.
+            if (room.IsRtmpFileShareActive && room.RtmpFileShareInitiator == Context.ConnectionId)
+                await StopRtmpFileShareInternalAsync(room);
 
             if (room.CurrentStreamer == Context.ConnectionId)
             {
