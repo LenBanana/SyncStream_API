@@ -194,7 +194,22 @@ public partial class ServerHub
 
     internal async Task StopRtmpFileShareInternalAsync(Room room)
     {
+        var session = _rtmpFileShareManager.Get(room.uniqueId);
         _rtmpFileShareManager.Stop(room.uniqueId);
+
+        if (session != null)
+        {
+            var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.id == session.StreamToken);
+            if (liveUser != null)
+            {
+                _manager.LiveUsers.TryTake(out liveUser);
+                var liveUsers = _manager.LiveUsers;
+                await Clients.Group(General.LoggedInGroupName)
+                    .getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
+                await Clients.Group(General.BottedInGroupName)
+                    .getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
+            }
+        }
 
         room.IsRtmpFileShareActive  = false;
         room.RtmpFileShareInitiator = null;
