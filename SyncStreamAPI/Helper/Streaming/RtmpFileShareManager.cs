@@ -405,7 +405,7 @@ public class RtmpFileShareManager : IDisposable
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = General.GetFFprobePath(),
-                    Arguments = $"-v quiet -print_format json -show_streams \"{filePath}\"",
+                    Arguments = $"-v error -print_format json -show_entries stream=index,codec_type,codec_name:stream_tags=language,title:stream_disposition=default,forced \"{filePath}\"",
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     RedirectStandardOutput = true,
@@ -415,14 +415,23 @@ public class RtmpFileShareManager : IDisposable
 
             p.Start();
             var stdout = await p.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
+            var stderr = await p.StandardError.ReadToEndAsync().ConfigureAwait(false);
             await p.WaitForExitAsync().ConfigureAwait(false);
 
             if (p.ExitCode != 0 || string.IsNullOrWhiteSpace(stdout))
+            {
+                Console.WriteLine(
+                    $"[RtmpShare/Probe] ffprobe failed exitCode={p.ExitCode} stdoutEmpty={string.IsNullOrWhiteSpace(stdout)} " +
+                    $"stderr=\"{TrimForLog(stderr, 400)}\"");
                 return new RtmpPlaybackSelection();
+            }
 
             var streams = JsonNode.Parse(stdout)?["streams"]?.AsArray();
             if (streams == null || streams.Count == 0)
+            {
+                Console.WriteLine("[RtmpShare/Probe] ffprobe returned no streams");
                 return new RtmpPlaybackSelection();
+            }
 
             var parsedStreams = new List<RtmpProbeStream>();
             var subtitleOrdinal = 0;
@@ -436,13 +445,13 @@ public class RtmpFileShareManager : IDisposable
 
                 var parsed = new RtmpProbeStream
                 {
-                    StreamIndex = stream["index"]?.GetValue<int>() ?? -1,
+                    StreamIndex = ReadInt(stream, "index") ?? -1,
                     CodecType = codecType,
-                    CodecName = stream["codec_name"]?.GetValue<string>() ?? string.Empty,
-                    Language = NormalizeLanguage(stream["tags"]?["language"]?.GetValue<string>()),
-                    Title = stream["tags"]?["title"]?.GetValue<string>() ?? string.Empty,
-                    IsDefault = (stream["disposition"]?["default"]?.GetValue<int>() ?? 0) == 1,
-                    IsForced = (stream["disposition"]?["forced"]?.GetValue<int>() ?? 0) == 1,
+                    CodecName = ReadString(stream, "codec_name") ?? string.Empty,
+                    Language = NormalizeLanguage(ReadNestedString(stream, "tags", "language")),
+                    Title = ReadNestedString(stream, "tags", "title") ?? string.Empty,
+                    IsDefault = (ReadNestedInt(stream, "disposition", "default") ?? 0) == 1,
+                    IsForced = (ReadNestedInt(stream, "disposition", "forced") ?? 0) == 1,
                 };
 
                 if (string.Equals(codecType, "subtitle", StringComparison.OrdinalIgnoreCase))
@@ -679,6 +688,59 @@ public class RtmpFileShareManager : IDisposable
             .Replace("[", "\\[")
             .Replace("]", "\\]")
             .Replace(",", "\\,");
+
+    private static string? ReadString(JsonNode? node, string propertyName)
+        => ReadJsonValue(node?[propertyName]);
+
+    private static string? ReadNestedString(JsonNode? node, string parentPropertyName, string propertyName)
+        => ReadJsonValue(node?[parentPropertyName]?[propertyName]);
+
+    private static int? ReadInt(JsonNode? node, string propertyName)
+        => ReadJsonInt(node?[propertyName]);
+
+    private static int? ReadNestedInt(JsonNode? node, string parentPropertyName, string propertyName)
+        => ReadJsonInt(node?[parentPropertyName]?[propertyName]);
+
+    private static string? ReadJsonValue(JsonNode? node)
+    {
+        if (node == null)
+            return null;
+
+        try
+        {
+            return node.GetValue<string>();
+        }
+        catch
+        {
+            return node.ToString();
+        }
+    }
+
+    private static int? ReadJsonInt(JsonNode? node)
+    {
+        if (node == null)
+            return null;
+
+        try
+        {
+            return node.GetValue<int>();
+        }
+        catch
+        {
+            return int.TryParse(node.ToString(), out var value) ? value : null;
+        }
+    }
+
+    private static string TrimForLog(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var trimmed = value.Trim();
+        return trimmed.Length <= maxLength
+            ? trimmed
+            : trimmed[..maxLength] + "...";
+    }
 
     private static void LogFfmpegProgress(RtmpFileShareSession session, IReadOnlyDictionary<string, string> progressFields)
     {
