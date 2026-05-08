@@ -101,6 +101,11 @@ public class RtmpFileShareManager : IDisposable
         string streamToken, string filePath, string? uploadId, RtmpPlaybackPreferences? playbackPreferences)
     {
         var normalizedPreferences = NormalizePlaybackPreferences(playbackPreferences);
+        var fileInfo = new FileInfo(filePath);
+        Console.WriteLine(
+            $"{GetLogPrefix(roomId)} start requested file=\"{fileInfo.Name}\" sizeBytes={fileInfo.Length} " +
+            $"subtitleMode={normalizedPreferences.SubtitleMode} " +
+            $"audioPriority=[{string.Join(",", normalizedPreferences.AudioLanguagePriority)}]");
         var playbackSelection = await ProbePlaybackSelectionAsync(filePath, normalizedPreferences);
 
         var session = new RtmpFileShareSession
@@ -125,8 +130,15 @@ public class RtmpFileShareManager : IDisposable
         // Probe duration in the background — does not block stream start.
         _ = Task.Run(async () =>
         {
-            try { session.DurationSec = await ProbeFileDurationAsync(filePath); }
-            catch { /* probe failure is non-fatal */ }
+            try
+            {
+                session.DurationSec = await ProbeFileDurationAsync(filePath);
+                Console.WriteLine($"{GetLogPrefix(roomId)} durationProbe durationSec={(session.DurationSec?.ToString("F3", System.Globalization.CultureInfo.InvariantCulture) ?? "unknown")}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"{GetLogPrefix(roomId)} durationProbe failed: {ex.Message}");
+            }
         });
 
         SpawnFfmpeg(session, 0);
@@ -137,6 +149,8 @@ public class RtmpFileShareManager : IDisposable
     public Task PausePlayAsync(string roomId, bool isPlaying)
     {
         if (!_sessions.TryGetValue(roomId, out var session)) return Task.CompletedTask;
+
+        Console.WriteLine($"{GetLogPrefix(roomId)} {(isPlaying ? "resume" : "pause")} requested currentPositionSec={session.CurrentPositionSec:F3}");
 
         if (isPlaying && session.Paused)
         {
@@ -157,6 +171,7 @@ public class RtmpFileShareManager : IDisposable
     public Task SeekAsync(string roomId, double positionSec)
     {
         if (!_sessions.TryGetValue(roomId, out var session)) return Task.CompletedTask;
+        Console.WriteLine($"{GetLogPrefix(roomId)} seek requested targetPositionSec={positionSec:F3} currentPositionSec={session.CurrentPositionSec:F3}");
         RegisterExpectedPublisherDisconnect(session);
         KillFfmpeg(session);
         session.PositionSec = positionSec;
@@ -171,6 +186,7 @@ public class RtmpFileShareManager : IDisposable
     public bool Stop(string roomId)
     {
         if (!_sessions.TryRemove(roomId, out var session)) return false;
+        Console.WriteLine($"{GetLogPrefix(roomId)} stop requested finalPositionSec={session.CurrentPositionSec:F3} retries={session.RetryCount}");
         KillFfmpeg(session);
         CleanUpUploadDir(session);
         return true;
@@ -180,7 +196,10 @@ public class RtmpFileShareManager : IDisposable
     public void MarkUploadComplete(string roomId, string uploadId)
     {
         if (_sessions.TryGetValue(roomId, out var session) && session.UploadId == uploadId)
+        {
             session.UploadId = null;
+            Console.WriteLine($"{GetLogPrefix(roomId)} upload completed uploadId={uploadId}");
+        }
     }
 
     // ── ffmpeg process management ─────────────────────────────────────────────
@@ -195,7 +214,7 @@ public class RtmpFileShareManager : IDisposable
         var rtmpUrl = $"{_rtmpBaseUrl}/{session.OwnerUsername}?token={Uri.EscapeDataString(session.StreamToken)}";
 
         var args = string.Concat(
-            "-stats_period 1 -threads 0 ",
+            "-nostats -progress pipe:1 -stats_period 1 -threads 0 ",
             $"-re {seekArg}",
             $"-i \"{session.FilePath}\" ",
             $"-map 0:v:0 -map {session.AudioMapSpecifier} ",
@@ -210,10 +229,11 @@ public class RtmpFileShareManager : IDisposable
         );
 
         Console.WriteLine(
-            $"[RtmpShare/{session.RoomId.Substring(0, Math.Min(8, session.RoomId.Length))}] " +
-            $"spawn ffmpeg seek={fromPositionSec:F3}s widthCap={_maxVideoWidth} preset={_videoPreset} " +
+            $"{GetLogPrefix(session.RoomId)} spawn ffmpeg seek={fromPositionSec:F3}s widthCap={_maxVideoWidth} preset={_videoPreset} " +
             $"video={_videoBitrateKbps}/{_maxVideoBitrateKbps}k audio={_audioBitrateKbps}k " +
             $"audioTrack=\"{session.AudioSelectionLabel}\" subtitleTrack=\"{session.SubtitleSelectionLabel ?? "none"}\"");
+
+        var progressFields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         var process = new Process
         {
@@ -230,10 +250,33 @@ public class RtmpFileShareManager : IDisposable
             EnableRaisingEvents = true
         };
 
+        process.OutputDataReceived += (_, e) =>
+        {
+            if (string.IsNullOrWhiteSpace(e.Data))
+                return;
+
+            var separatorIndex = e.Data.IndexOf('=');
+            if (separatorIndex <= 0 || separatorIndex == e.Data.Length - 1)
+            {
+                Console.WriteLine($"{GetLogPrefix(session.RoomId)} ffmpeg progress(raw) {e.Data}");
+                return;
+            }
+
+            var key = e.Data[..separatorIndex];
+            var value = e.Data[(separatorIndex + 1)..];
+            progressFields[key] = value;
+
+            if (string.Equals(key, "progress", StringComparison.OrdinalIgnoreCase))
+            {
+                LogFfmpegProgress(session, progressFields);
+                progressFields.Clear();
+            }
+        };
+
         process.ErrorDataReceived += (_, e) =>
         {
             if (!string.IsNullOrEmpty(e.Data))
-                Console.WriteLine($"[RtmpShare/{session.RoomId.Substring(0, Math.Min(8, session.RoomId.Length))}] {e.Data}");
+                Console.WriteLine($"{GetLogPrefix(session.RoomId)} ffmpeg stderr {e.Data}");
         };
 
         process.Exited += (_, _) =>
@@ -254,8 +297,8 @@ public class RtmpFileShareManager : IDisposable
                 // Back-off: 3s, 6s, 9s, 12s, … so later retries give the background
                 // upload more time to flush the moov atom / file tail to disk.
                 var delaySec = session.RetryCount * 3;
-                Console.WriteLine($"[RtmpShare/{session.RoomId[..Math.Min(8, session.RoomId.Length)]}] " +
-                                  $"ffmpeg exited after {elapsed:F1}s (retry {session.RetryCount}/{maxRetries}, next in {delaySec}s)");
+                Console.WriteLine($"{GetLogPrefix(session.RoomId)} ffmpeg exited exitCode={process.ExitCode} elapsedSec={elapsed:F1} " +
+                                  $"(retry {session.RetryCount}/{maxRetries}, next in {delaySec}s)");
                 Task.Run(async () =>
                 {
                     await Task.Delay(delaySec * 1000);
@@ -265,8 +308,8 @@ public class RtmpFileShareManager : IDisposable
             }
             else
             {
-                Console.WriteLine($"[RtmpShare/{session.RoomId[..Math.Min(8, session.RoomId.Length)]}] " +
-                                  $"ffmpeg exited after {elapsed:F1}s and exhausted {maxRetries} retries — giving up");
+                Console.WriteLine($"{GetLogPrefix(session.RoomId)} ffmpeg exited exitCode={process.ExitCode} elapsedSec={elapsed:F1} " +
+                                  $"and exhausted {maxRetries} retries; giving up");
             }
         };
 
@@ -281,7 +324,10 @@ public class RtmpFileShareManager : IDisposable
     private static void RegisterExpectedPublisherDisconnect(RtmpFileShareSession session)
     {
         lock (session)
+        {
             session.PendingPublisherDisconnects++;
+            Console.WriteLine($"{GetLogPrefix(session.RoomId)} expected publisher disconnect count={session.PendingPublisherDisconnects}");
+        }
     }
 
     private string BuildVideoFilterArg(RtmpFileShareSession session)
@@ -307,6 +353,7 @@ public class RtmpFileShareManager : IDisposable
         // Save position before killing so seek/pause resume from the right offset.
         session.PositionSec = session.CurrentPositionSec;
         session.Process = null;
+        Console.WriteLine($"{GetLogPrefix(session.RoomId)} kill ffmpeg savedPositionSec={session.PositionSec:F3}");
         try
         {
             if (!p.HasExited)
@@ -407,6 +454,14 @@ public class RtmpFileShareManager : IDisposable
             var preferredSubtitle = SelectSubtitleTrack(parsedStreams);
             var audio = SelectAudioTrack(parsedStreams, playbackPreferences, preferredSubtitle != null);
             var subtitle = ResolveSubtitleTrack(preferredSubtitle, audio, playbackPreferences);
+
+            Console.WriteLine(
+                $"[RtmpShare/Probe] subtitleMode={playbackPreferences.SubtitleMode} " +
+                $"audioPriority=[{string.Join(",", playbackPreferences.AudioLanguagePriority)}] " +
+                $"audioCandidates=[{string.Join(" | ", parsedStreams.Where(s => string.Equals(s.CodecType, "audio", StringComparison.OrdinalIgnoreCase)).Select(DescribeStream))}] " +
+                $"subtitleCandidates=[{string.Join(" | ", parsedStreams.Where(s => string.Equals(s.CodecType, "subtitle", StringComparison.OrdinalIgnoreCase)).Select(DescribeStream))}] " +
+                $"selectedAudio=\"{(audio != null ? DescribeStream(audio) : "first audio fallback")}\" " +
+                $"selectedSubtitle=\"{(subtitle != null ? DescribeStream(subtitle) : "none")}\"");
 
             return new RtmpPlaybackSelection
             {
@@ -624,6 +679,63 @@ public class RtmpFileShareManager : IDisposable
             .Replace("[", "\\[")
             .Replace("]", "\\]")
             .Replace(",", "\\,");
+
+    private static void LogFfmpegProgress(RtmpFileShareSession session, IReadOnlyDictionary<string, string> progressFields)
+    {
+        var progressState = GetProgressValue(progressFields, "progress") ?? "unknown";
+        var frame = ParseInt(progressFields, "frame");
+        var fps = ParseDouble(progressFields, "fps");
+        var speed = GetProgressValue(progressFields, "speed");
+        var bitrate = GetProgressValue(progressFields, "bitrate");
+        var dupFrames = ParseInt(progressFields, "dup_frames");
+        var dropFrames = ParseInt(progressFields, "drop_frames");
+        var outTimeSec = ParseOutTimeSeconds(progressFields);
+        var elapsedSec = Math.Max(0, (DateTime.UtcNow - session.StartedAtUtc).TotalSeconds);
+        var wallClockDriftSec = outTimeSec.HasValue ? elapsedSec - outTimeSec.Value : (double?)null;
+
+        Console.WriteLine(
+            $"{GetLogPrefix(session.RoomId)} ffmpeg progress={progressState} " +
+            $"frame={(frame?.ToString() ?? "?")} fps={(fps?.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) ?? "?")} " +
+            $"speed={(speed ?? "?")} bitrate={(bitrate ?? "?")} " +
+            $"outTimeSec={(outTimeSec?.ToString("F3", System.Globalization.CultureInfo.InvariantCulture) ?? "?")} " +
+            $"wallClockDriftSec={(wallClockDriftSec?.ToString("F3", System.Globalization.CultureInfo.InvariantCulture) ?? "?")} " +
+            $"dupFrames={(dupFrames?.ToString() ?? "?")} dropFrames={(dropFrames?.ToString() ?? "?")}");
+    }
+
+    private static string GetLogPrefix(string roomId)
+        => $"[RtmpShare/{roomId[..Math.Min(8, roomId.Length)]}]";
+
+    private static string? GetProgressValue(IReadOnlyDictionary<string, string> progressFields, string key)
+        => progressFields.TryGetValue(key, out var value) ? value : null;
+
+    private static int? ParseInt(IReadOnlyDictionary<string, string> progressFields, string key)
+        => int.TryParse(GetProgressValue(progressFields, key), out var value) ? value : null;
+
+    private static double? ParseDouble(IReadOnlyDictionary<string, string> progressFields, string key)
+        => double.TryParse(
+            GetProgressValue(progressFields, key),
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var value)
+            ? value
+            : null;
+
+    private static double? ParseOutTimeSeconds(IReadOnlyDictionary<string, string> progressFields)
+    {
+        var outTimeMs = GetProgressValue(progressFields, "out_time_ms");
+        if (long.TryParse(outTimeMs, out var milliseconds))
+            return milliseconds / 1_000_000d;
+
+        var outTimeUs = GetProgressValue(progressFields, "out_time_us");
+        if (long.TryParse(outTimeUs, out var microseconds))
+            return microseconds / 1_000_000d;
+
+        var outTime = GetProgressValue(progressFields, "out_time");
+        if (TimeSpan.TryParse(outTime, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+            return parsed.TotalSeconds;
+
+        return null;
+    }
 
     private sealed class RtmpPlaybackSelection
     {
