@@ -18,7 +18,7 @@
 
 const { spawn } = require('child_process');
 const path = require('path');
-const os   = require('os');
+const os = require('os');
 
 // ISO timestamp prefix for all log lines so events can be correlated.
 const ts = () => new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm
@@ -59,25 +59,25 @@ function freePort(port) {
 /** State for one active server-side file stream in a room. */
 class ServerFileStream {
   constructor({ videoTransport, audioTransport, videoProducer, audioProducer,
-                videoPort, audioPort, videoLocalPort, audioLocalPort, filePath, targetBitrate,
-                audioMapSpecifier, selectedAudioLabel }) {
+    videoPort, audioPort, videoLocalPort, audioLocalPort, filePath, targetBitrate,
+    audioMapSpecifier, selectedAudioLabel }) {
     this.videoTransport = videoTransport;
     this.audioTransport = audioTransport;
-    this.videoProducer  = videoProducer;
-    this.audioProducer  = audioProducer;
-    this.videoPort      = videoPort;       // mediasoup's RTP listening port (ffmpeg sends TO this)
-    this.audioPort      = audioPort;
+    this.videoProducer = videoProducer;
+    this.audioProducer = audioProducer;
+    this.videoPort = videoPort;       // mediasoup's RTP listening port (ffmpeg sends TO this)
+    this.audioPort = audioPort;
     this.videoLocalPort = videoLocalPort;  // fixed port ffmpeg binds FROM (stays constant on restart)
     this.audioLocalPort = audioLocalPort;
-    this.filePath       = filePath;
-    this.targetBitrate  = targetBitrate;
+    this.filePath = filePath;
+    this.targetBitrate = targetBitrate;
     this.audioMapSpecifier = audioMapSpecifier;
     this.selectedAudioLabel = selectedAudioLabel;
-    this.ffmpeg         = null;
-    this.positionSec    = 0;   // last known position (updated on pause/seek)
-    this.startedAt      = 0;   // Date.now() when current ffmpeg started at positionSec
-    this.pausedAt       = 0;   // Date.now() when stream was paused (for burst detection)
-    this.paused         = false;
+    this.ffmpeg = null;
+    this.positionSec = 0;   // last known position (updated on pause/seek)
+    this.startedAt = 0;   // Date.now() when current ffmpeg started at positionSec
+    this.pausedAt = 0;   // Date.now() when stream was paused (for burst detection)
+    this.paused = false;
   }
 
   /** Current estimated playback position. */
@@ -171,7 +171,7 @@ async function probeSourceSelection(filePath) {
       filePath,
     ];
 
-    const proc = spawn(FFPROBE_PATH, args, {stdio: ['ignore', 'pipe', 'pipe']});
+    const proc = spawn(FFPROBE_PATH, args, { stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
 
@@ -229,9 +229,9 @@ async function probeSourceSelection(filePath) {
  * Returns the ChildProcess.
  */
 function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
-                       videoLocalPort, audioLocalPort,
-                       videoPayloadType, audioPayloadType, videoSsrc, audioSsrc,
-                       audioMapSpecifier, selectedAudioLabel, videoSourceLabel }) {
+  videoLocalPort, audioLocalPort,
+  videoPayloadType, audioPayloadType, videoSsrc, audioSsrc,
+  audioMapSpecifier, selectedAudioLabel, videoSourceLabel }) {
   const bitrateK = Math.round(targetBitrate / 1000);
   const seekArgs = startSec > 0.5 ? ['-ss', String(startSec.toFixed(3))] : [];
   const { filterArgs, scaleLabel } = getVideoFilterArgs();
@@ -240,20 +240,21 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
   const args = [
     ...seekArgs,
     '-stats_period', '1',
-    '-re',                        // real-time pacing
+    '-re',
     '-i', filePath,
-    // Video: transcode to VP8 real-time (VP8 is ~3× faster than VP9 to encode)
+
+    // Video
     '-map', '0:v:0',
     ...filterArgs,
     '-c:v', 'libvpx',
     '-deadline', 'realtime',
     '-lag-in-frames', '0',
-    '-cpu-used', '16',            // maximum speed for libvpx VP8
+    '-cpu-used', '15',
     '-threads', '8',
+    '-token-parts', '2',         // enables parallel coefficient encoding for HD; confirmed in VP8 docs
+    '-error-resilient', '1',     // recommended for RTP streaming with potential packet loss
     '-b:v', `${bitrateK}k`,
     '-maxrate', `${bitrateK}k`,
-    // Keep the VBV buffer tight so complex scenes do not burst far above target
-    // bitrate and then destabilize the consumer leg.
     '-bufsize', `${bufferSizeK}k`,
     '-keyint_min', '60',
     '-g', '60',
@@ -261,18 +262,20 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
     '-ssrc', String(videoSsrc),
     '-payload_type', String(videoPayloadType),
     '-f', 'rtp', `rtp://127.0.0.1:${videoPort}?pkt_size=1200&localport=${videoLocalPort}`,
-    // Audio: transcode to Opus
+
+    // Audio
     '-map', audioMapSpecifier,
     '-c:a', 'libopus',
     '-b:a', '128k',
     '-ar', '48000',
     '-ac', '2',
+    '-application', 'lowdelay',  // reduces Opus algorithmic delay; valid libopus FFmpeg option
     '-ssrc', String(audioSsrc),
     '-payload_type', String(audioPayloadType),
     '-f', 'rtp', `rtp://127.0.0.1:${audioPort}?pkt_size=1200&localport=${audioLocalPort}`,
   ];
 
-  const proc = spawn(FFMPEG_PATH, args, {stdio: ['ignore', 'ignore', 'pipe']});
+  const proc = spawn(FFMPEG_PATH, args, { stdio: ['ignore', 'ignore', 'pipe'] });
   console.log(`[ffmpeg|${proc.pid}] ${ts()} spawned startSec=${startSec} vPort=${videoPort} aPort=${audioPort} source=${videoSourceLabel} scale=${scaleLabel} audio=${selectedAudioLabel} vbv=${bufferSizeK}k lag=0`);
 
   // Log ALL stderr lines for the first 30 (startup + first keyframe), then errors only.
@@ -306,8 +309,8 @@ async function createPlainProducer(router, kind, payloadType, ssrc) {
 
   const transport = await router.createPlainTransport({
     listenInfo: { protocol: 'udp', ip: '127.0.0.1' },
-    rtcpMux:     true,
-    comedia:     false,
+    rtcpMux: true,
+    comedia: false,
   });
 
   // Set the remote address mediasoup will accept RTP from (and send RTCP to).
@@ -320,28 +323,28 @@ async function createPlainProducer(router, kind, payloadType, ssrc) {
 
   const rtpParameters = kind === 'video'
     ? {
-        codecs: [{
-          mimeType:    'video/VP8',
-          payloadType,
-          clockRate:   90000,
-          parameters:  {},
-        }],
-        encodings: [{ssrc}],
-      }
+      codecs: [{
+        mimeType: 'video/VP8',
+        payloadType,
+        clockRate: 90000,
+        parameters: {},
+      }],
+      encodings: [{ ssrc }],
+    }
     : {
-        codecs: [{
-          mimeType:    'audio/opus',
-          payloadType,
-          clockRate:   48000,
-          channels:    2,
-          parameters:  {'sprop-stereo': 1},
-        }],
-        encodings: [{ssrc}],
-      };
+      codecs: [{
+        mimeType: 'audio/opus',
+        payloadType,
+        clockRate: 48000,
+        channels: 2,
+        parameters: { 'sprop-stereo': 1 },
+      }],
+      encodings: [{ ssrc }],
+    };
 
-  const producer = await transport.produce({kind, rtpParameters, paused: false});
+  const producer = await transport.produce({ kind, rtpParameters, paused: false });
 
-  return {transport, producer, port, localPort, payloadType, ssrc};
+  return { transport, producer, port, localPort, payloadType, ssrc };
 }
 
 /**
@@ -368,10 +371,10 @@ async function startServerFileStream(room, filePath, targetBitrate, onProducerCr
   const stream = new ServerFileStream({
     videoTransport: vResult.transport,
     audioTransport: aResult.transport,
-    videoProducer:  vResult.producer,
-    audioProducer:  aResult.producer,
-    videoPort:      vResult.port,
-    audioPort:      aResult.port,
+    videoProducer: vResult.producer,
+    audioProducer: aResult.producer,
+    videoPort: vResult.port,
+    audioPort: aResult.port,
     videoLocalPort: vResult.localPort,
     audioLocalPort: aResult.localPort,
     filePath,
@@ -382,8 +385,8 @@ async function startServerFileStream(room, filePath, targetBitrate, onProducerCr
 
   // Register producers in the room so consumers can subscribe.
   const serverPeerId = `server-file:${room.id}`;
-  room.producers.set(vResult.producer.id, {producer: vResult.producer, peerId: serverPeerId});
-  room.producers.set(aResult.producer.id, {producer: aResult.producer, peerId: serverPeerId});
+  room.producers.set(vResult.producer.id, { producer: vResult.producer, peerId: serverPeerId });
+  room.producers.set(aResult.producer.id, { producer: aResult.producer, peerId: serverPeerId });
 
   vResult.producer.on('transportclose', () => room.producers.delete(vResult.producer.id));
   aResult.producer.on('transportclose', () => room.producers.delete(aResult.producer.id));
@@ -402,12 +405,12 @@ async function startServerFileStream(room, filePath, targetBitrate, onProducerCr
   stream.startedAt = Date.now();
   stream.ffmpeg = spawnFfmpeg({
     filePath,
-    startSec:         0,
+    startSec: 0,
     targetBitrate,
-    videoPort:        vResult.port,
-    audioPort:        aResult.port,
-    videoLocalPort:   vResult.localPort,
-    audioLocalPort:   aResult.localPort,
+    videoPort: vResult.port,
+    audioPort: aResult.port,
+    videoLocalPort: vResult.localPort,
+    audioLocalPort: aResult.localPort,
     videoPayloadType: videoPt,
     audioPayloadType: audioPt,
     videoSsrc,
@@ -474,17 +477,17 @@ async function resumeServerFileStream(stream, seekToSec) {
   }
 
   stream.ffmpeg = spawnFfmpeg({
-    filePath:         stream.filePath,
-    startSec:         stream.positionSec,
-    targetBitrate:    stream.targetBitrate,
-    videoPort:        stream.videoPort,
-    audioPort:        stream.audioPort,
-    videoLocalPort:   stream.videoLocalPort,
-    audioLocalPort:   stream.audioLocalPort,
+    filePath: stream.filePath,
+    startSec: stream.positionSec,
+    targetBitrate: stream.targetBitrate,
+    videoPort: stream.videoPort,
+    audioPort: stream.audioPort,
+    videoLocalPort: stream.videoLocalPort,
+    audioLocalPort: stream.audioLocalPort,
     videoPayloadType: 96,
     audioPayloadType: 97,
-    videoSsrc:        stream.videoProducer.rtpParameters.encodings[0].ssrc,
-    audioSsrc:        stream.audioProducer.rtpParameters.encodings[0].ssrc,
+    videoSsrc: stream.videoProducer.rtpParameters.encodings[0].ssrc,
+    audioSsrc: stream.audioProducer.rtpParameters.encodings[0].ssrc,
     audioMapSpecifier: stream.audioMapSpecifier,
     selectedAudioLabel: stream.selectedAudioLabel,
     videoSourceLabel: 'resume',
@@ -544,4 +547,4 @@ function stopServerFileStream(room, stream) {
   console.log(`[server-stream] stopped room=${room.id}`);
 }
 
-module.exports = {startServerFileStream, pauseServerFileStream, resumeServerFileStream, stopServerFileStream};
+module.exports = { startServerFileStream, pauseServerFileStream, resumeServerFileStream, stopServerFileStream };
