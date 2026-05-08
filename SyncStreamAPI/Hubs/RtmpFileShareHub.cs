@@ -134,8 +134,11 @@ public partial class ServerHub
         await _rtmpFileShareManager.PausePlayAsync(roomId, isPlaying);
 
         var pos = _rtmpFileShareManager.Get(roomId)?.CurrentPositionSec ?? 0;
-        await Clients.GroupExcept(roomId, new[] { Context.ConnectionId })
-            .rtmpFileSharePlayPause(isPlaying, pos);
+        var viewers = Clients.GroupExcept(roomId, new[] { Context.ConnectionId });
+        await viewers.rtmpFileSharePlayPause(isPlaying, pos);
+
+        if (isPlaying)
+            await viewers.rtmpFileShareSeek(pos);
     }
 
     /// <summary>

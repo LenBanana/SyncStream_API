@@ -32,6 +32,20 @@ public class RtmpFileShareSession
     public double? DurationSec { get; set; }
     /// <summary>The stream token used as RTMP auth query param.</summary>
     public string StreamToken { get; set; } = string.Empty;
+    /// <summary>Number of consecutive unexpected ffmpeg exits since the last explicit start/seek/resume.</summary>
+    public int RetryCount { get; set; }
+    /// <summary>
+    /// Counts intentional ffmpeg shutdowns (pause/seek) so nginx-rtmp callbacks can
+    /// distinguish a managed restart from a real stream end.
+    /// </summary>
+    public int PendingPublisherDisconnects { get; set; }
+    /// <summary>
+    /// True for MP4/MOV files: ffmpeg cannot open them until the moov atom is present,
+    /// so we defer spawning until a qt-faststart remux completes after upload finishes.
+    /// </summary>
+    public bool NeedsRemux { get; set; }
+    /// <summary>Viewer HLS URL — stored so the manager can fire rtmpFileShareStarted after the deferred remux.</summary>
+    public string StreamUrl { get; set; } = string.Empty;
 
     /// <summary>
     /// Computes the current playback position based on the saved offset and

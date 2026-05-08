@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Helper;
+using SyncStreamAPI.Helper.Streaming;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models.RTMP;
@@ -23,12 +24,18 @@ public class RtmpController : Controller
     private readonly IHubContext<ServerHub, IServerHub> _hub;
     private readonly MainManager _manager;
     private readonly PostgresContext _postgres;
+    private readonly RtmpFileShareManager _rtmpFileShareManager;
 
-    public RtmpController(IHubContext<ServerHub, IServerHub> hub, PostgresContext postgres, MainManager manager)
+    public RtmpController(
+        IHubContext<ServerHub, IServerHub> hub,
+        PostgresContext postgres,
+        MainManager manager,
+        RtmpFileShareManager rtmpFileShareManager)
     {
         _hub = hub;
         _postgres = postgres;
         _manager = manager;
+        _rtmpFileShareManager = rtmpFileShareManager;
     }
 
     [HttpPost("[action]")]
@@ -71,6 +78,12 @@ public class RtmpController : Controller
             var dbUser = _postgres.Users?.FirstOrDefault(x => x.StreamToken != null && x.StreamToken == rtmpData.token);
             var token = dbUser?.StreamToken;
             if (string.IsNullOrEmpty(token) || dbUser.userprivileges < UserPrivileges.Approved) return Unauthorized();
+
+            if (_rtmpFileShareManager.TryConsumeExpectedPublishDone(token, rtmpData.name))
+            {
+                Console.WriteLine($"[RtmpShare/{rtmpData.name}] suppressing transient onpublishdone during managed pause/seek");
+                return Ok();
+            }
 
             var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.id == rtmpData.token);
             if (liveUser == null) return Ok();
