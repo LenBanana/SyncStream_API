@@ -235,6 +235,7 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
   const bitrateK = Math.round(targetBitrate / 1000);
   const seekArgs = startSec > 0.5 ? ['-ss', String(startSec.toFixed(3))] : [];
   const { filterArgs, scaleLabel } = getVideoFilterArgs();
+  const bufferSizeK = bitrateK;
 
   const args = [
     ...seekArgs,
@@ -246,11 +247,14 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
     ...filterArgs,
     '-c:v', 'libvpx',
     '-deadline', 'realtime',
+    '-lag-in-frames', '0',
     '-cpu-used', '16',            // maximum speed for libvpx VP8
     '-threads', '4',
     '-b:v', `${bitrateK}k`,
     '-maxrate', `${bitrateK}k`,
-    '-bufsize', `${bitrateK * 2}k`,
+    // Keep the VBV buffer tight so complex scenes do not burst far above target
+    // bitrate and then destabilize the consumer leg.
+    '-bufsize', `${bufferSizeK}k`,
     '-keyint_min', '60',
     '-g', '60',
     '-pix_fmt', 'yuv420p',
@@ -269,7 +273,7 @@ function spawnFfmpeg({ filePath, startSec, targetBitrate, videoPort, audioPort,
   ];
 
   const proc = spawn(FFMPEG_PATH, args, {stdio: ['ignore', 'ignore', 'pipe']});
-  console.log(`[ffmpeg|${proc.pid}] ${ts()} spawned startSec=${startSec} vPort=${videoPort} aPort=${audioPort} source=${videoSourceLabel} scale=${scaleLabel} audio=${selectedAudioLabel}`);
+  console.log(`[ffmpeg|${proc.pid}] ${ts()} spawned startSec=${startSec} vPort=${videoPort} aPort=${audioPort} source=${videoSourceLabel} scale=${scaleLabel} audio=${selectedAudioLabel} vbv=${bufferSizeK}k lag=0`);
 
   // Log ALL stderr lines for the first 30 (startup + first keyframe), then errors only.
   let stderrCount = 0;
