@@ -32,6 +32,14 @@ public class RtmpFileShareSession
     public double? DurationSec { get; set; }
     /// <summary>The stream token used as RTMP auth query param.</summary>
     public string StreamToken { get; set; } = string.Empty;
+    /// <summary>ffmpeg map specifier for the selected audio track.</summary>
+    public string AudioMapSpecifier { get; set; } = "0:a:0?";
+    /// <summary>Human-readable description of the selected audio track for logs.</summary>
+    public string AudioSelectionLabel { get; set; } = "first audio fallback";
+    /// <summary>Optional ffmpeg video filter fragment that burns a subtitle track into the video.</summary>
+    public string? SubtitleFilter { get; set; }
+    /// <summary>Human-readable description of the selected subtitle track for logs.</summary>
+    public string? SubtitleSelectionLabel { get; set; }
     /// <summary>Number of consecutive unexpected ffmpeg exits since the last explicit start/seek/resume.</summary>
     public int RetryCount { get; set; }
     /// <summary>
