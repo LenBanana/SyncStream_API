@@ -755,8 +755,17 @@ app.post('/rooms/:roomId/recording/stop', async (req, res) => {
 (async () => {
   await startWorkers();
 
-  app.listen(config.httpPort, '0.0.0.0', () => {
-    console.log(`SFU HTTP API listening on port ${config.httpPort}`);
+  // Bind the HTTP control API to loopback only.  Under bridge networking the
+  // port wasn't published, so 0.0.0.0 was effectively private; under host
+  // networking the same bind would expose this unauthenticated control plane
+  // (start/stop streams, kill recordings, create rooms) to the public IP.
+  // Loopback is reachable by the .NET API container via the docker host
+  // gateway (`extra_hosts: host.docker.internal:host-gateway`) and by any
+  // process on the host directly — both legitimate callers — but not from
+  // the Internet.
+  const httpBindAddress = process.env.SFU_HTTP_BIND ?? '127.0.0.1';
+  app.listen(config.httpPort, httpBindAddress, () => {
+    console.log(`SFU HTTP API listening on ${httpBindAddress}:${config.httpPort}`);
     console.log(`Announced IP: ${config.announcedIp}`);
     console.log(`RTC port range: ${config.rtcMinPort}-${config.rtcMaxPort}`);
   });
