@@ -119,11 +119,10 @@ public class RtmpFileShareManager : IDisposable
             UploadId          = uploadId,
             PositionSec       = 0,
             Paused            = false,
-            AudioMapSpecifier = playbackSelection.AudioMapSpecifier,
-            AudioSelectionLabel = playbackSelection.AudioSelectionLabel,
-            SubtitleFilter = playbackSelection.SubtitleFilter,
-            SubtitleSelectionLabel = playbackSelection.SubtitleSelectionLabel,
+            PlaybackPreferences = normalizedPreferences,
         };
+
+        ApplyPlaybackSelection(session, playbackSelection);
 
         _sessions[roomId] = session;
 
@@ -206,6 +205,8 @@ public class RtmpFileShareManager : IDisposable
 
     private void SpawnFfmpeg(RtmpFileShareSession session, double fromPositionSec)
     {
+        RefreshPlaybackSelectionIfNeeded(session);
+
         var seekArg = fromPositionSec > 0.5
             ? $"-ss {fromPositionSec.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)} "
             : string.Empty;
@@ -366,6 +367,40 @@ public class RtmpFileShareManager : IDisposable
         finally { p.Dispose(); }
     }
 
+    private void RefreshPlaybackSelectionIfNeeded(RtmpFileShareSession session)
+    {
+        if (session.PlaybackSelectionResolved)
+            return;
+
+        try
+        {
+            var refreshedSelection = ProbePlaybackSelectionAsync(session.FilePath, session.PlaybackPreferences)
+                .GetAwaiter()
+                .GetResult();
+
+            if (!refreshedSelection.ProbeSucceeded)
+                return;
+
+            ApplyPlaybackSelection(session, refreshedSelection);
+            Console.WriteLine(
+                $"{GetLogPrefix(session.RoomId)} playback selection refreshed " +
+                $"audioTrack=\"{session.AudioSelectionLabel}\" subtitleTrack=\"{session.SubtitleSelectionLabel ?? "none"}\"");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"{GetLogPrefix(session.RoomId)} playback selection refresh failed: {ex.Message}");
+        }
+    }
+
+    private static void ApplyPlaybackSelection(RtmpFileShareSession session, RtmpPlaybackSelection playbackSelection)
+    {
+        session.AudioMapSpecifier = playbackSelection.AudioMapSpecifier;
+        session.AudioSelectionLabel = playbackSelection.AudioSelectionLabel;
+        session.SubtitleFilter = playbackSelection.SubtitleFilter;
+        session.SubtitleSelectionLabel = playbackSelection.SubtitleSelectionLabel;
+        session.PlaybackSelectionResolved = playbackSelection.ProbeSucceeded;
+    }
+
     private static void CleanUpUploadDir(RtmpFileShareSession session)
     {
         var dir = Path.GetDirectoryName(session.FilePath);
@@ -474,6 +509,7 @@ public class RtmpFileShareManager : IDisposable
 
             return new RtmpPlaybackSelection
             {
+                ProbeSucceeded = true,
                 AudioMapSpecifier = audio != null ? $"0:{audio.StreamIndex}" : "0:a:0?",
                 AudioSelectionLabel = audio != null ? DescribeStream(audio) : "first audio fallback",
                 SubtitleFilter = subtitle != null ? BuildSubtitleFilter(filePath, subtitle.SubtitleOrdinal) : null,
@@ -801,6 +837,7 @@ public class RtmpFileShareManager : IDisposable
 
     private sealed class RtmpPlaybackSelection
     {
+        public bool ProbeSucceeded { get; init; }
         public string AudioMapSpecifier { get; init; } = "0:a:0?";
         public string AudioSelectionLabel { get; init; } = "first audio fallback";
         public string? SubtitleFilter { get; init; }

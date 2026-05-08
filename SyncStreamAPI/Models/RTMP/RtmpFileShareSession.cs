@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Collections.Generic;
 
 namespace SyncStreamAPI.Models.RTMP;
 
@@ -40,6 +41,10 @@ public class RtmpFileShareSession
     public string? SubtitleFilter { get; set; }
     /// <summary>Human-readable description of the selected subtitle track for logs.</summary>
     public string? SubtitleSelectionLabel { get; set; }
+    /// <summary>Normalized playback preferences requested by the host for audio/subtitle selection.</summary>
+    public RtmpPlaybackPreferences PlaybackPreferences { get; set; } = new();
+    /// <summary>True once ffprobe successfully read stream metadata and selection no longer relies on a fallback.</summary>
+    public bool PlaybackSelectionResolved { get; set; }
     /// <summary>Number of consecutive unexpected ffmpeg exits since the last explicit start/seek/resume.</summary>
     public int RetryCount { get; set; }
     /// <summary>
