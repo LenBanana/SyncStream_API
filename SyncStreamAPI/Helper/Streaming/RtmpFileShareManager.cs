@@ -38,6 +38,26 @@ public class RtmpFileShareManager : IDisposable
         { "deu", "ger", "de" };
     private static readonly HashSet<string> BurnableSubtitleCodecs = new(StringComparer.OrdinalIgnoreCase)
         { "subrip", "srt", "ass", "ssa", "webvtt", "mov_text", "text" };
+    private static readonly string[] PreferredSubtitleTitleKeywords =
+    {
+        "full subtitles",
+        "full subtitle",
+        "dialogue",
+        "dialog",
+        "english subs",
+        "english subtitles",
+        "subtitles",
+    };
+    private static readonly string[] DeprioritizedSubtitleTitleKeywords =
+    {
+        "episode name",
+        "signs",
+        "songs",
+        "sign/song",
+        "title",
+        "karaoke",
+        "forced",
+    };
 
     private readonly string _rtmpBaseUrl;
     private readonly IHubContext<ServerHub, IServerHub> _hub;
@@ -616,6 +636,7 @@ public class RtmpFileShareManager : IDisposable
 
         return subtitleStreams
             .OrderBy(stream => GetSubtitleLanguagePreferenceRank(stream.Language))
+            .ThenBy(stream => GetSubtitleTitlePreferenceRank(stream.Title))
             .ThenBy(stream => stream.IsDefault ? 0 : 1)
             .ThenBy(stream => stream.IsForced ? 1 : 0)
             .ThenBy(stream => stream.StreamIndex)
@@ -647,6 +668,22 @@ public class RtmpFileShareManager : IDisposable
         if (EnglishLanguages.Contains(language)) return 0;
         if (GermanLanguages.Contains(language)) return 1;
         return 2;
+    }
+
+    private static int GetSubtitleTitlePreferenceRank(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+            return 1;
+
+        var normalizedTitle = title.Trim().ToLowerInvariant();
+
+        if (PreferredSubtitleTitleKeywords.Any(keyword => normalizedTitle.Contains(keyword, StringComparison.OrdinalIgnoreCase)))
+            return 0;
+
+        if (DeprioritizedSubtitleTitleKeywords.Any(keyword => normalizedTitle.Contains(keyword, StringComparison.OrdinalIgnoreCase)))
+            return 2;
+
+        return 1;
     }
 
     private static string GetPreferenceLanguageKey(string language)
