@@ -56,5 +56,5 @@ public partial interface IServerHub
     /// <summary>Sent when a restarted RTMP publisher is live again and clients may reconnect.</summary>
     Task rtmpFileShareStreamReady(double positionSec);
     /// <summary>Sent when the finished upload is ready for normal VOD playback.</summary>
-    Task rtmpFileShareVodReady(string playbackUrl, double? durationSec);
+    Task rtmpFileShareVodReady(string playbackUrl, double? durationSec, string? contentType);
 }

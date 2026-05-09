@@ -578,6 +578,7 @@ public class RoomStreamService : IRoomStreamService
                 var directPlaybackUrl = await TryBuildDirectRoomUploadPlaybackUrlAsync(uploadFilePath, uploadId, session);
                 if (!string.IsNullOrWhiteSpace(directPlaybackUrl))
                 {
+                    var directPlaybackContentType = GetDirectPlaybackContentType(session.FileEnding);
                     session.PlaybackUrl = directPlaybackUrl;
                     session.UpdatedUtc = DateTime.UtcNow;
                     await SaveSessionAsync(session);
@@ -588,9 +589,10 @@ public class RoomStreamService : IRoomStreamService
                         room.RtmpStreamUrl = session.PlaybackUrl;
                         room.RtmpFileShareUsesVodPlayback = true;
                         room.RtmpFileShareUploadId = null;
+                        room.RtmpFileSharePlaybackContentType = directPlaybackContentType;
                         _rtmpFileShareManager.TransitionToVodPlayback(session.UniqueId);
                         await _hub.Clients.Group(session.UniqueId)
-                            .rtmpFileShareVodReady(session.PlaybackUrl, room.RtmpFileShareDurationSec);
+                            .rtmpFileShareVodReady(session.PlaybackUrl, room.RtmpFileShareDurationSec, directPlaybackContentType);
                     }
 
                     return;
@@ -614,9 +616,10 @@ public class RoomStreamService : IRoomStreamService
                             room.RtmpStreamUrl = session.PlaybackUrl;
                             room.RtmpFileShareUsesVodPlayback = true;
                             room.RtmpFileShareUploadId = null;
+                            room.RtmpFileSharePlaybackContentType = "application/x-mpegURL";
                             _rtmpFileShareManager.TransitionToVodPlayback(session.UniqueId);
                             await _hub.Clients.Group(session.UniqueId)
-                                .rtmpFileShareVodReady(session.PlaybackUrl, room.RtmpFileShareDurationSec);
+                                .rtmpFileShareVodReady(session.PlaybackUrl, room.RtmpFileShareDurationSec, room.RtmpFileSharePlaybackContentType);
                         }
                     }
                     else
@@ -897,6 +900,16 @@ public class RoomStreamService : IRoomStreamService
             return null;
 
         return $"{session.BaseUrl}/api/video/roomUploadByToken?uploadId={Uri.EscapeDataString(uploadId)}";
+    }
+
+    private string? GetDirectPlaybackContentType(string fileEnding)
+    {
+        if (string.IsNullOrWhiteSpace(fileEnding))
+            return null;
+
+        return _contentTypeProvider.TryGetContentType($"file{fileEnding}", out var contentType)
+            ? contentType
+            : null;
     }
 
     private static async Task<bool> CanUseDirectPlaybackAsync(string filePath, string fileEnding)

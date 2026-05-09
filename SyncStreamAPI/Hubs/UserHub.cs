@@ -133,7 +133,8 @@ public partial class ServerHub
             {
                 await Clients.Caller.rtmpFileShareVodReady(
                     room.RtmpStreamUrl,
-                    room.RtmpFileShareDurationSec ?? rtmpSession?.DurationSec);
+                    room.RtmpFileShareDurationSec ?? rtmpSession?.DurationSec,
+                    room.RtmpFileSharePlaybackContentType);
             }
 
             if (rtmpSession != null)

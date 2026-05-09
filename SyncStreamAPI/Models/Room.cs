@@ -67,6 +67,8 @@ public class Room
     [NotMapped] public bool RtmpFileShareUsesVodPlayback { get; set; }
     /// <summary>Best-known duration for the active RTMP/VOD share.</summary>
     [NotMapped] public double? RtmpFileShareDurationSec { get; set; }
+    /// <summary>MIME type for the current RTMP/VOD playback URL when known.</summary>
+    [NotMapped] public string? RtmpFileSharePlaybackContentType { get; set; }
 
     /// <summary>
     /// Set of connectionIds that are currently streaming P2P (Discord-style opt-in).

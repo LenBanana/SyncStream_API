@@ -86,6 +86,7 @@ public partial class ServerHub
         room.RtmpFileShareAssetKey  = uploadId;
         room.RtmpFileShareUsesVodPlayback = false;
         room.RtmpFileShareDurationSec = null;
+        room.RtmpFileSharePlaybackContentType = null;
 
         try
         {
@@ -113,6 +114,7 @@ public partial class ServerHub
             room.RtmpFileShareAssetKey  = null;
             room.RtmpFileShareUsesVodPlayback = false;
             room.RtmpFileShareDurationSec = null;
+            room.RtmpFileSharePlaybackContentType = null;
             room.RtmpStreamUrl          = null;
             await Clients.Caller.dialog(new Dialog(AlertType.Danger)
             {
@@ -226,6 +228,7 @@ public partial class ServerHub
         room.RtmpFileShareAssetKey  = null;
         room.RtmpFileShareUsesVodPlayback = false;
         room.RtmpFileShareDurationSec = null;
+        room.RtmpFileSharePlaybackContentType = null;
         room.RtmpStreamUrl          = null;
 
         await Clients.Group(room.uniqueId).rtmpFileShareStopped();
