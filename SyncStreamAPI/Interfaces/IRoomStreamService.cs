@@ -14,8 +14,7 @@ public interface IRoomStreamService
 
     Task<RoomUploadSessionResult> GetRoomUploadStatusAsync(string token, string uploadId);
 
-    Task<RoomUploadSessionResult> CompleteRoomUploadAsync(string token, string uploadId, string scheme,
-        HostString host);
+    Task<RoomUploadSessionResult> CompleteRoomUploadAsync(string token, string uploadId, string publicBaseUrl);
 
     Task<RoomUploadSessionResult> CancelRoomUploadAsync(string token, string uploadId);
 

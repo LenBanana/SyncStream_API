@@ -334,7 +334,7 @@ public class VideoController : Controller
     [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
     public async Task<IActionResult> completeRoomUpload(string token, string uploadId)
     {
-        var result = await _roomStreamService.CompleteRoomUploadAsync(token, uploadId, Request.Scheme, Request.Host);
+        var result = await _roomStreamService.CompleteRoomUploadAsync(token, uploadId, General.GetPublicBaseUrl(Request));
         return StatusCode(result.StatusCode, result);
     }
 

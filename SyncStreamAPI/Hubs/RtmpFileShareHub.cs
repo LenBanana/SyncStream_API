@@ -94,8 +94,9 @@ public partial class ServerHub
                 dbUser.StreamToken, filePath, uploadId, playbackPreferences);
 
             var httpContext = _httpContextAccessor.HttpContext;
-            var streamUrl = httpContext != null
-                ? $"{httpContext.Request.Scheme}://{httpContext.Request.Host}/api/rtmp/liveProxy?stream={Uri.EscapeDataString(dbUser.username.ToLower())}"
+            var publicBaseUrl = General.GetPublicBaseUrl(httpContext?.Request, Configuration);
+            var streamUrl = !string.IsNullOrWhiteSpace(publicBaseUrl)
+                ? $"{publicBaseUrl}/api/rtmp/liveProxy?stream={Uri.EscapeDataString(dbUser.username.ToLower())}"
                 : $"{(Configuration["LiveStreamBaseUrl"]?.TrimEnd('/') ?? "https://live.drecktu.be/live")}?stream={Uri.EscapeDataString(dbUser.username.ToLower())}";
             room.RtmpStreamUrl = streamUrl;
             room.RtmpFileShareDurationSec = session.DurationSec;

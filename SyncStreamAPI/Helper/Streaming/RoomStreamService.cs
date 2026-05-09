@@ -292,8 +292,7 @@ public class RoomStreamService : IRoomStreamService
     public async Task<RoomUploadSessionResult> CompleteRoomUploadAsync(
         string token,
         string uploadId,
-        string scheme,
-        HostString host)
+        string publicBaseUrl)
     {
         var uploadLock = GetUploadLock(uploadId);
         await uploadLock.WaitAsync();
@@ -333,7 +332,7 @@ public class RoomStreamService : IRoomStreamService
                 return ToRoomUploadResult(session, uploadedBytes, StatusCodes.Status409Conflict);
 
             session.State = RoomUploadStates.Processing;
-            session.BaseUrl = $"{scheme}://{host}";
+            session.BaseUrl = string.IsNullOrWhiteSpace(publicBaseUrl) ? null : publicBaseUrl.TrimEnd('/');
             session.UpdatedUtc = DateTime.UtcNow;
             await SaveSessionAsync(session);
 
@@ -488,7 +487,7 @@ public class RoomStreamService : IRoomStreamService
                 };
             }
 
-            var completeResult = await CompleteRoomUploadAsync(token, startResult.UploadId, request.Scheme, request.Host);
+            var completeResult = await CompleteRoomUploadAsync(token, startResult.UploadId, General.GetPublicBaseUrl(request));
             return new StreamToRoomResult
             {
                 StatusCode = completeResult.StatusCode,

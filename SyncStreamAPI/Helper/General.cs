@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -9,6 +10,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
 using HtmlAgilityPack;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.GallowGameWords;
@@ -170,6 +172,52 @@ public static class General
         if (title is { Length: 0 }) title = await YtApiInfo(url, configuration);
 
         return title;
+    }
+
+    public static string GetPublicBaseUrl(HttpRequest? request, IConfiguration? configuration = null)
+    {
+        var configuredBaseUrl = configuration?["PublicBaseUrl"];
+        if (!string.IsNullOrWhiteSpace(configuredBaseUrl))
+            return configuredBaseUrl.TrimEnd('/');
+
+        if (request == null)
+            return string.Empty;
+
+        var forwardedProto = ReadForwardedHeaderValue(request.Headers, "X-Forwarded-Proto");
+        var forwardedHost = ReadForwardedHeaderValue(request.Headers, "X-Forwarded-Host");
+
+        var scheme = !string.IsNullOrWhiteSpace(forwardedProto) ? forwardedProto : request.Scheme;
+        var host = !string.IsNullOrWhiteSpace(forwardedHost) ? forwardedHost : request.Host.Value;
+
+        if (string.IsNullOrWhiteSpace(host))
+            return string.Empty;
+
+        if (string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) && !IsLocalHost(host))
+            scheme = "https";
+
+        return $"{scheme}://{host}".TrimEnd('/');
+    }
+
+    private static string? ReadForwardedHeaderValue(IHeaderDictionary headers, string headerName)
+    {
+        var rawValue = headers[headerName].FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(rawValue))
+            return null;
+
+        return rawValue.Split(',').FirstOrDefault()?.Trim();
+    }
+
+    private static bool IsLocalHost(string host)
+    {
+        var normalizedHost = host.Split(':')[0].Trim();
+        if (string.Equals(normalizedHost, "localhost", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (string.Equals(normalizedHost, "127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(normalizedHost, "::1", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return IPAddress.TryParse(normalizedHost, out var ipAddress) && IPAddress.IsLoopback(ipAddress);
     }
 
     private static string GetYtVideoKey(string url)
