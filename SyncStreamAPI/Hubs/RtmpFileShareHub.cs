@@ -83,6 +83,9 @@ public partial class ServerHub
         room.IsRtmpFileShareActive  = true;
         room.RtmpFileShareInitiator = Context.ConnectionId;
         room.RtmpFileShareUploadId  = uploadId;
+        room.RtmpFileShareAssetKey  = uploadId;
+        room.RtmpFileShareUsesVodPlayback = false;
+        room.RtmpFileShareDurationSec = null;
 
         try
         {
@@ -94,6 +97,7 @@ public partial class ServerHub
             var liveBase = Configuration["LiveStreamBaseUrl"]?.TrimEnd('/') ?? "https://live.drecktu.be/live";
             var streamUrl = $"{liveBase}?stream={Uri.EscapeDataString(dbUser.username.ToLower())}";
             room.RtmpStreamUrl = streamUrl;
+            room.RtmpFileShareDurationSec = session.DurationSec;
 
             await Clients.Group(roomId).rtmpFileShareStarted(
                 Context.ConnectionId, dbUser.username, roomId, streamUrl, session.DurationSec);
@@ -104,6 +108,9 @@ public partial class ServerHub
             room.IsRtmpFileShareActive  = false;
             room.RtmpFileShareInitiator = null;
             room.RtmpFileShareUploadId  = null;
+            room.RtmpFileShareAssetKey  = null;
+            room.RtmpFileShareUsesVodPlayback = false;
+            room.RtmpFileShareDurationSec = null;
             room.RtmpStreamUrl          = null;
             await Clients.Caller.dialog(new Dialog(AlertType.Danger)
             {
@@ -141,9 +148,6 @@ public partial class ServerHub
         var pos = _rtmpFileShareManager.Get(roomId)?.CurrentPositionSec ?? 0;
         var viewers = Clients.GroupExcept(roomId, new[] { Context.ConnectionId });
         await viewers.rtmpFileSharePlayPause(isPlaying, pos);
-
-        if (isPlaying)
-            await viewers.rtmpFileShareSeek(pos);
     }
 
     /// <summary>
@@ -197,6 +201,9 @@ public partial class ServerHub
         var session = _rtmpFileShareManager.Get(room.uniqueId);
         _rtmpFileShareManager.Stop(room.uniqueId);
 
+        if (!string.IsNullOrWhiteSpace(room.RtmpFileShareAssetKey))
+            _roomStreamService.CleanupRoomUploadArtifacts(room.RtmpFileShareAssetKey);
+
         if (session != null)
         {
             var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.id == session.StreamToken);
@@ -214,6 +221,9 @@ public partial class ServerHub
         room.IsRtmpFileShareActive  = false;
         room.RtmpFileShareInitiator = null;
         room.RtmpFileShareUploadId  = null;
+        room.RtmpFileShareAssetKey  = null;
+        room.RtmpFileShareUsesVodPlayback = false;
+        room.RtmpFileShareDurationSec = null;
         room.RtmpStreamUrl          = null;
 
         await Clients.Group(room.uniqueId).rtmpFileShareStopped();

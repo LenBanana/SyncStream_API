@@ -19,6 +19,7 @@ using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.PostgresModels;
+using SyncStreamAPI.ServerData;
 using SyncStreamAPI.ServerData.Helper;
 
 namespace SyncStreamAPI.Helper.Streaming;
@@ -35,17 +36,20 @@ public class RoomStreamService : IRoomStreamService
     private readonly IContentTypeProvider _contentTypeProvider;
     private readonly IHubContext<ServerHub, IServerHub> _hub;
     private readonly PostgresContext _postgres;
+    private readonly RtmpFileShareManager _rtmpFileShareManager;
     private readonly IServiceScopeFactory _scopeFactory;
 
     public RoomStreamService(
         IHubContext<ServerHub, IServerHub> hub,
         PostgresContext postgres,
         IContentTypeProvider contentTypeProvider,
+        RtmpFileShareManager rtmpFileShareManager,
         IServiceScopeFactory scopeFactory)
     {
         _hub = hub;
         _postgres = postgres;
         _contentTypeProvider = contentTypeProvider;
+        _rtmpFileShareManager = rtmpFileShareManager;
         _scopeFactory = scopeFactory;
     }
 
@@ -468,6 +472,15 @@ public class RoomStreamService : IRoomStreamService
         };
     }
 
+    public void CleanupRoomUploadArtifacts(string uploadId)
+    {
+        if (string.IsNullOrWhiteSpace(uploadId))
+            return;
+
+        TryDeleteDirectory(GetUploadDirectory(uploadId));
+        TryDeleteDirectory(Path.Combine(General.TemporaryFilePath, "hls", uploadId));
+    }
+
     private async Task FinalizeRoomUploadAsync(string uploadId)
     {
         var uploadLock = GetUploadLock(uploadId);
@@ -486,13 +499,45 @@ public class RoomStreamService : IRoomStreamService
                 throw new FileNotFoundException("Upload session file could not be found", uploadFilePath);
 
             // For skipPlaylist (early-stream) uploads the file stays at the upload path so ffmpeg
-            // can keep reading it.  No DB record, no file move, no HLS — just mark it complete.
+            // can keep reading it. Once the upload is complete we can prepare HLS assets and
+            // hand the room off to normal VOD playback without adding anything to the playlist.
             if (session.SkipPlaylist)
             {
                 session.State = RoomUploadStates.Ready;
                 session.FileKey = uploadId;
+                session.PlaybackUrl = null;
                 session.UpdatedUtc = DateTime.UtcNow;
                 await SaveSessionAsync(session);
+
+                if (IsVideoExtension(session.FileEnding) && !string.IsNullOrWhiteSpace(session.BaseUrl))
+                {
+                    var hlsDir = Path.Combine(General.TemporaryFilePath, "hls", uploadId);
+                    Directory.CreateDirectory(hlsDir);
+
+                    var hlsSucceeded = await GenerateHlsFromFileAsync(uploadFilePath, hlsDir, uploadId);
+                    if (hlsSucceeded)
+                    {
+                        session.PlaybackUrl = $"{session.BaseUrl}/api/video/hlsSegment/{uploadId}/stream.m3u8";
+                        session.UpdatedUtc = DateTime.UtcNow;
+                        await SaveSessionAsync(session);
+
+                        var room = MainManager.GetRoom(session.UniqueId);
+                        if (room != null && room.IsRtmpFileShareActive && room.RtmpFileShareAssetKey == uploadId)
+                        {
+                            room.RtmpStreamUrl = session.PlaybackUrl;
+                            room.RtmpFileShareUsesVodPlayback = true;
+                            room.RtmpFileShareUploadId = null;
+                            _rtmpFileShareManager.TransitionToVodPlayback(session.UniqueId);
+                            await _hub.Clients.Group(session.UniqueId)
+                                .rtmpFileShareVodReady(session.PlaybackUrl, room.RtmpFileShareDurationSec);
+                        }
+                    }
+                    else
+                    {
+                        TryDeleteDirectory(hlsDir);
+                    }
+                }
+
                 return;
             }
 

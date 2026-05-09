@@ -30,15 +30,18 @@ public partial class ServerHub : Hub<IServerHub>
 
     private readonly WebRtcSfuManager _webRtcSfuManager;
     private readonly PostgresContext _postgres;
+    private readonly IRoomStreamService _roomStreamService;
 
     public ServerHub(IConfiguration configuration, MainManager manager, PostgresContext postgres,
         GallowGameManager gallowGameManager, BlackjackManager blackjackManager,
-        WebRtcSfuManager webRtcSfuManager, RtmpFileShareManager rtmpFileShareManager)
+        WebRtcSfuManager webRtcSfuManager, RtmpFileShareManager rtmpFileShareManager,
+        IRoomStreamService roomStreamService)
     {
         Configuration = configuration;
         _manager = manager;
         _webRtcSfuManager = webRtcSfuManager;
         _rtmpFileShareManager = rtmpFileShareManager;
+        _roomStreamService = roomStreamService;
         _postgres = postgres;
         _gallowGameManager = gallowGameManager;
         _blackjackManager = blackjackManager;

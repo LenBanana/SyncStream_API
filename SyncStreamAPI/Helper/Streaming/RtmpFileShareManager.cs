@@ -13,6 +13,7 @@ using SyncStreamAPI.Helper;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models.RTMP;
+using SyncStreamAPI.ServerData;
 
 namespace SyncStreamAPI.Helper.Streaming;
 
@@ -152,7 +153,11 @@ public class RtmpFileShareManager : IDisposable
             try
             {
                 session.DurationSec = await ProbeFileDurationAsync(filePath);
+                var room = MainManager.GetRoom(roomId);
+                if (room != null)
+                    room.RtmpFileShareDurationSec = session.DurationSec;
                 Console.WriteLine($"{GetLogPrefix(roomId)} durationProbe durationSec={(session.DurationSec?.ToString("F3", System.Globalization.CultureInfo.InvariantCulture) ?? "unknown")}");
+                await _hub.Clients.Group(roomId).rtmpFileShareMetadata(session.DurationSec, string.IsNullOrWhiteSpace(session.UploadId));
             }
             catch (Exception ex)
             {
@@ -207,7 +212,8 @@ public class RtmpFileShareManager : IDisposable
         if (!_sessions.TryRemove(roomId, out var session)) return false;
         Console.WriteLine($"{GetLogPrefix(roomId)} stop requested finalPositionSec={session.CurrentPositionSec:F3} retries={session.RetryCount}");
         KillFfmpeg(session);
-        CleanUpUploadDir(session);
+        if (!session.PreserveUploadArtifacts)
+            CleanUpUploadDir(session);
         return true;
     }
 
@@ -217,8 +223,45 @@ public class RtmpFileShareManager : IDisposable
         if (_sessions.TryGetValue(roomId, out var session) && session.UploadId == uploadId)
         {
             session.UploadId = null;
+            var room = MainManager.GetRoom(roomId);
+            if (room != null)
+                room.RtmpFileShareDurationSec = session.DurationSec;
             Console.WriteLine($"{GetLogPrefix(roomId)} upload completed uploadId={uploadId}");
+            _ = _hub.Clients.Group(roomId).rtmpFileShareMetadata(session.DurationSec, canSeek: true);
         }
+    }
+
+    public bool TransitionToVodPlayback(string roomId)
+    {
+        if (!_sessions.TryGetValue(roomId, out var session))
+            return false;
+
+        session.PreserveUploadArtifacts = true;
+        RegisterExpectedPublisherDisconnect(session);
+        KillFfmpeg(session);
+        session.Paused = true;
+        return true;
+    }
+
+    public bool TryMarkPublisherLive(string streamToken, string streamName, out string roomId, out double positionSec)
+    {
+        foreach (var session in _sessions.Values)
+        {
+            if (session.StreamToken != streamToken ||
+                !string.Equals(session.OwnerUsername, streamName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            session.IsPublisherLive = true;
+            roomId = session.RoomId;
+            positionSec = session.CurrentPositionSec;
+            return true;
+        }
+
+        roomId = string.Empty;
+        positionSec = 0;
+        return false;
     }
 
     // ── ffmpeg process management ─────────────────────────────────────────────
@@ -253,6 +296,10 @@ public class RtmpFileShareManager : IDisposable
             $"{GetLogPrefix(session.RoomId)} spawn ffmpeg seek={fromPositionSec:F3}s widthCap={_maxVideoWidth} preset={_videoPreset} " +
             $"video={_videoBitrateKbps}/{_maxVideoBitrateKbps}k audio={_audioBitrateKbps}k " +
             $"audioTrack=\"{session.AudioSelectionLabel}\" subtitleTrack=\"{session.SubtitleSelectionLabel ?? "none"}\"");
+
+        session.IsPublisherLive = false;
+        session.LastEncoderOutTimeSec = 0;
+        session.LastEncoderProgressAtUtc = null;
 
         var progressFields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -374,6 +421,9 @@ public class RtmpFileShareManager : IDisposable
         // Save position before killing so seek/pause resume from the right offset.
         session.PositionSec = session.CurrentPositionSec;
         session.Process = null;
+        session.IsPublisherLive = false;
+        session.LastEncoderOutTimeSec = 0;
+        session.LastEncoderProgressAtUtc = null;
         Console.WriteLine($"{GetLogPrefix(session.RoomId)} kill ffmpeg savedPositionSec={session.PositionSec:F3}");
         try
         {
@@ -825,6 +875,11 @@ public class RtmpFileShareManager : IDisposable
         var dupFrames = ParseInt(progressFields, "dup_frames");
         var dropFrames = ParseInt(progressFields, "drop_frames");
         var outTimeSec = ParseOutTimeSeconds(progressFields);
+        if (outTimeSec.HasValue)
+        {
+            session.LastEncoderOutTimeSec = Math.Max(session.LastEncoderOutTimeSec, outTimeSec.Value);
+            session.LastEncoderProgressAtUtc = DateTime.UtcNow;
+        }
         var elapsedSec = Math.Max(0, (DateTime.UtcNow - session.StartedAtUtc).TotalSeconds);
         var wallClockDriftSec = outTimeSec.HasValue ? elapsedSec - outTimeSec.Value : (double?)null;
 

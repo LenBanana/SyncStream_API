@@ -51,4 +51,10 @@ public partial interface IServerHub
     Task rtmpFileShareSeek(double positionSec);
     /// <summary>Periodic position broadcast so viewers can sync their seek bar.</summary>
     Task rtmpFileSharePosition(double positionSec);
+    /// <summary>Sent when RTMP file-share metadata changes, e.g. duration probe or seek availability.</summary>
+    Task rtmpFileShareMetadata(double? durationSec, bool canSeek);
+    /// <summary>Sent when a restarted RTMP publisher is live again and clients may reconnect.</summary>
+    Task rtmpFileShareStreamReady(double positionSec);
+    /// <summary>Sent when the finished upload is ready for normal VOD playback.</summary>
+    Task rtmpFileShareVodReady(string playbackUrl, double? durationSec);
 }

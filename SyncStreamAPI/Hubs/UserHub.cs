@@ -109,6 +109,39 @@ public partial class ServerHub
             // P2P (Discord-style): do NOT auto-join — the user list shows who is streaming
             // and the viewer can choose to watch by clicking the user's streaming indicator.
         }
+
+        if (room.IsRtmpFileShareActive && !string.IsNullOrWhiteSpace(room.RtmpStreamUrl))
+        {
+            var rtmpSession = _rtmpFileShareManager.Get(room.uniqueId);
+            var rtmpSharer = room.server.members.FirstOrDefault(member => member?.ConnectionId == room.RtmpFileShareInitiator);
+
+            await Clients.Caller.rtmpFileShareStarted(
+                room.RtmpFileShareInitiator ?? string.Empty,
+                rtmpSharer?.username ?? string.Empty,
+                room.uniqueId,
+                room.RtmpStreamUrl,
+                room.RtmpFileShareDurationSec ?? rtmpSession?.DurationSec);
+
+            await Clients.Caller.rtmpFileShareMetadata(
+                room.RtmpFileShareDurationSec ?? rtmpSession?.DurationSec,
+                room.RtmpFileShareUsesVodPlayback || string.IsNullOrWhiteSpace(room.RtmpFileShareUploadId));
+
+            if (room.RtmpFileShareUsesVodPlayback)
+            {
+                await Clients.Caller.rtmpFileShareVodReady(
+                    room.RtmpStreamUrl,
+                    room.RtmpFileShareDurationSec ?? rtmpSession?.DurationSec);
+            }
+
+            if (rtmpSession != null)
+            {
+                if (rtmpSession.Paused)
+                    await Clients.Caller.rtmpFileSharePlayPause(false, rtmpSession.CurrentPositionSec);
+                else
+                    await Clients.Caller.rtmpFileSharePosition(rtmpSession.CurrentPositionSec);
+            }
+        }
+
         if (mainServer.playlist.Count > 0) await Clients.Caller.playlistupdate(mainServer.playlist);
     }
 

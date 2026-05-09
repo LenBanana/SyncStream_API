@@ -23,6 +23,8 @@ public interface IRoomStreamService
         string fileEnding);
 
     HlsSegmentResult GetHlsSegment(string fileKey, string fileName);
+
+    void CleanupRoomUploadArtifacts(string uploadId);
 }
 
 public class RoomUploadSessionResult

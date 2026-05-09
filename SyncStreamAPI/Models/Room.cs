@@ -59,8 +59,14 @@ public class Room
     [NotMapped] public string? RtmpFileShareInitiator { get; set; }
     /// <summary>uploadId that is still being chunked; null once the upload is finalised.</summary>
     [NotMapped] public string? RtmpFileShareUploadId { get; set; }
+    /// <summary>Stable asset key for the active RTMP share, used for HLS handoff and cleanup.</summary>
+    [NotMapped] public string? RtmpFileShareAssetKey { get; set; }
     /// <summary>HLS/FLV stream URL broadcast to late-joining viewers.</summary>
     [NotMapped] public string? RtmpStreamUrl { get; set; }
+    /// <summary>True once the room has switched from RTMP transport to VOD playback.</summary>
+    [NotMapped] public bool RtmpFileShareUsesVodPlayback { get; set; }
+    /// <summary>Best-known duration for the active RTMP/VOD share.</summary>
+    [NotMapped] public double? RtmpFileShareDurationSec { get; set; }
 
     /// <summary>
     /// Set of connectionIds that are currently streaming P2P (Discord-style opt-in).

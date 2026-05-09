@@ -60,6 +60,10 @@ public class RtmpController : Controller
                 await _hub.Clients.Groups(General.BottedInGroupName)
                     .getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
             }
+
+            if (_rtmpFileShareManager.TryMarkPublisherLive(token, rtmpData.name, out var roomId, out var positionSec))
+                await _hub.Clients.Group(roomId).rtmpFileShareStreamReady(positionSec);
+
             return Ok();
         }
         catch (Exception ex)

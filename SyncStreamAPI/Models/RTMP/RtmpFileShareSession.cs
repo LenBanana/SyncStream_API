@@ -52,6 +52,14 @@ public class RtmpFileShareSession
     /// distinguish a managed restart from a real stream end.
     /// </summary>
     public int PendingPublisherDisconnects { get; set; }
+    /// <summary>Skip upload-dir cleanup once the share has handed off to VOD playback.</summary>
+    public bool PreserveUploadArtifacts { get; set; }
+    /// <summary>Latest ffmpeg out_time value in seconds for the current process lifetime.</summary>
+    public double LastEncoderOutTimeSec { get; set; }
+    /// <summary>UTC time when <see cref="LastEncoderOutTimeSec"/> was last refreshed.</summary>
+    public DateTime? LastEncoderProgressAtUtc { get; set; }
+    /// <summary>True once nginx-rtmp has accepted the current publisher instance.</summary>
+    public bool IsPublisherLive { get; set; }
     /// <summary>
     /// True for MP4/MOV files: ffmpeg cannot open them until the moov atom is present,
     /// so we defer spawning until a qt-faststart remux completes after upload finishes.
@@ -71,6 +79,13 @@ public class RtmpFileShareSession
         {
             if (Paused || Process == null)
                 return PositionSec;
+
+            if (LastEncoderProgressAtUtc.HasValue)
+            {
+                var encoderWallClockAdvance = Math.Max(0, (DateTime.UtcNow - LastEncoderProgressAtUtc.Value).TotalSeconds);
+                return PositionSec + LastEncoderOutTimeSec + Math.Min(encoderWallClockAdvance, 1.5d);
+            }
+
             return PositionSec + (DateTime.UtcNow - StartedAtUtc).TotalSeconds;
         }
     }
