@@ -231,13 +231,13 @@ public class RoomManager
         switch (room.GameMode)
         {
             case GameMode.Blackjack:
-                await hub.Clients.Group(room.uniqueId).playertype(PlayerType.Blackjack);
+                if (sendToUsers) await hub.Clients.Group(room.uniqueId).playertype(PlayerType.Blackjack);
                 return PlayerType.Blackjack;
             case GameMode.Chess:
-                await hub.Clients.Group(room.uniqueId).playertype(PlayerType.Chess);
+                if (sendToUsers) await hub.Clients.Group(room.uniqueId).playertype(PlayerType.Chess);
                 return PlayerType.Chess;
             case GameMode.Gallows:
-                await hub.Clients.Group(room.uniqueId).playertype(PlayerType.WhiteBoard);
+                if (sendToUsers) await hub.Clients.Group(room.uniqueId).playertype(PlayerType.WhiteBoard);
                 return PlayerType.WhiteBoard;
         }
         

@@ -93,8 +93,11 @@ public partial class ServerHub
         }
 
         await Clients.Caller.hostupdate(newMember.ishost);
-        var type = await RoomManager.SendPlayerType(room);
-        if (type != PlayerType.Nothing && mainServer.playlist.Count > 0)
+        var type = await RoomManager.SendPlayerType(room, sendToUsers: false);
+        await Clients.Caller.playertype(type);
+        if (type != PlayerType.Nothing && !string.IsNullOrWhiteSpace(mainServer.currentVideo?.url) && !mainServer.currentVideo.ended)
+            await Clients.Caller.videoupdate(mainServer.currentVideo);
+        else if (type != PlayerType.Nothing && mainServer.playlist.Count > 0)
             await Clients.Caller.videoupdate(mainServer.playlist[0]);
 
         await Clients.Caller.isplayingupdate(mainServer.isplaying);
