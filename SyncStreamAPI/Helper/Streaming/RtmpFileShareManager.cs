@@ -184,9 +184,9 @@ public class RtmpFileShareManager : IDisposable
         }
         else if (!isPlaying && !session.Paused)
         {
-            session.Paused = true;
             RegisterExpectedPublisherDisconnect(session);
             KillFfmpeg(session);
+            session.Paused = true;
         }
         return Task.CompletedTask;
     }
