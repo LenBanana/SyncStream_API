@@ -1,11 +1,15 @@
 ﻿using System;
+using System.Net.Http;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Net.Http.Headers;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Helper.Streaming;
@@ -21,21 +25,75 @@ namespace SyncStreamAPI.Controllers;
 [Route("api/rtmp")]
 public class RtmpController : Controller
 {
+    private static readonly HttpClient LiveProxyClient = new(new SocketsHttpHandler
+    {
+        AllowAutoRedirect = false,
+        AutomaticDecompression = System.Net.DecompressionMethods.None,
+        UseProxy = false,
+    })
+    {
+        Timeout = System.Threading.Timeout.InfiniteTimeSpan,
+    };
+
+    private readonly IConfiguration _configuration;
     private readonly IHubContext<ServerHub, IServerHub> _hub;
     private readonly MainManager _manager;
     private readonly PostgresContext _postgres;
     private readonly RtmpFileShareManager _rtmpFileShareManager;
 
     public RtmpController(
+        IConfiguration configuration,
         IHubContext<ServerHub, IServerHub> hub,
         PostgresContext postgres,
         MainManager manager,
         RtmpFileShareManager rtmpFileShareManager)
     {
+        _configuration = configuration;
         _hub = hub;
         _postgres = postgres;
         _manager = manager;
         _rtmpFileShareManager = rtmpFileShareManager;
+    }
+
+    [HttpGet("[action]")]
+    public async Task<IActionResult> liveProxy([FromQuery] string stream, [FromQuery] string token)
+    {
+        if (string.IsNullOrWhiteSpace(stream) || string.IsNullOrWhiteSpace(token))
+            return BadRequest("Missing required stream parameters");
+
+        try
+        {
+            var liveBase = _configuration["LiveStreamBaseUrl"]?.TrimEnd('/') ?? "https://live.drecktu.be/live";
+            var targetUrl = liveBase + Request.QueryString;
+
+            using var upstreamRequest = new HttpRequestMessage(HttpMethod.Get, targetUrl);
+            using var upstreamResponse = await LiveProxyClient.SendAsync(
+                upstreamRequest,
+                HttpCompletionOption.ResponseHeadersRead,
+                HttpContext.RequestAborted);
+
+            if (!upstreamResponse.IsSuccessStatusCode)
+                return StatusCode((int)upstreamResponse.StatusCode);
+
+            HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+            Response.ContentType = upstreamResponse.Content.Headers.ContentType?.ToString() ?? "video/x-flv";
+            Response.Headers[HeaderNames.CacheControl] = "no-store, no-cache, must-revalidate";
+            Response.Headers[HeaderNames.Pragma] = "no-cache";
+            Response.Headers[HeaderNames.Expires] = "0";
+
+            await using var upstreamStream = await upstreamResponse.Content.ReadAsStreamAsync(HttpContext.RequestAborted);
+            await upstreamStream.CopyToAsync(Response.Body, HttpContext.RequestAborted);
+            return new EmptyResult();
+        }
+        catch (OperationCanceledException)
+        {
+            return new EmptyResult();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"RTMP liveProxy failed: {ex}");
+            return StatusCode(StatusCodes.Status502BadGateway);
+        }
     }
 
     [HttpPost("[action]")]

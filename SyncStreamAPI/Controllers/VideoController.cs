@@ -105,6 +105,49 @@ public class VideoController : Controller
     }
 
     [HttpGet("[action]")]
+    public async Task<IActionResult> roomUploadByToken(string uploadId, string? token)
+    {
+        try
+        {
+            var dbUser = _postgres.Users?
+                .Include(x => x.RememberTokens)
+                .FirstOrDefault(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
+            if (dbUser == null)
+                return Unauthorized("You do not have permissions to view this content");
+
+            var asset = await _roomStreamService.GetRoomUploadPlaybackAssetAsync(uploadId);
+            if (asset.StatusCode != StatusCodes.Status200OK || string.IsNullOrWhiteSpace(asset.FilePath))
+            {
+                return StatusCode(
+                    asset.StatusCode == 0 ? StatusCodes.Status404NotFound : asset.StatusCode,
+                    asset.ErrorMessage ?? "The requested upload could not be found");
+            }
+
+            Response.Headers[HeaderNames.XContentTypeOptions] = "nosniff";
+            Response.Headers[HeaderNames.CacheControl] = "no-store, no-cache, must-revalidate";
+            Response.Headers[HeaderNames.Pragma] = "no-cache";
+
+            var fileName = string.IsNullOrWhiteSpace(asset.FileName) ? uploadId : asset.FileName;
+            var contentDisposition = new ContentDispositionHeaderValue("inline");
+            contentDisposition.SetHttpFileName(fileName);
+            Response.Headers[HeaderNames.ContentDisposition] = contentDisposition.ToString();
+
+            var fileStream = System.IO.File.OpenRead(asset.FilePath);
+            return new FileStreamResult(fileStream, asset.ContentType ?? "application/octet-stream")
+            {
+                EnableRangeProcessing = true,
+                LastModified = System.IO.File.GetLastWriteTimeUtc(asset.FilePath)
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                "An error occurred while processing the request");
+        }
+    }
+
+    [HttpGet("[action]")]
     [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token,
         TokenPosition = 1)]
     public async Task<IActionResult> getYoutubeQuality(string url, string token)

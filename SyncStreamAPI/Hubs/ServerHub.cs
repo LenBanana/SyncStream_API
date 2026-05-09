@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Cors;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using SyncStreamAPI.Annotations;
@@ -29,17 +30,19 @@ public partial class ServerHub : Hub<IServerHub>
     private readonly MainManager _manager;
 
     private readonly WebRtcSfuManager _webRtcSfuManager;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly PostgresContext _postgres;
     private readonly IRoomStreamService _roomStreamService;
 
     public ServerHub(IConfiguration configuration, MainManager manager, PostgresContext postgres,
         GallowGameManager gallowGameManager, BlackjackManager blackjackManager,
         WebRtcSfuManager webRtcSfuManager, RtmpFileShareManager rtmpFileShareManager,
-        IRoomStreamService roomStreamService)
+        IRoomStreamService roomStreamService, IHttpContextAccessor httpContextAccessor)
     {
         Configuration = configuration;
         _manager = manager;
         _webRtcSfuManager = webRtcSfuManager;
+        _httpContextAccessor = httpContextAccessor;
         _rtmpFileShareManager = rtmpFileShareManager;
         _roomStreamService = roomStreamService;
         _postgres = postgres;

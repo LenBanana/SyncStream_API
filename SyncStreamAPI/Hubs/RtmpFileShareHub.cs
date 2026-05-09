@@ -93,9 +93,10 @@ public partial class ServerHub
                 roomId, Context.ConnectionId, dbUser.ID, dbUser.username,
                 dbUser.StreamToken, filePath, uploadId, playbackPreferences);
 
-            // Build the viewer HLS/FLV URL using the same format as the live-stream view.
-            var liveBase = Configuration["LiveStreamBaseUrl"]?.TrimEnd('/') ?? "https://live.drecktu.be/live";
-            var streamUrl = $"{liveBase}?stream={Uri.EscapeDataString(dbUser.username.ToLower())}";
+            var httpContext = _httpContextAccessor.HttpContext;
+            var streamUrl = httpContext != null
+                ? $"{httpContext.Request.Scheme}://{httpContext.Request.Host}/api/rtmp/liveProxy?stream={Uri.EscapeDataString(dbUser.username.ToLower())}"
+                : $"{(Configuration["LiveStreamBaseUrl"]?.TrimEnd('/') ?? "https://live.drecktu.be/live")}?stream={Uri.EscapeDataString(dbUser.username.ToLower())}";
             room.RtmpStreamUrl = streamUrl;
             room.RtmpFileShareDurationSec = session.DurationSec;
 

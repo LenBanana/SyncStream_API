@@ -22,6 +22,8 @@ public interface IRoomStreamService
     Task<StreamToRoomResult> StreamToRoomAsync(HttpRequest request, string token, string uniqueId, string name,
         string fileEnding);
 
+    Task<RoomUploadPlaybackAssetResult> GetRoomUploadPlaybackAssetAsync(string uploadId);
+
     HlsSegmentResult GetHlsSegment(string fileKey, string fileName);
 
     void CleanupRoomUploadArtifacts(string uploadId);
@@ -45,6 +47,15 @@ public class StreamToRoomResult
     public int StatusCode { get; init; }
     public string? ErrorMessage { get; init; }
     public string? FileKey { get; init; }
+}
+
+public class RoomUploadPlaybackAssetResult
+{
+    public int StatusCode { get; init; }
+    public string? ErrorMessage { get; init; }
+    public string? FilePath { get; init; }
+    public string? FileName { get; init; }
+    public string? ContentType { get; init; }
 }
 
 public class HlsSegmentResult

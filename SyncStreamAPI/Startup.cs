@@ -81,6 +81,7 @@ public class Startup
                 .AllowAnyHeader()
                 .AllowCredentials();
         }));
+        services.AddHttpContextAccessor();
         services.AddSignalR(options => { options.EnableDetailedErrors = false; }).AddNewtonsoftJsonProtocol();
         services.AddSingleton(provider =>
         {

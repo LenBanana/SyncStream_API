@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -28,6 +29,15 @@ public class RoomStreamService : IRoomStreamService
 {
     private const int DefaultRoomUploadChunkSize = 8 * 1024 * 1024;
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> UploadLocks = new();
+    private static readonly HashSet<string> DirectMp4VideoCodecs = new(StringComparer.OrdinalIgnoreCase) { "h264" };
+    private static readonly HashSet<string> DirectMp4AudioCodecs = new(StringComparer.OrdinalIgnoreCase) { "aac", "mp3", "mp2" };
+    private static readonly HashSet<string> DirectWebmVideoCodecs = new(StringComparer.OrdinalIgnoreCase) { "vp8", "vp9", "av1" };
+    private static readonly HashSet<string> DirectWebmAudioCodecs = new(StringComparer.OrdinalIgnoreCase) { "opus", "vorbis" };
+    private static readonly HashSet<string> DirectMp3AudioCodecs = new(StringComparer.OrdinalIgnoreCase) { "mp3" };
+    private static readonly HashSet<string> DirectAacAudioCodecs = new(StringComparer.OrdinalIgnoreCase) { "aac" };
+    private static readonly HashSet<string> DirectOggAudioCodecs = new(StringComparer.OrdinalIgnoreCase) { "opus", "vorbis" };
+    private static readonly HashSet<string> DirectWavAudioCodecs = new(StringComparer.OrdinalIgnoreCase)
+        { "pcm_s16le", "pcm_s24le", "pcm_s32le", "pcm_u8", "pcm_f32le", "pcm_f64le" };
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true
@@ -382,6 +392,63 @@ public class RoomStreamService : IRoomStreamService
         }
     }
 
+    public async Task<RoomUploadPlaybackAssetResult> GetRoomUploadPlaybackAssetAsync(string uploadId)
+    {
+        try
+        {
+            var session = await LoadSessionAsync(uploadId);
+            if (session == null)
+            {
+                return new RoomUploadPlaybackAssetResult
+                {
+                    StatusCode = StatusCodes.Status404NotFound,
+                    ErrorMessage = "Upload session not found"
+                };
+            }
+
+            if (session.State != RoomUploadStates.Ready)
+            {
+                return new RoomUploadPlaybackAssetResult
+                {
+                    StatusCode = StatusCodes.Status409Conflict,
+                    ErrorMessage = "Upload is not ready for direct playback"
+                };
+            }
+
+            var filePath = GetUploadDataPath(uploadId);
+            if (!System.IO.File.Exists(filePath))
+            {
+                return new RoomUploadPlaybackAssetResult
+                {
+                    StatusCode = StatusCodes.Status404NotFound,
+                    ErrorMessage = "Upload media file not found"
+                };
+            }
+
+            if (!_contentTypeProvider.TryGetContentType($"file{session.FileEnding}", out var contentType))
+                contentType = "application/octet-stream";
+
+            return new RoomUploadPlaybackAssetResult
+            {
+                StatusCode = StatusCodes.Status200OK,
+                FilePath = filePath,
+                FileName = session.FileName.EndsWith(session.FileEnding, StringComparison.OrdinalIgnoreCase)
+                    ? session.FileName
+                    : session.FileName + session.FileEnding,
+                ContentType = contentType
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            return new RoomUploadPlaybackAssetResult
+            {
+                StatusCode = StatusCodes.Status500InternalServerError,
+                ErrorMessage = "Could not read the completed upload"
+            };
+        }
+    }
+
     public async Task<StreamToRoomResult> StreamToRoomAsync(
         HttpRequest request,
         string token,
@@ -508,6 +575,27 @@ public class RoomStreamService : IRoomStreamService
                 session.PlaybackUrl = null;
                 session.UpdatedUtc = DateTime.UtcNow;
                 await SaveSessionAsync(session);
+
+                var directPlaybackUrl = await TryBuildDirectRoomUploadPlaybackUrlAsync(uploadFilePath, uploadId, session);
+                if (!string.IsNullOrWhiteSpace(directPlaybackUrl))
+                {
+                    session.PlaybackUrl = directPlaybackUrl;
+                    session.UpdatedUtc = DateTime.UtcNow;
+                    await SaveSessionAsync(session);
+
+                    var room = MainManager.GetRoom(session.UniqueId);
+                    if (room != null && room.IsRtmpFileShareActive && room.RtmpFileShareAssetKey == uploadId)
+                    {
+                        room.RtmpStreamUrl = session.PlaybackUrl;
+                        room.RtmpFileShareUsesVodPlayback = true;
+                        room.RtmpFileShareUploadId = null;
+                        _rtmpFileShareManager.TransitionToVodPlayback(session.UniqueId);
+                        await _hub.Clients.Group(session.UniqueId)
+                            .rtmpFileShareVodReady(session.PlaybackUrl, room.RtmpFileShareDurationSec);
+                    }
+
+                    return;
+                }
 
                 if (IsVideoExtension(session.FileEnding) && !string.IsNullOrWhiteSpace(session.BaseUrl))
                 {
@@ -797,6 +885,126 @@ public class RoomStreamService : IRoomStreamService
         Console.WriteLine($"[HLS {step} {fileKey}] exit={process.ExitCode}");
     }
 
+    private async Task<string?> TryBuildDirectRoomUploadPlaybackUrlAsync(
+        string uploadFilePath,
+        string uploadId,
+        RoomUploadSessionState session)
+    {
+        if (string.IsNullOrWhiteSpace(session.BaseUrl))
+            return null;
+
+        var canUseDirectPlayback = await CanUseDirectPlaybackAsync(uploadFilePath, session.FileEnding);
+        if (!canUseDirectPlayback)
+            return null;
+
+        return $"{session.BaseUrl}/api/video/roomUploadByToken?uploadId={Uri.EscapeDataString(uploadId)}";
+    }
+
+    private static async Task<bool> CanUseDirectPlaybackAsync(string filePath, string fileEnding)
+    {
+        var streams = await ProbeStreamCodecsAsync(filePath);
+        if (streams.Count == 0)
+            return false;
+
+        var normalizedExtension = (fileEnding ?? string.Empty).Trim().ToLowerInvariant();
+        var videoCodecs = streams
+            .Where(stream => string.Equals(stream.CodecType, "video", StringComparison.OrdinalIgnoreCase))
+            .Select(stream => stream.CodecName)
+            .Where(codec => !string.IsNullOrWhiteSpace(codec))
+            .ToList();
+        var audioCodecs = streams
+            .Where(stream => string.Equals(stream.CodecType, "audio", StringComparison.OrdinalIgnoreCase))
+            .Select(stream => stream.CodecName)
+            .Where(codec => !string.IsNullOrWhiteSpace(codec))
+            .ToList();
+
+        var isSupported = normalizedExtension switch
+        {
+            ".mp4" or ".m4v" or ".mov" =>
+                AllCodecsSupported(videoCodecs, DirectMp4VideoCodecs) &&
+                AllCodecsSupported(audioCodecs, DirectMp4AudioCodecs),
+            ".webm" =>
+                AllCodecsSupported(videoCodecs, DirectWebmVideoCodecs) &&
+                AllCodecsSupported(audioCodecs, DirectWebmAudioCodecs),
+            ".mp3" =>
+                videoCodecs.Count == 0 && AllCodecsSupported(audioCodecs, DirectMp3AudioCodecs),
+            ".m4a" or ".aac" =>
+                videoCodecs.Count == 0 && AllCodecsSupported(audioCodecs, DirectAacAudioCodecs),
+            ".ogg" or ".oga" =>
+                videoCodecs.Count == 0 && AllCodecsSupported(audioCodecs, DirectOggAudioCodecs),
+            ".wav" =>
+                videoCodecs.Count == 0 && AllCodecsSupported(audioCodecs, DirectWavAudioCodecs),
+            _ => false,
+        };
+
+        Console.WriteLine(
+            $"[RoomUpload/Direct] directPlaybackCandidate extension={normalizedExtension} " +
+            $"video=[{string.Join(",", videoCodecs)}] audio=[{string.Join(",", audioCodecs)}] supported={isSupported}");
+
+        return isSupported;
+    }
+
+    private static bool AllCodecsSupported(IReadOnlyCollection<string> codecs, HashSet<string> supportedCodecs)
+        => codecs.Count == 0 || codecs.All(codec => supportedCodecs.Contains(codec));
+
+    private static async Task<List<PlaybackProbeStream>> ProbeStreamCodecsAsync(string filePath)
+    {
+        try
+        {
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = General.GetFFprobePath(),
+                    Arguments = $"-v error -print_format json -show_entries stream=codec_type,codec_name \"{filePath}\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                }
+            };
+
+            process.Start();
+            var stdout = await process.StandardOutput.ReadToEndAsync();
+            var stderr = await process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            if (process.ExitCode != 0 || string.IsNullOrWhiteSpace(stdout))
+            {
+                Console.WriteLine(
+                    $"[RoomUpload/Probe] ffprobe failed exitCode={process.ExitCode} stdoutEmpty={string.IsNullOrWhiteSpace(stdout)} stderr=\"{TrimForLog(stderr, 300)}\"");
+                return new List<PlaybackProbeStream>();
+            }
+
+            var streams = JsonNode.Parse(stdout)?["streams"]?.AsArray();
+            if (streams == null)
+                return new List<PlaybackProbeStream>();
+
+            return streams
+                .Select(stream => new PlaybackProbeStream
+                {
+                    CodecType = stream?["codec_type"]?.GetValue<string>() ?? string.Empty,
+                    CodecName = stream?["codec_name"]?.GetValue<string>() ?? string.Empty,
+                })
+                .Where(stream => !string.IsNullOrWhiteSpace(stream.CodecType) && !string.IsNullOrWhiteSpace(stream.CodecName))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[RoomUpload/Probe] ffprobe playback probe failed: {ex.Message}");
+            return new List<PlaybackProbeStream>();
+        }
+    }
+
+    private static string TrimForLog(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return string.Empty;
+
+        var trimmed = value.Trim();
+        return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength] + "...";
+    }
+
     private static bool HasUsableHlsOutput(string hlsDir)
     {
         try
@@ -850,6 +1058,12 @@ public class RoomStreamService : IRoomStreamService
         public bool SkipPlaylist { get; set; }
         public DateTime CreatedUtc { get; set; }
         public DateTime UpdatedUtc { get; set; }
+    }
+
+    private sealed class PlaybackProbeStream
+    {
+        public string CodecType { get; init; } = string.Empty;
+        public string CodecName { get; init; } = string.Empty;
     }
 
     private static class RoomUploadStates
