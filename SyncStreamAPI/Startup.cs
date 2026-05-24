@@ -15,6 +15,7 @@ using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Games.Blackjack;
 using SyncStreamAPI.Games.Gallows;
 using SyncStreamAPI.Helper;
+using SyncStreamAPI.Helper.SponsorBlock;
 using SyncStreamAPI.Helper.Streaming;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
@@ -34,6 +35,8 @@ public class Startup
 
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddMemoryCache();
+        services.AddHttpClient();
         services.Configure<KestrelServerOptions>(options => { options.Limits.MaxRequestBodySize = null; });
         services.Configure<IISServerOptions>(options => { options.MaxRequestBodySize = null; });
         services.Configure<FormOptions>(options =>
@@ -44,6 +47,7 @@ public class Startup
         });
 
         services.AddSingleton<IContentTypeProvider, FileExtensionContentTypeProvider>();
+        services.AddSingleton<ISponsorBlockService, SponsorBlockService>();
         services.AddScoped<IRoomStreamService, RoomStreamService>();
         services.AddHostedService<DataBackgroundService>();
         services.AddHostedService<ServerHealthBackgroundService>();
