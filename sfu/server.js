@@ -30,8 +30,8 @@ const config = {
   // Transport bitrate tuning.  This deployment prioritizes quality over density,
   // so we start transports with a much higher outgoing budget than mediasoup's
   // conservative defaults and optionally allow higher ingress from producers.
-  initialAvailableOutgoingBitrate: parseInt(process.env.SFU_INITIAL_OUTGOING_BITRATE ?? '10000000', 10),
-  maxIncomingBitrate: parseInt(process.env.SFU_MAX_INCOMING_BITRATE ?? '20000000', 10),
+  initialAvailableOutgoingBitrate: parseInt(process.env.SFU_INITIAL_OUTGOING_BITRATE ?? '25000000', 10),
+  maxIncomingBitrate: parseInt(process.env.SFU_MAX_INCOMING_BITRATE ?? '50000000', 10),
 
   // Number of mediasoup Worker processes.  Defaults to the number of logical CPU
   // cores so multiple rooms are spread across workers and no single thread becomes
