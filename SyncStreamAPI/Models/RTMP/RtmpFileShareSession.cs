@@ -39,6 +39,10 @@ public class RtmpFileShareSession
     public string AudioSelectionLabel { get; set; } = "first audio fallback";
     /// <summary>Optional ffmpeg video filter fragment that burns a subtitle track into the video.</summary>
     public string? SubtitleFilter { get; set; }
+    /// <summary>Kind-relative subtitle stream ordinal selected for burning, e.g. 0 for 0:s:0.</summary>
+    public int? SubtitleOrdinal { get; set; }
+    /// <summary>Burn strategy for the selected subtitle stream: text uses libass, bitmap uses overlay.</summary>
+    public string? SubtitleBurnMethod { get; set; }
     /// <summary>Human-readable description of the selected subtitle track for logs.</summary>
     public string? SubtitleSelectionLabel { get; set; }
     /// <summary>Normalized playback preferences requested by the host for audio/subtitle selection.</summary>

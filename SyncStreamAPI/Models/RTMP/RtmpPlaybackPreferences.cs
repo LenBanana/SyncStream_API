@@ -15,6 +15,12 @@ public class RtmpPlaybackPreferences
 
     public string SubtitleMode { get; set; } = SubtitleModeAuto;
 
+    public int? SelectedAudioOrdinal { get; set; }
+
+    public int? SelectedSubtitleOrdinal { get; set; }
+
+    public string? SelectedSubtitleCodecName { get; set; }
+
     public List<string> AudioLanguagePriority { get; set; } =
         new() { JapaneseLanguage, EnglishLanguage, GermanLanguage, OtherLanguage };
 }

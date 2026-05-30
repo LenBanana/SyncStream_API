@@ -24,6 +24,9 @@ namespace SyncStreamAPI.Helper.Streaming;
 /// </summary>
 public class RtmpFileShareManager : IDisposable
 {
+    private const string SubtitleBurnMethodText = "text";
+    private const string SubtitleBurnMethodBitmap = "bitmap";
+
     private static readonly string[] DefaultAudioLanguagePriority =
     {
         RtmpPlaybackPreferences.JapaneseLanguage,
@@ -37,8 +40,10 @@ public class RtmpFileShareManager : IDisposable
         { "eng", "en" };
     private static readonly HashSet<string> GermanLanguages = new(StringComparer.OrdinalIgnoreCase)
         { "deu", "ger", "de" };
-    private static readonly HashSet<string> BurnableSubtitleCodecs = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> TextSubtitleCodecs = new(StringComparer.OrdinalIgnoreCase)
         { "subrip", "srt", "ass", "ssa", "webvtt", "mov_text", "text" };
+    private static readonly HashSet<string> BitmapSubtitleCodecs = new(StringComparer.OrdinalIgnoreCase)
+        { "hdmv_pgs_subtitle", "pgs", "dvd_subtitle", "dvdsub", "vobsub", "xsub", "dvb_subtitle" };
     private static readonly string[] PreferredSubtitleTitleKeywords =
     {
         "full subtitles",
@@ -273,7 +278,7 @@ public class RtmpFileShareManager : IDisposable
         var seekArg = fromPositionSec > 0.5
             ? $"-ss {fromPositionSec.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)} "
             : string.Empty;
-        var videoFilterArg = BuildVideoFilterArg(session);
+        var videoMapAndFilterArg = BuildVideoMapAndFilterArg(session);
 
         var rtmpUrl = $"{_rtmpBaseUrl}/{session.OwnerUsername}?token={Uri.EscapeDataString(session.StreamToken)}";
 
@@ -281,8 +286,8 @@ public class RtmpFileShareManager : IDisposable
             "-nostats -progress pipe:1 -stats_period 1 -threads 0 ",
             $"-re {seekArg}",
             $"-i \"{session.FilePath}\" ",
-            $"-map 0:v:0 -map {session.AudioMapSpecifier} ",
-            videoFilterArg,
+            videoMapAndFilterArg,
+            $"-map {session.AudioMapSpecifier} ",
             $"-c:v libx264 -preset {_videoPreset} -tune zerolatency ",
             "-profile:v main -level:v 4.1 -pix_fmt yuv420p ",
             $"-b:v {_videoBitrateKbps}k -maxrate {_maxVideoBitrateKbps}k -bufsize {_videoBufferSizeKbps}k ",
@@ -295,7 +300,8 @@ public class RtmpFileShareManager : IDisposable
         Console.WriteLine(
             $"{GetLogPrefix(session.RoomId)} spawn ffmpeg seek={fromPositionSec:F3}s widthCap={_maxVideoWidth} preset={_videoPreset} " +
             $"video={_videoBitrateKbps}/{_maxVideoBitrateKbps}k audio={_audioBitrateKbps}k " +
-            $"audioTrack=\"{session.AudioSelectionLabel}\" subtitleTrack=\"{session.SubtitleSelectionLabel ?? "none"}\"");
+            $"audioTrack=\"{session.AudioSelectionLabel}\" subtitleTrack=\"{session.SubtitleSelectionLabel ?? "none"}\" " +
+            $"subtitleBurn={session.SubtitleBurnMethod ?? "none"}");
 
         session.IsPublisherLive = false;
         session.LastEncoderOutTimeSec = 0;
@@ -398,17 +404,36 @@ public class RtmpFileShareManager : IDisposable
         }
     }
 
-    private string BuildVideoFilterArg(RtmpFileShareSession session)
+    private string BuildVideoMapAndFilterArg(RtmpFileShareSession session)
     {
+        var scaleFilter = _maxVideoWidth > 0
+            ? $"scale=w='min(iw,{_maxVideoWidth})':h=-2"
+            : null;
+
+        if (session.SubtitleOrdinal.HasValue &&
+            string.Equals(session.SubtitleBurnMethod, SubtitleBurnMethodBitmap, StringComparison.OrdinalIgnoreCase))
+        {
+            var postOverlayScale = string.IsNullOrWhiteSpace(scaleFilter)
+                ? string.Empty
+                : $",{scaleFilter}";
+            return $"-filter_complex \"[0:v:0]split[base][ref];[0:s:{session.SubtitleOrdinal.Value}][ref]scale2ref=w=iw:h=ih[sub][unused];[unused]nullsink;[base][sub]overlay=eof_action=pass{postOverlayScale}[v]\" -map \"[v]\" ";
+        }
+
         var filters = new List<string>();
 
-        if (!string.IsNullOrWhiteSpace(session.SubtitleFilter))
+        if (session.SubtitleOrdinal.HasValue &&
+            string.Equals(session.SubtitleBurnMethod, SubtitleBurnMethodText, StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(session.SubtitleFilter))
+        {
             filters.Add(session.SubtitleFilter);
+        }
 
-        if (_maxVideoWidth > 0)
-            filters.Add($"scale=w='min(iw,{_maxVideoWidth})':h=-2");
+        if (!string.IsNullOrWhiteSpace(scaleFilter))
+            filters.Add(scaleFilter);
 
-        return filters.Count == 0 ? string.Empty : $"-vf \"{string.Join(",", filters)}\" ";
+        return filters.Count == 0
+            ? "-map 0:v:0 "
+            : $"-map 0:v:0 -vf \"{string.Join(",", filters)}\" ";
     }
 
     private static int ParsePositiveInt(string? rawValue, int fallback)
@@ -467,6 +492,8 @@ public class RtmpFileShareManager : IDisposable
         session.AudioMapSpecifier = playbackSelection.AudioMapSpecifier;
         session.AudioSelectionLabel = playbackSelection.AudioSelectionLabel;
         session.SubtitleFilter = playbackSelection.SubtitleFilter;
+        session.SubtitleOrdinal = playbackSelection.SubtitleOrdinal;
+        session.SubtitleBurnMethod = playbackSelection.SubtitleBurnMethod;
         session.SubtitleSelectionLabel = playbackSelection.SubtitleSelectionLabel;
         session.PlaybackSelectionResolved = playbackSelection.ProbeSucceeded;
     }
@@ -528,17 +555,18 @@ public class RtmpFileShareManager : IDisposable
                 Console.WriteLine(
                     $"[RtmpShare/Probe] ffprobe failed exitCode={p.ExitCode} stdoutEmpty={string.IsNullOrWhiteSpace(stdout)} " +
                     $"stderr=\"{TrimForLog(stderr, 400)}\"");
-                return new RtmpPlaybackSelection();
+                return BuildExplicitFallbackSelection(filePath, playbackPreferences, "ffprobe failed");
             }
 
             var streams = JsonNode.Parse(stdout)?["streams"]?.AsArray();
             if (streams == null || streams.Count == 0)
             {
                 Console.WriteLine("[RtmpShare/Probe] ffprobe returned no streams");
-                return new RtmpPlaybackSelection();
+                return BuildExplicitFallbackSelection(filePath, playbackPreferences, "ffprobe returned no streams");
             }
 
             var parsedStreams = new List<RtmpProbeStream>();
+            var audioOrdinal = 0;
             var subtitleOrdinal = 0;
 
             foreach (var stream in streams)
@@ -559,18 +587,24 @@ public class RtmpFileShareManager : IDisposable
                     IsForced = (ReadNestedInt(stream, "disposition", "forced") ?? 0) == 1,
                 };
 
+                if (string.Equals(codecType, "audio", StringComparison.OrdinalIgnoreCase))
+                    parsed.AudioOrdinal = audioOrdinal++;
+
                 if (string.Equals(codecType, "subtitle", StringComparison.OrdinalIgnoreCase))
                     parsed.SubtitleOrdinal = subtitleOrdinal++;
 
                 parsedStreams.Add(parsed);
             }
 
-            var preferredSubtitle = SelectSubtitleTrack(parsedStreams);
+            var preferredSubtitle = SelectSubtitleTrack(parsedStreams, playbackPreferences);
             var audio = SelectAudioTrack(parsedStreams, playbackPreferences, preferredSubtitle != null);
             var subtitle = ResolveSubtitleTrack(preferredSubtitle, audio, playbackPreferences);
+            var subtitleBurnMethod = subtitle != null ? GetSubtitleBurnMethod(subtitle.CodecName) : null;
 
             Console.WriteLine(
                 $"[RtmpShare/Probe] subtitleMode={playbackPreferences.SubtitleMode} " +
+                $"selectedAudioOrdinal={(playbackPreferences.SelectedAudioOrdinal?.ToString() ?? "none")} " +
+                $"selectedSubtitleOrdinal={(playbackPreferences.SelectedSubtitleOrdinal?.ToString() ?? "none")} " +
                 $"audioPriority=[{string.Join(",", playbackPreferences.AudioLanguagePriority)}] " +
                 $"audioCandidates=[{string.Join(" | ", parsedStreams.Where(s => string.Equals(s.CodecType, "audio", StringComparison.OrdinalIgnoreCase)).Select(DescribeStream))}] " +
                 $"subtitleCandidates=[{string.Join(" | ", parsedStreams.Where(s => string.Equals(s.CodecType, "subtitle", StringComparison.OrdinalIgnoreCase)).Select(DescribeStream))}] " +
@@ -580,17 +614,67 @@ public class RtmpFileShareManager : IDisposable
             return new RtmpPlaybackSelection
             {
                 ProbeSucceeded = true,
-                AudioMapSpecifier = audio != null ? $"0:{audio.StreamIndex}" : "0:a:0?",
+                AudioMapSpecifier = BuildAudioMapSpecifier(audio),
                 AudioSelectionLabel = audio != null ? DescribeStream(audio) : "first audio fallback",
-                SubtitleFilter = subtitle != null ? BuildSubtitleFilter(filePath, subtitle.SubtitleOrdinal) : null,
+                SubtitleFilter = string.Equals(subtitleBurnMethod, SubtitleBurnMethodText, StringComparison.OrdinalIgnoreCase)
+                    ? BuildSubtitleFilter(filePath, subtitle!.SubtitleOrdinal)
+                    : null,
+                SubtitleOrdinal = subtitle?.SubtitleOrdinal,
+                SubtitleBurnMethod = subtitleBurnMethod,
                 SubtitleSelectionLabel = subtitle != null ? DescribeStream(subtitle) : null,
             };
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[RtmpShare] ffprobe track selection failed: {ex.Message}");
-            return new RtmpPlaybackSelection();
+            return BuildExplicitFallbackSelection(filePath, playbackPreferences, "ffprobe exception");
         }
+    }
+
+    private static RtmpPlaybackSelection BuildExplicitFallbackSelection(
+        string filePath,
+        RtmpPlaybackPreferences playbackPreferences,
+        string reason)
+    {
+        var audioMapSpecifier = playbackPreferences.SelectedAudioOrdinal.HasValue
+            ? $"0:a:{playbackPreferences.SelectedAudioOrdinal.Value}?"
+            : "0:a:0?";
+        var audioSelectionLabel = playbackPreferences.SelectedAudioOrdinal.HasValue
+            ? $"client-selected audio ordinal={playbackPreferences.SelectedAudioOrdinal.Value} ({reason})"
+            : $"first audio fallback ({reason})";
+
+        if (string.Equals(playbackPreferences.SubtitleMode, RtmpPlaybackPreferences.SubtitleModeNever, StringComparison.OrdinalIgnoreCase) ||
+            !playbackPreferences.SelectedSubtitleOrdinal.HasValue)
+        {
+            return new RtmpPlaybackSelection
+            {
+                AudioMapSpecifier = audioMapSpecifier,
+                AudioSelectionLabel = audioSelectionLabel,
+            };
+        }
+
+        var burnMethod = GetSubtitleBurnMethod(playbackPreferences.SelectedSubtitleCodecName);
+        if (burnMethod == null)
+        {
+            return new RtmpPlaybackSelection
+            {
+                AudioMapSpecifier = audioMapSpecifier,
+                AudioSelectionLabel = audioSelectionLabel,
+            };
+        }
+
+        var subtitleOrdinal = playbackPreferences.SelectedSubtitleOrdinal.Value;
+        return new RtmpPlaybackSelection
+        {
+            AudioMapSpecifier = audioMapSpecifier,
+            AudioSelectionLabel = audioSelectionLabel,
+            SubtitleFilter = string.Equals(burnMethod, SubtitleBurnMethodText, StringComparison.OrdinalIgnoreCase)
+                ? BuildSubtitleFilter(filePath, subtitleOrdinal)
+                : null,
+            SubtitleOrdinal = subtitleOrdinal,
+            SubtitleBurnMethod = burnMethod,
+            SubtitleSelectionLabel = $"client-selected subtitle ordinal={subtitleOrdinal} codec={playbackPreferences.SelectedSubtitleCodecName ?? "unknown"} ({reason})",
+        };
     }
 
     private static async Task<double?> ProbeFileDurationAsync(string filePath)
@@ -643,7 +727,26 @@ public class RtmpFileShareManager : IDisposable
             .ToList();
 
         if (audioStreams.Count == 0)
-            return null;
+        {
+            return playbackPreferences.SelectedAudioOrdinal.HasValue
+                ? new RtmpProbeStream
+                {
+                    StreamIndex = -1,
+                    AudioOrdinal = playbackPreferences.SelectedAudioOrdinal.Value,
+                    CodecType = "audio",
+                    CodecName = "unknown",
+                    Language = "und",
+                    Title = "client-selected audio"
+                }
+                : null;
+        }
+
+        if (playbackPreferences.SelectedAudioOrdinal.HasValue)
+        {
+            var selected = audioStreams.FirstOrDefault(stream => stream.AudioOrdinal == playbackPreferences.SelectedAudioOrdinal.Value);
+            if (selected != null)
+                return selected;
+        }
 
         return audioStreams
             .OrderBy(stream => GetAudioLanguagePreferenceRank(stream.Language, playbackPreferences, subtitleAvailable))
@@ -672,14 +775,36 @@ public class RtmpFileShareManager : IDisposable
             : null;
     }
 
-    private static RtmpProbeStream? SelectSubtitleTrack(IEnumerable<RtmpProbeStream> streams)
+    private static RtmpProbeStream? SelectSubtitleTrack(IEnumerable<RtmpProbeStream> streams, RtmpPlaybackPreferences playbackPreferences)
     {
         var subtitleStreams = streams
             .Where(stream =>
                 string.Equals(stream.CodecType, "subtitle", StringComparison.OrdinalIgnoreCase) &&
                 stream.StreamIndex >= 0 &&
-                BurnableSubtitleCodecs.Contains(stream.CodecName))
+                GetSubtitleBurnMethod(stream.CodecName) != null)
             .ToList();
+
+        if (playbackPreferences.SelectedSubtitleOrdinal.HasValue &&
+            !string.Equals(playbackPreferences.SubtitleMode, RtmpPlaybackPreferences.SubtitleModeNever, StringComparison.OrdinalIgnoreCase))
+        {
+            var selected = subtitleStreams.FirstOrDefault(stream => stream.SubtitleOrdinal == playbackPreferences.SelectedSubtitleOrdinal.Value);
+            if (selected != null)
+                return selected;
+
+            var burnMethod = GetSubtitleBurnMethod(playbackPreferences.SelectedSubtitleCodecName);
+            if (burnMethod != null)
+            {
+                return new RtmpProbeStream
+                {
+                    StreamIndex = -1,
+                    SubtitleOrdinal = playbackPreferences.SelectedSubtitleOrdinal.Value,
+                    CodecType = "subtitle",
+                    CodecName = playbackPreferences.SelectedSubtitleCodecName ?? "unknown",
+                    Language = "und",
+                    Title = "client-selected subtitle"
+                };
+            }
+        }
 
         if (subtitleStreams.Count == 0)
             return null;
@@ -764,8 +889,14 @@ public class RtmpFileShareManager : IDisposable
         {
             SubtitleMode = NormalizeSubtitleMode(playbackPreferences?.SubtitleMode),
             AudioLanguagePriority = normalized,
+            SelectedAudioOrdinal = NormalizeTrackOrdinal(playbackPreferences?.SelectedAudioOrdinal),
+            SelectedSubtitleOrdinal = NormalizeTrackOrdinal(playbackPreferences?.SelectedSubtitleOrdinal),
+            SelectedSubtitleCodecName = NormalizeSubtitleCodecName(playbackPreferences?.SelectedSubtitleCodecName),
         };
     }
+
+    private static int? NormalizeTrackOrdinal(int? ordinal)
+        => ordinal.HasValue && ordinal.Value >= 0 && ordinal.Value < 256 ? ordinal.Value : null;
 
     private static string NormalizeSubtitleMode(string? subtitleMode)
     {
@@ -791,6 +922,49 @@ public class RtmpFileShareManager : IDisposable
 
     private static string NormalizeLanguage(string? language)
         => string.IsNullOrWhiteSpace(language) ? "und" : language.Trim().ToLowerInvariant();
+
+    private static string? NormalizeSubtitleCodecName(string? codecName)
+    {
+        if (string.IsNullOrWhiteSpace(codecName))
+            return null;
+
+        var normalized = codecName.Trim().ToLowerInvariant();
+        var compact = normalized.Replace(" ", string.Empty).Replace("-", string.Empty).Replace("_", string.Empty).Replace("/", string.Empty);
+
+        if (compact.Contains("pgs") || compact.Contains("hdmv")) return "hdmv_pgs_subtitle";
+        if (compact.Contains("vobsub") || compact.Contains("dvdsubtitle") || compact.Contains("dvdsub")) return "dvd_subtitle";
+        if (compact.Contains("dvbsubtitle") || compact.Contains("dvbsub")) return "dvb_subtitle";
+        if (compact.Contains("xsub")) return "xsub";
+        if (compact.Contains("ass")) return "ass";
+        if (compact.Contains("ssa")) return "ssa";
+        if (compact.Contains("webvtt") || compact.Contains("vtt")) return "webvtt";
+        if (compact.Contains("movtext") || compact.Contains("tx3g")) return "mov_text";
+        if (compact.Contains("subrip") || compact.Contains("srt") || compact.Contains("utf8")) return "subrip";
+        if (compact.Contains("text")) return "text";
+
+        return normalized;
+    }
+
+    private static string? GetSubtitleBurnMethod(string? codecName)
+    {
+        var normalized = NormalizeSubtitleCodecName(codecName);
+        if (normalized == null)
+            return null;
+
+        if (TextSubtitleCodecs.Contains(normalized)) return SubtitleBurnMethodText;
+        if (BitmapSubtitleCodecs.Contains(normalized)) return SubtitleBurnMethodBitmap;
+        return null;
+    }
+
+    private static string BuildAudioMapSpecifier(RtmpProbeStream? audio)
+    {
+        if (audio == null)
+            return "0:a:0?";
+
+        return audio.StreamIndex >= 0
+            ? $"0:{audio.StreamIndex}"
+            : $"0:a:{Math.Max(0, audio.AudioOrdinal)}?";
+    }
 
     private static string DescribeStream(RtmpProbeStream stream)
     {
@@ -933,12 +1107,15 @@ public class RtmpFileShareManager : IDisposable
         public string AudioMapSpecifier { get; init; } = "0:a:0?";
         public string AudioSelectionLabel { get; init; } = "first audio fallback";
         public string? SubtitleFilter { get; init; }
+        public int? SubtitleOrdinal { get; init; }
+        public string? SubtitleBurnMethod { get; init; }
         public string? SubtitleSelectionLabel { get; init; }
     }
 
     private sealed class RtmpProbeStream
     {
         public int StreamIndex { get; init; }
+        public int AudioOrdinal { get; set; } = -1;
         public int SubtitleOrdinal { get; set; } = -1;
         public string CodecType { get; init; } = string.Empty;
         public string CodecName { get; init; } = string.Empty;
