@@ -11,36 +11,127 @@ on:
 env:
   IMAGE_NAME: syncstreamapi
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
-  test:
+  # Compute lowercase image names and the version tag once, shared by all jobs.
+  prep:
     runs-on: ubuntu-latest
+    outputs:
+      api_image: ${{ steps.prep.outputs.api_image }}
+      sfu_image: ${{ steps.prep.outputs.sfu_image }}
+      version: ${{ steps.prep.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Run tests
+      - name: Prepare image metadata
+        id: prep
         run: |
-          if [ -f docker-compose.test.yml ]; then
-            docker compose --file docker-compose.test.yml build
-            docker compose --file docker-compose.test.yml run sut
-          else
-            docker build . --file Dockerfile
-          fi
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          API_IMAGE="ghcr.io/${OWNER}/${{ env.IMAGE_NAME }}"
+          SFU_IMAGE="ghcr.io/${OWNER}/syncstreamsfu"
 
-  push:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo "$VERSION" | sed -e 's/^v//')
+          [ "$VERSION" == "master" ] && VERSION=latest
 
-    permissions:
-      contents: read
-      packages: write
+          echo "api_image=${API_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "sfu_image=${SFU_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
+  # Build each image on its own native runner (no QEMU). On push events the
+  # per-arch image is pushed to the registry by digest; on pull requests it is
+  # only built (and cached) to validate the Dockerfiles.
+  build:
+    needs: [prep]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: api
+            context: .
+            dockerfile: ./Dockerfile
+            platform: linux/amd64
+            platform_pair: linux-amd64
+            runner: ubuntu-latest
+          - image: api
+            context: .
+            dockerfile: ./Dockerfile
+            platform: linux/arm64
+            platform_pair: linux-arm64
+            runner: ubuntu-24.04-arm
+          - image: sfu
+            context: ./sfu
+            dockerfile: ./sfu/Dockerfile
+            platform: linux/amd64
+            platform_pair: linux-amd64
+            runner: ubuntu-latest
+          - image: sfu
+            context: ./sfu
+            dockerfile: ./sfu/Dockerfile
+            platform: linux/arm64
+            platform_pair: linux-arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platform }}
+          provenance: false
+          tags: ${{ matrix.image == 'api' && needs.prep.outputs.api_image || needs.prep.outputs.sfu_image }}
+          outputs: ${{ github.event_name == 'push' && 'type=image,push-by-digest=true,name-canonical=true,push=true' || 'type=cacheonly' }}
+          cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.platform_pair }}
+          cache-to: type=gha,scope=${{ matrix.image }}-${{ matrix.platform_pair }},mode=max
+
+      - name: Export digest
+        if: github.event_name == 'push'
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.image }}-${{ matrix.platform_pair }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Combine the per-arch images of each repository into one multi-arch manifest.
+  merge:
+    needs: [prep, build]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [api, sfu]
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-${{ matrix.image }}-*
+          merge-multiple: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -52,43 +143,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepare image metadata
-        id: prep
+      - name: Create and push manifest
+        working-directory: ${{ runner.temp }}/digests
         run: |
-          # Lowercase owner and derive image IDs
-          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          API_IMAGE="ghcr.io/${OWNER}/${{ env.IMAGE_NAME }}"
-          SFU_IMAGE="ghcr.io/${OWNER}/syncstreamsfu"
+          IMG="${{ matrix.image == 'api' && needs.prep.outputs.api_image || needs.prep.outputs.sfu_image }}"
+          docker buildx imagetools create -t "${IMG}:${{ needs.prep.outputs.version }}" \
+            $(printf "${IMG}@sha256:%s " *)
 
-          # Derive version from git ref
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
-          # Strip "v" prefix from tag names
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo "$VERSION" | sed -e 's/^v//')
-          # Use "latest" for master branch
-          [ "$VERSION" == "master" ] && VERSION=latest
-
-          echo "api_image=${API_IMAGE}" >> $GITHUB_OUTPUT
-          echo "sfu_image=${SFU_IMAGE}" >> $GITHUB_OUTPUT
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-
-      - name: Build and push API
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.prep.outputs.api_image }}:${{ steps.prep.outputs.version }}
-          cache-from: type=registry,ref=${{ steps.prep.outputs.api_image }}:cache
-          cache-to: type=registry,ref=${{ steps.prep.outputs.api_image }}:cache,mode=max
-
-      - name: Build and push SFU
-        uses: docker/build-push-action@v6
-        with:
-          context: ./sfu
-          file: ./sfu/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.prep.outputs.sfu_image }}:${{ steps.prep.outputs.version }}
-          cache-from: type=registry,ref=${{ steps.prep.outputs.sfu_image }}:cache
-          cache-to: type=registry,ref=${{ steps.prep.outputs.sfu_image }}:cache,mode=max
+      - name: Inspect manifest
+        run: |
+          IMG="${{ matrix.image == 'api' && needs.prep.outputs.api_image || needs.prep.outputs.sfu_image }}"
+          docker buildx imagetools inspect "${IMG}:${{ needs.prep.outputs.version }}"

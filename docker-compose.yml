@@ -4,6 +4,8 @@ version: '3.9'
 volumes:
   app-releases:
   sfu-recordings:
+  api-videofiles:   # permanent files  → /app/VideoFiles
+  api-temp:         # temp + uploads   → /app/Temp  (includes room-uploads/)
 
 # ─── Services ─────────────────────────────────────────────────────────────────
 services:
@@ -22,14 +24,19 @@ services:
       start_period: 30s
     environment:
       SFU_HTTP_PORT: "3000"
-      # Set SFU_ANNOUNCED_IP to the public IP of this host at deploy time.
-      SFU_ANNOUNCED_IP: "127.0.0.1" 
+      # Public address announced in ICE candidates. Override to 127.0.0.1 only for same-machine local testing.
+      SFU_ANNOUNCED_IP: "${SFU_ANNOUNCED_IP:-152.53.224.14}"
       SFU_RTC_MIN_PORT: "10000"
       SFU_RTC_MAX_PORT: "10099"
+      SFU_INITIAL_OUTGOING_BITRATE: "25000000"
+      SFU_MAX_INCOMING_BITRATE: "50000000"
       SFU_NUM_WORKERS: "1"
       SFU_RECORDINGS_DIR: "/recordings"
     volumes:
       - sfu-recordings:/recordings
+      # Read-only access to API media directories so ffmpeg can open file-share sources.
+      - api-videofiles:/app/VideoFiles:ro
+      - api-temp:/app/Temp:ro
     ports:
       # HTTP API is NOT exposed outside the Docker network (intentionally).
       # RTP/RTCP UDP+TCP range exposed to the internet for WebRTC media.
@@ -54,6 +61,8 @@ services:
     volumes:
       - app-releases:/var/app-releases
       - sfu-recordings:/recordings:ro
+      - api-videofiles:/app/VideoFiles
+      - api-temp:/app/Temp
     depends_on:
       sfu:
         condition: service_healthy
