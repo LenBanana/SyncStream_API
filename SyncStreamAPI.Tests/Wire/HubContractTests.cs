@@ -55,46 +55,46 @@ public class HubContractTests
     };
 
     /// <summary>
-    ///     Payload types that live under <c>Models/</c> but are only ever sent to clients, so they are
-    ///     effectively wire types in the wrong folder. Relocating them under <c>Wire/</c> is a job for the
-    ///     wire-boundary phase; until then they are listed here so the set is pinned.
+    ///     Types under <c>Models/</c> that still reach clients, and why each is tolerated.
     /// </summary>
     /// <remarks>
-    ///     Pinned exactly, in both directions. A new domain type reaching a client fails the test, and so
-    ///     does an entry that no longer reaches one, which is what keeps this list shrinking as types move
-    ///     to <c>Wire/</c> instead of quietly rotting.
+    ///     Pinned exactly, in both directions: a new domain type reaching a client fails this test, and so
+    ///     does an entry that stops reaching one, so the list cannot drift from reality.
+    ///     <para>
+    ///         None of these carry a credential, a connection id or a server path, which the other tests in
+    ///         this class assert independently. What is left is organisational: they are contracts living in
+    ///         the domain folder. Two kinds remain, and they need different work.
+    ///     </para>
     /// </remarks>
     private static readonly string[] KnownDomainTypesOnTheWire =
     {
-        // Games
-        "BlackjackDealer",
-        "BlackjackMember",
-        "ChessMove",
-        "GallowMember",
-        "PlayingCard",
-        // Room and media
+        // Domain state that is also a payload, so a move is not enough: these are stored in Room.server and
+        // mutated by the hub, so untangling them means a DTO plus roughly thirty send sites, and ChatMessage
+        // is subclassed by the whisper and system message types so the DTO has to stay polymorphic. Deferred
+        // deliberately: there is no leak here, only tidiness, and the diff is not worth it yet.
         "ChatMessage",
-        "Drawing",
         "DreckVideo",
-        "EditorProcess",
+        "Drawing",
         "SelectedShapeOptions",
-        // Files and downloads
+
+        // Pure payloads that happen to live under Models/. Moving them to Wire/ is a namespace change and
+        // nothing more, which is why it has not been done as part of a security pass.
+        "BotLiveChannelInfo",
+        "ChessMove",
+        "Dialog",
         "DownloadFileInfo",
         "DownloadInfo",
-        "FileStorageInfo",
-        // WebRTC, SFU and VoIP signalling
+        "EditorProcess",
+        "PrivilegeInfo",
+        "ServerHealthDto",
         "SfuNewProducerNotification",
         "SfuRecordingInfo",
         "VoipOffer",
         "VoipParticipantDto",
         "WebRtcClientOffer",
-        // Live streaming and bots
-        "BotLiveChannelInfo",
-        "LiveUserDTO",
-        // Cross-cutting
-        "Dialog",
-        "PrivilegeInfo",
-        "ServerHealthDto"
+
+        // Elevated-only storage report. It does expose real server paths, which is the point of the view.
+        "FileStorageInfo"
     };
 
     private static IEnumerable<MethodInfo> HubCallbacks()
@@ -159,6 +159,33 @@ public class HubContractTests
 
         Assert.True(offenders.Count == 0,
             "Credential reachable from a client callback: " + string.Join(", ", offenders));
+    }
+
+    /// <summary>
+    ///     Types allowed to carry a connection id, because a client needs it to address a specific peer.
+    /// </summary>
+    private static readonly HashSet<string> MayCarryConnectionId = new(StringComparer.Ordinal)
+    {
+        // The room member list: the front end targets a streamer by connection id to watch them.
+        "MemberDTO"
+    };
+
+    [Fact]
+    public void A_connection_id_only_reaches_clients_where_one_is_needed()
+    {
+        // Not a credential, but it is capability-granting: knowing a connection id is what lets a caller
+        // aim a hub method at somebody else's connection. It was removed from the room list and the chess
+        // payload for that reason, so anything else carrying it is an oversight rather than a decision.
+        var offenders = (from callback in HubCallbacks()
+            from parameter in callback.GetParameters()
+            from type in ReachableTypes(parameter.ParameterType)
+            where !MayCarryConnectionId.Contains(type.Name)
+            from property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            where property.Name is "ConnectionId" or "connectionId"
+            select $"{callback.Name}(...) -> {type.Name}.{property.Name}").Distinct().ToList();
+
+        Assert.True(offenders.Count == 0,
+            "Connection ids reaching clients that do not need them: " + string.Join(", ", offenders));
     }
 
     [Fact]

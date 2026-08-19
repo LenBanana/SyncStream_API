@@ -18,9 +18,4 @@ public class BlackjackDealer
     public int? pointsDTO => cards?.Where(x => x.FaceUp).ToList().CalculatePoints();
     public double money { get; set; } = 0;
     public bool blackjack => cards.Count == 2 && points == 21;
-
-    public bool ShouldSerializepoints()
-    {
-        return false;
-    }
 }

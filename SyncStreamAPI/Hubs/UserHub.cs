@@ -105,7 +105,7 @@ public partial class ServerHub
                 {
                     game.AddMember(newMember);
                     await Clients.Caller.playinggallows(game.GallowWord);
-                    await Clients.Caller.gallowusers(game.members);
+                    await Clients.Caller.gallowusers(game.members.ToDtos());
                 }
 
                 break;

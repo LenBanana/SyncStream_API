@@ -13,6 +13,7 @@ using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
 using Microsoft.AspNetCore.Authorization;
 using SyncStreamAPI.Auth;
+using SyncStreamAPI.Wire;
 
 namespace SyncStreamAPI.Hubs;
 
@@ -217,9 +218,9 @@ public partial class ServerHub
                 _manager.LiveUsers.TryTake(out liveUser);
                 var liveUsers = _manager.LiveUsers;
                 await Clients.Group(General.LoggedInGroupName)
-                    .getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
+                    .getliveusers(liveUsers.ToDtos());
                 await Clients.Group(General.BottedInGroupName)
-                    .getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
+                    .getliveusers(liveUsers.ToDtos());
             }
         }
 

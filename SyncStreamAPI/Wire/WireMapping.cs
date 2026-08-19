@@ -4,6 +4,11 @@ using SyncStreamAPI.Models;
 using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.Wire.Rooms;
 using SyncStreamAPI.Wire.Users;
+using SyncStreamAPI.Models.GameModels.Blackjack;
+using SyncStreamAPI.Models.GameModels.Members;
+using SyncStreamAPI.Models.RTMP;
+using SyncStreamAPI.Wire.Live;
+using SyncStreamAPI.Wire.Games;
 
 namespace SyncStreamAPI.Wire;
 
@@ -28,6 +33,31 @@ public static class WireMapping
     public static SelfProfileDto ToSelfProfile(this DbUser user)
     {
         return new SelfProfileDto(user);
+    }
+
+    public static BlackjackMemberDto ToDto(this BlackjackMember member)
+    {
+        return new BlackjackMemberDto(member);
+    }
+
+    public static List<BlackjackMemberDto> ToDtos(this IEnumerable<BlackjackMember>? members)
+    {
+        return members?.Select(member => member.ToDto()).ToList() ?? new List<BlackjackMemberDto>();
+    }
+
+    public static BlackjackDealerDto ToDto(this BlackjackDealer dealer)
+    {
+        return new BlackjackDealerDto(dealer);
+    }
+
+    public static List<GallowMemberDto> ToDtos(this IEnumerable<GallowMember>? members)
+    {
+        return members?.Select(member => new GallowMemberDto(member)).ToList() ?? new List<GallowMemberDto>();
+    }
+
+    public static List<LiveUserDto> ToDtos(this IEnumerable<LiveUser>? users)
+    {
+        return users?.Select(user => new LiveUserDto(user)).ToList() ?? new List<LiveUserDto>();
     }
 
     public static RoomSummaryDto ToSummary(this Room room)

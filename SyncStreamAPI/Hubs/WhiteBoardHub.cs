@@ -7,6 +7,7 @@ using Newtonsoft.Json;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.ServerData.Helper;
+using SyncStreamAPI.Wire;
 
 namespace SyncStreamAPI.Hubs;
 
@@ -19,7 +20,7 @@ public partial class ServerHub
             var room = GetRoom(UniqueId);
             if (room == null) return;
 
-            await Clients.Group(UniqueId).gallowusers(room.GallowGame.members);
+            await Clients.Group(UniqueId).gallowusers(room.GallowGame.members.ToDtos());
         }
         catch (Exception ex)
         {
@@ -49,7 +50,7 @@ public partial class ServerHub
                 gallows.GameLanguage = language;
                 gallows.GameLength = gameLength;
                 gallows.UpdateGallowWord(false);
-                await Clients.Group(UniqueId).gallowusers(room.GallowGame.members);
+                await Clients.Group(UniqueId).gallowusers(room.GallowGame.members.ToDtos());
                 var startGallowMessage = new SystemMessage("Started a round of gallows, have fun!");
                 await Clients.Group(UniqueId).sendmessage(startGallowMessage);
                 await Clients.Group(UniqueId).playertype(PlayerType.WhiteBoard);

@@ -8,6 +8,7 @@ using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.GameModels.Gallows;
 using SyncStreamAPI.ServerData;
+using SyncStreamAPI.Wire;
 
 namespace SyncStreamAPI.Games.Gallows;
 
@@ -64,7 +65,7 @@ public class GallowGameManager
 
     private async void Server_GallowTimerUpdate(int Time, GallowLogic game)
     {
-        if (Time % 5 == 0) await _hub.Clients.Group(game.RoomId).gallowusers(game.members);
+        if (Time % 5 == 0) await _hub.Clients.Group(game.RoomId).gallowusers(game.members.ToDtos());
 
         await _hub.Clients.Group(game.RoomId).gallowtimerupdate(Time);
     }
@@ -111,7 +112,7 @@ public class GallowGameManager
             await _hub.Clients.Client(sender.ConnectionId).sendmessage(correntAnswerPrivateMsg);
             if (game.members?.Where(x => !x.isDrawing).All(x => x.guessedGallow) == true) await EndGallow(game, Time);
 
-            await _hub.Clients.Group(game.RoomId).gallowusers(game.members);
+            await _hub.Clients.Group(game.RoomId).gallowusers(game.members.ToDtos());
         }
         else if (StringExtensions.CalculateWordDifference(msg, gallowWord) == 1)
         {
@@ -135,7 +136,7 @@ public class GallowGameManager
         game.UpdateGallowWord(false);
 
         var idx = game.members.FindIndex(x => x.isDrawing);
-        if (idx == -1) await _hub.Clients.Group(game.RoomId).gallowusers(game.members);
+        if (idx == -1) await _hub.Clients.Group(game.RoomId).gallowusers(game.members.ToDtos());
 
         if (idx > -1)
         {

@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.GameModels.Members;
+using SyncStreamAPI.Wire.Games;
 
 namespace SyncStreamAPI.Interfaces;
 
@@ -21,7 +22,7 @@ public partial interface IServerHub
 
     Task playinggallows(string word);
 
-    Task gallowusers(List<GallowMember> members);
+    Task gallowusers(List<GallowMemberDto> members);
 
     Task gallowtimerupdate(int time);
 

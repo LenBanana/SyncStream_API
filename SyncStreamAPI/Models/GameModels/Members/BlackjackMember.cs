@@ -112,11 +112,6 @@ public class BlackjackMember
 
     public event KickEvent Kicked;
 
-    public bool ShouldSerializeConnectionId()
-    {
-        return false;
-    }
-
     public event MemberEvent DidSplit;
     public event MemberEvent FailedToReact;
 

@@ -6,6 +6,9 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.PostgresModels;
+using SyncStreamAPI.Enums.Games.Cards;
+using SyncStreamAPI.Models.GameModels;
+using SyncStreamAPI.Models.GameModels.Blackjack;
 using SyncStreamAPI.Wire.Games;
 using SyncStreamAPI.Wire.Rooms;
 using SyncStreamAPI.Wire.Users;
@@ -127,6 +130,41 @@ public class WireNamingTests
 
         Assert.DoesNotContain("the-password-hash", json);
         Assert.DoesNotContain("the-salt", json);
+    }
+
+    [Fact]
+    public void A_face_down_card_reveals_nothing()
+    {
+        var hidden = new PlayingCardDto(new PlayingCard(PlayingCardSuit.Spades, PlayingCardRank.Ace));
+        var json = JsonConvert.SerializeObject(hidden, HubSerializerSettings);
+
+        // The domain card serialised its suit and rank whatever FaceUp said, so a player could read the
+        // dealer's hole card off the wire while the table drew a card back.
+        Assert.False(hidden.faceUp);
+        Assert.DoesNotContain("Spades", json);
+        Assert.DoesNotContain("Ace", json);
+
+        var revealed = new PlayingCardDto(
+            new PlayingCard(PlayingCardSuit.Spades, PlayingCardRank.Ace) { FaceUp = true });
+
+        Assert.Equal(PlayingCardSuit.Spades, revealed.suit);
+        Assert.Equal(PlayingCardRank.Ace, revealed.rank);
+    }
+
+    [Fact]
+    public void The_dealer_payload_sends_only_the_face_up_total()
+    {
+        var dealer = new BlackjackDealer { name = "Dealer" };
+        dealer.cards.Add(new PlayingCard(PlayingCardSuit.Hearts, PlayingCardRank.Ten) { FaceUp = true });
+        dealer.cards.Add(new PlayingCard(PlayingCardSuit.Spades, PlayingCardRank.Ace));
+
+        var keys = Keys(new BlackjackDealerDto(dealer)).ToList();
+
+        // No `points`, which counts every card, and no `blackjack`, which is derived from it: either would
+        // announce a dealer 21 before the reveal.
+        Assert.DoesNotContain("points", keys);
+        Assert.DoesNotContain("blackjack", keys);
+        Assert.Contains("pointsDTO", keys);
     }
 
     [Fact]

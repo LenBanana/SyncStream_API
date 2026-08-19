@@ -115,9 +115,9 @@ public class RtmpController : Controller
                 _manager.LiveUsers.Add(new LiveUser { userName = dbUser.username, id = rtmpData.token });
                 var liveUsers = _manager.LiveUsers;
                 await _hub.Clients.Groups(General.LoggedInGroupName)
-                    .getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
+                    .getliveusers(liveUsers.ToDtos());
                 await _hub.Clients.Groups(General.BottedInGroupName)
-                    .getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
+                    .getliveusers(liveUsers.ToDtos());
             }
 
             if (_rtmpFileShareManager.TryMarkPublisherLive(token, rtmpData.name, out var roomId, out var positionSec))
@@ -154,9 +154,9 @@ public class RtmpController : Controller
                 _manager.LiveUsers.TryTake(out liveUser);
                 var liveUsers = _manager.LiveUsers;
                 await _hub.Clients.Groups(General.LoggedInGroupName)
-                    .getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
+                    .getliveusers(liveUsers.ToDtos());
                 await _hub.Clients.Groups(General.BottedInGroupName)
-                    .getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
+                    .getliveusers(liveUsers.ToDtos());
             }
             return Ok();
         }
@@ -184,7 +184,7 @@ public class RtmpController : Controller
             liveUser.watchMember.Add(dbUser.ToSummary());
             var liveUsers = _manager.LiveUsers;
             await _hub.Clients.Groups(General.LoggedInGroupName)
-                .getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
+                .getliveusers(liveUsers.ToDtos());
             return Ok();
         }
         catch (Exception ex)
@@ -213,7 +213,7 @@ public class RtmpController : Controller
 
             var liveUsers = _manager.LiveUsers;
             await _hub.Clients.Groups(General.LoggedInGroupName)
-                .getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
+                .getliveusers(liveUsers.ToDtos());
             return Ok();
         }
         catch (Exception ex)

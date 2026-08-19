@@ -5,6 +5,7 @@ using SyncStreamAPI.Enums;
 using SyncStreamAPI.PostgresModels;
 using Microsoft.AspNetCore.Authorization;
 using SyncStreamAPI.Auth;
+using SyncStreamAPI.Wire;
 
 namespace SyncStreamAPI.Hubs;
 
@@ -14,7 +15,7 @@ public partial class ServerHub
     public async Task GetLiveUsers()
     {
         var liveUser = _manager.LiveUsers;
-        if (liveUser.Count > 0) await Clients.Caller.getliveusers(liveUser.Select(x => x.ToDTO()).ToList());
+        if (liveUser.Count > 0) await Clients.Caller.getliveusers(liveUser.ToDtos());
     }
 
     [Authorize(Policy = AuthorizationPolicies.Approved)]
