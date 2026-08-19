@@ -5,6 +5,8 @@ using SyncStreamAPI.Annotations;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.PostgresModels;
+using Microsoft.AspNetCore.Authorization;
+using SyncStreamAPI.Auth;
 
 namespace SyncStreamAPI.Controllers;
 
@@ -20,8 +22,8 @@ public class WebRtcController : Controller
     }
 
     [HttpGet("GetWebRtcCredentials")]
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public IActionResult GetWebRtcCredentials(string token)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public IActionResult GetWebRtcCredentials()
     {
         return Ok(General.GenerateTemporaryCredentials(Configuration));
     }

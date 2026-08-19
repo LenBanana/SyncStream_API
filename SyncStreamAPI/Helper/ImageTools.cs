@@ -70,7 +70,7 @@ public class ImageTools
 
         await SaveToDb(dbFile, postgresContext);
         var fileBytes = await File.ReadAllBytesAsync(outputPath);
-        await serverHub.Clients.Group(dbUser.ApiKey).updateFolders(new FileDto(dbFile));
+        await serverHub.Clients.Group(dbUser.ID.ToString()).updateFolders(new FileDto(dbFile));
         var result = new FileContentResult(fileBytes, mimeType)
         {
             FileDownloadName = $"{dbFile.Name}{dbFile.FileEnding}"

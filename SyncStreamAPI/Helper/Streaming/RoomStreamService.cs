@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -64,7 +64,7 @@ public class RoomStreamService : IRoomStreamService
     }
 
     public async Task<RoomUploadSessionResult> StartRoomUploadAsync(
-        string token,
+        int? userId,
         string uniqueId,
         string name,
         string fileEnding,
@@ -73,7 +73,7 @@ public class RoomStreamService : IRoomStreamService
     {
         try
         {
-            var dbUser = await GetUserByTokenAsync(token);
+            var dbUser = await GetUserByIdAsync(userId);
             if (dbUser == null)
                 return new RoomUploadSessionResult { StatusCode = StatusCodes.Status401Unauthorized };
 
@@ -145,7 +145,7 @@ public class RoomStreamService : IRoomStreamService
 
     public async Task<RoomUploadSessionResult> UploadRoomChunkAsync(
         HttpRequest request,
-        string token,
+        int? userId,
         string uploadId,
         long startByte)
     {
@@ -154,7 +154,7 @@ public class RoomStreamService : IRoomStreamService
 
         try
         {
-            var dbUser = await GetUserByTokenAsync(token);
+            var dbUser = await GetUserByIdAsync(userId);
             if (dbUser == null)
                 return new RoomUploadSessionResult { StatusCode = StatusCodes.Status401Unauthorized };
 
@@ -257,14 +257,14 @@ public class RoomStreamService : IRoomStreamService
         }
     }
 
-    public async Task<RoomUploadSessionResult> GetRoomUploadStatusAsync(string token, string uploadId)
+    public async Task<RoomUploadSessionResult> GetRoomUploadStatusAsync(int? userId, string uploadId)
     {
         var uploadLock = GetUploadLock(uploadId);
         await uploadLock.WaitAsync();
 
         try
         {
-            var dbUser = await GetUserByTokenAsync(token);
+            var dbUser = await GetUserByIdAsync(userId);
             if (dbUser == null)
                 return new RoomUploadSessionResult { StatusCode = StatusCodes.Status401Unauthorized };
 
@@ -290,7 +290,7 @@ public class RoomStreamService : IRoomStreamService
     }
 
     public async Task<RoomUploadSessionResult> CompleteRoomUploadAsync(
-        string token,
+        int? userId,
         string uploadId,
         string publicBaseUrl)
     {
@@ -299,7 +299,7 @@ public class RoomStreamService : IRoomStreamService
 
         try
         {
-            var dbUser = await GetUserByTokenAsync(token);
+            var dbUser = await GetUserByIdAsync(userId);
             if (dbUser == null)
                 return new RoomUploadSessionResult { StatusCode = StatusCodes.Status401Unauthorized };
 
@@ -354,14 +354,14 @@ public class RoomStreamService : IRoomStreamService
         }
     }
 
-    public async Task<RoomUploadSessionResult> CancelRoomUploadAsync(string token, string uploadId)
+    public async Task<RoomUploadSessionResult> CancelRoomUploadAsync(int? userId, string uploadId)
     {
         var uploadLock = GetUploadLock(uploadId);
         await uploadLock.WaitAsync();
 
         try
         {
-            var dbUser = await GetUserByTokenAsync(token);
+            var dbUser = await GetUserByIdAsync(userId);
             if (dbUser == null)
                 return new RoomUploadSessionResult { StatusCode = StatusCodes.Status401Unauthorized };
 
@@ -450,7 +450,7 @@ public class RoomStreamService : IRoomStreamService
 
     public async Task<StreamToRoomResult> StreamToRoomAsync(
         HttpRequest request,
-        string token,
+        int? userId,
         string uniqueId,
         string name,
         string fileEnding)
@@ -466,7 +466,7 @@ public class RoomStreamService : IRoomStreamService
                 };
             }
 
-            var startResult = await StartRoomUploadAsync(token, uniqueId, name, fileEnding, request.ContentLength.Value);
+            var startResult = await StartRoomUploadAsync(userId, uniqueId, name, fileEnding, request.ContentLength.Value);
             if (startResult.StatusCode != StatusCodes.Status200OK || string.IsNullOrWhiteSpace(startResult.UploadId))
             {
                 return new StreamToRoomResult
@@ -476,10 +476,10 @@ public class RoomStreamService : IRoomStreamService
                 };
             }
 
-            var chunkResult = await UploadRoomChunkAsync(request, token, startResult.UploadId, 0);
+            var chunkResult = await UploadRoomChunkAsync(request, userId, startResult.UploadId, 0);
             if (chunkResult.StatusCode != StatusCodes.Status200OK)
             {
-                await CancelRoomUploadAsync(token, startResult.UploadId);
+                await CancelRoomUploadAsync(userId, startResult.UploadId);
                 return new StreamToRoomResult
                 {
                     StatusCode = chunkResult.StatusCode,
@@ -487,7 +487,7 @@ public class RoomStreamService : IRoomStreamService
                 };
             }
 
-            var completeResult = await CompleteRoomUploadAsync(token, startResult.UploadId, General.GetPublicBaseUrl(request));
+            var completeResult = await CompleteRoomUploadAsync(userId, startResult.UploadId, General.GetPublicBaseUrl(request));
             return new StreamToRoomResult
             {
                 StatusCode = completeResult.StatusCode,
@@ -661,7 +661,7 @@ public class RoomStreamService : IRoomStreamService
 
             postgres.Files?.Add(dbFile);
             await postgres.SaveChangesAsync();
-            await hub.Clients.Group(dbUser.ApiKey).updateFolders(new FileDto(dbFile));
+            await hub.Clients.Group(dbUser.ID.ToString()).updateFolders(new FileDto(dbFile));
 
             var playbackUrl = $"{session.BaseUrl}/api/video/fileByToken?fileKey={dbFile.FileKey}";
 
@@ -715,11 +715,10 @@ public class RoomStreamService : IRoomStreamService
         }
     }
 
-    private async Task<DbUser?> GetUserByTokenAsync(string token)
+    private async Task<DbUser?> GetUserByIdAsync(int? userId)
     {
-        return await _postgres.Users
-            .Include(x => x.RememberTokens)
-            .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
+        if (userId == null) return null;
+        return await _postgres.Users.FirstOrDefaultAsync(candidate => candidate.ID == userId);
     }
 
     private static readonly HashSet<string> FfmpegContainerExtensions = new(StringComparer.OrdinalIgnoreCase)

@@ -22,6 +22,9 @@ using SyncStreamAPI.Wire;
 using System.Text.RegularExpressions;
 using SyncStreamAPI.Wire.Rooms;
 using SyncStreamAPI.Helper;
+using SyncStreamAPI.Auth;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 
 namespace SyncStreamAPI.Hubs;
 
@@ -57,6 +60,28 @@ public partial class ServerHub : Hub<IServerHub>
     private static readonly Regex RoomIdRegex = new(@"^[A-Za-z0-9_-]{1,64}$", RegexOptions.Compiled);
 
     private IConfiguration Configuration { get; }
+
+    /// <summary>
+    ///     Puts the connection into the channels its identity entitles it to.
+    /// </summary>
+    /// <remarks>
+    ///     This used to happen inside LoginRequest, which meant a reconnect kept its room but silently lost
+    ///     every per-user channel until the client logged in again. Deriving it from the connection's own
+    ///     identity makes it survive reconnects for free.
+    /// </remarks>
+    public override async Task OnConnectedAsync()
+    {
+        var caller = Context.GetCaller();
+        if (!caller.IsGuest)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, caller.UserId!.Value.ToString());
+            await Groups.AddToGroupAsync(Context.ConnectionId, General.LoggedInGroupName);
+            if (caller.HasAtLeast(UserPrivileges.Elevated))
+                await Groups.AddToGroupAsync(Context.ConnectionId, General.AdminGroupName);
+        }
+
+        await base.OnConnectedAsync();
+    }
 
     public override async Task OnDisconnectedAsync(Exception? ex)
     {
@@ -152,23 +177,40 @@ public partial class ServerHub : Hub<IServerHub>
         await base.OnDisconnectedAsync(ex);
     }
 
-    public bool CheckPrivileges(Room room, int minPriv = 1)
+    /// <summary>The authenticated account's id, or null for a guest.</summary>
+    private int? CallerUserId => Context.GetCaller().UserId;
+
+    /// <summary>
+    ///     Loads the calling account, or null for a guest.
+    /// </summary>
+    /// <remarks>
+    ///     Replaces the pattern this codebase repeated 33 times, looking a user up by a remember token that
+    ///     arrived as a method argument.
+    /// </remarks>
+    private Task<DbUser?> GetCallerUserAsync()
+    {
+        var userId = CallerUserId;
+        if (userId == null) return Task.FromResult<DbUser?>(null);
+        return _postgres.Users.FirstOrDefaultAsync(candidate => candidate.ID == userId);
+    }
+
+    /// <summary>
+    ///     Whether the caller may perform a privileged action in this room.
+    /// </summary>
+    /// <remarks>
+    ///     Reads the connection's own claims. It used to look the member's <c>username</c> up in the database
+    ///     and take that account's privileges, and the username was whatever the client passed to AddUser, so
+    ///     joining a privileged room under someone else's name borrowed their privileges.
+    /// </remarks>
+    private bool CheckPrivileges(Room room, UserPrivileges minimum = UserPrivileges.Approved)
     {
         if (!room.isPrivileged) return true;
-        var member = room.server.members.FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
-        if (member != null)
-        {
-            if (member.ishost) return true;
 
-            var user = _postgres.Users.FirstOrDefault(x => x.username == member.username);
-            if (user == null || user.userprivileges < (UserPrivileges)minPriv) return false;
-        }
-        else
-        {
-            return false;
-        }
+        var member = room.server.members.FirstOrDefault(x => x?.ConnectionId == Context.ConnectionId);
+        if (member == null) return false;
+        if (member.ishost) return true;
 
-        return true;
+        return Context.GetCaller().HasAtLeast(minimum);
     }
 
     private Room? GetRoom(string UniqueId)
@@ -344,9 +386,8 @@ public partial class ServerHub : Hub<IServerHub>
         await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token,
-        TokenPosition = 1)]
-    public async Task AddRoom(CreateRoomRequestDto request, string token)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task AddRoom(CreateRoomRequestDto request)
     {
         if (string.IsNullOrWhiteSpace(request?.name) || string.IsNullOrWhiteSpace(request.uniqueId))
         {
@@ -396,9 +437,8 @@ public partial class ServerHub : Hub<IServerHub>
         await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token,
-        TokenPosition = 1)]
-    public async Task RemoveRoom(string uniqueId, string token)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task RemoveRoom(string uniqueId)
     {
         var room = GetRoom(uniqueId);
         if (room == null || room.isPrivileged) return;

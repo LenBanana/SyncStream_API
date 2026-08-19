@@ -21,6 +21,7 @@ using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.ServerData;
 using SyncStreamAPI.ServerData.Background;
+using SyncStreamAPI.Auth;
 
 namespace SyncStreamAPI;
 
@@ -93,6 +94,15 @@ public class Startup
                 .AllowCredentials();
         }));
         services.AddHttpContextAccessor();
+
+        // One place turns a credential into an identity. Anonymous connections are allowed through so
+        // guests can watch; every gated action goes through a policy instead.
+        services.AddAuthentication(TokenAuthDefaults.Scheme)
+            .AddScheme<TokenAuthOptions, RememberTokenAuthenticationHandler>(TokenAuthDefaults.Scheme, null)
+            .AddScheme<ApiKeyAuthOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationHandler.Scheme, null);
+        services.AddAuthorization(options => options.AddSyncStreamPolicies());
+        services.AddSingleton<IUserIdProvider, DbUserIdProvider>();
+
         services.AddSignalR(options => { options.EnableDetailedErrors = false; }).AddNewtonsoftJsonProtocol();
         services.AddSingleton(provider =>
         {

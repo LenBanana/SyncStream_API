@@ -9,6 +9,8 @@ using SyncStreamAPI.Models.WebRTC;
 using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
 using SyncStreamAPI.ServerData.Helper;
+using Microsoft.AspNetCore.Authorization;
+using SyncStreamAPI.Auth;
 
 namespace SyncStreamAPI.Hubs;
 
@@ -31,8 +33,8 @@ public partial class ServerHub
     /// Returns the mediasoup router's RTP capabilities.
     /// Clients must call this first and pass the result to <c>device.load()</c>.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task<object> GetRouterRtpCapabilities(string token)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task<object> GetRouterRtpCapabilities()
     {
         return await SfuManager.GetRtpCapabilitiesAsync();
     }
@@ -46,8 +48,8 @@ public partial class ServerHub
     /// then returns the list of currently-active producers so the caller can
     /// immediately start consuming them.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task<List<SfuProducerEntry>> JoinSfuRoom(string token, string roomId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task<List<SfuProducerEntry>> JoinSfuRoom(string roomId)
     {
         await SfuManager.EnsureRoomAsync(roomId);
 
@@ -63,8 +65,8 @@ public partial class ServerHub
     }
 
     /// <summary>Leaves the SFU room and cleans up all server-side resources owned by this peer.</summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task LeaveSfuRoom(string token, string roomId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task LeaveSfuRoom(string roomId)
     {
         await CleanupSfuPeerAsync(Context.ConnectionId, roomId);
     }
@@ -78,9 +80,9 @@ public partial class ServerHub
     /// Returns the transport parameters that the client passes to
     /// <c>device.createSendTransport()</c> or <c>device.createRecvTransport()</c>.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
     public async Task<SfuTransportInfo> CreateWebRtcTransport(
-        string token, string roomId, SfuTransportDirection direction)
+        string roomId, SfuTransportDirection direction)
     {
         var producing = direction == SfuTransportDirection.Send;
         var consuming = direction == SfuTransportDirection.Recv;
@@ -93,8 +95,8 @@ public partial class ServerHub
     /// Finalises the DTLS handshake so media can flow.
     /// Called by the client after <c>transport.on('connect', …)</c> fires.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task ConnectTransport(string token, string roomId, string transportId, JObject dtlsParameters)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task ConnectTransport(string roomId, string transportId, JObject dtlsParameters)
     {
         await SfuManager.ConnectTransportAsync(roomId, transportId, dtlsParameters);
     }
@@ -108,9 +110,9 @@ public partial class ServerHub
     /// Notifies all other peers in the room so they can consume this track.
     /// Returns the producer ID.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
     public async Task<string> Produce(
-        string token, string roomId, string transportId, string kind, JObject rtpParameters)
+        string roomId, string transportId, string kind, JObject rtpParameters)
     {
         var producerId = await SfuManager.ProduceAsync(roomId, transportId, kind, rtpParameters, Context.ConnectionId);
         _sfuProducersByPeerRoom.GetOrAdd(SfuPeerRoomKey(Context.ConnectionId, roomId), _ => new List<string>()).Add(producerId);
@@ -129,8 +131,8 @@ public partial class ServerHub
     }
 
     /// <summary>Closes a specific producer (e.g. when the streamer pauses a track).</summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task CloseProducer(string token, string roomId, string producerId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task CloseProducer(string roomId, string producerId)
     {
         if (_sfuProducersByPeerRoom.TryGetValue(SfuPeerRoomKey(Context.ConnectionId, roomId), out var list))
             list.Remove(producerId);
@@ -148,9 +150,9 @@ public partial class ServerHub
     /// Creates a consumer for <paramref name="producerId"/> on the caller's recv transport.
     /// Returns consumer parameters for use with <c>recvTransport.consume()</c>.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
     public async Task<SfuConsumerInfo> Consume(
-        string token, string roomId, string transportId, string producerId, JObject rtpCapabilities)
+        string roomId, string transportId, string producerId, JObject rtpCapabilities)
     {
         return await SfuManager.ConsumeAsync(roomId, transportId, producerId, rtpCapabilities, Context.ConnectionId);
     }
@@ -160,8 +162,8 @@ public partial class ServerHub
     // ---------------------------------------------------------------
 
     /// <summary>Returns true when the mediasoup SFU is reachable.</summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task<bool> IsSfuAvailable(string token)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task<bool> IsSfuAvailable()
     {
         return await SfuManager.IsHealthyAsync();
     }
@@ -174,8 +176,8 @@ public partial class ServerHub
     /// Sets the preferred simulcast spatial and temporal layers for an existing consumer.
     /// Call from the viewer to lower/raise quality (e.g. based on available bandwidth).
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task SetPreferredLayers(string token, string roomId, string consumerId, int spatialLayer, int temporalLayer)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task SetPreferredLayers(string roomId, string consumerId, int spatialLayer, int temporalLayer)
     {
         await SfuManager.SetPreferredLayersAsync(roomId, consumerId, spatialLayer, temporalLayer);
     }
@@ -189,8 +191,8 @@ public partial class ServerHub
     /// Notifies every peer in the room so the UI can show a recording indicator.
     /// Only the room host (or admin) should call this; the hub enforces that the caller is in the room.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task StartRecording(string token, string roomId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task StartRecording(string roomId)
     {
         // Only the active SFU streamer for this room may start a recording.
         var room = MainManager.GetRoom(roomId);
@@ -203,8 +205,8 @@ public partial class ServerHub
     /// Stops the active recording in the SFU room.
     /// Notifies every peer in the room.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task StopRecording(string token, string roomId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task StopRecording(string roomId)
     {
         // Only the active SFU streamer for this room may stop the recording.
         var room = MainManager.GetRoom(roomId);
@@ -221,15 +223,15 @@ public partial class ServerHub
     /// Called by the streamer after they have already joined the SFU room and produced tracks.
     /// Marks the room as using SFU streaming and notifies viewers to join via SFU.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task StartSfuStream(string token, string roomId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task StartSfuStream(string roomId)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null) return;
 
         // Stop any existing P2P stream first.
         if (!string.IsNullOrEmpty(room.CurrentStreamer) && !room.IsStreamingSfu)
-            await StopWebRtcStream(token, roomId);
+            await StopWebRtcStream(roomId);
 
         room.CurrentStreamer = Context.ConnectionId;
         room.IsStreamingSfu = true;
@@ -243,8 +245,8 @@ public partial class ServerHub
     /// Stops the SFU stream for the room and resets its player type.
     /// Producers and transports are cleaned up when the streamer calls <c>LeaveSfuRoom</c>.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task StopSfuStream(string token, string roomId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task StopSfuStream(string roomId)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null || room.CurrentStreamer != Context.ConnectionId) return;
@@ -261,8 +263,8 @@ public partial class ServerHub
     /// Unlike <see cref="StartSfuStream"/>, this does not affect the room's main
     /// player or auto-join any viewers; it only marks the member as live in the user list.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task<string> StartSfuOptInStream(string token, string roomId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task<string> StartSfuOptInStream(string roomId)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null) return string.Empty;
@@ -285,8 +287,8 @@ public partial class ServerHub
     /// Stops the caller's opt-in SFU live screen-share and dismisses any viewers
     /// currently watching via the popout/live-watch path.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task StopSfuOptInStream(string token, string roomId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task StopSfuOptInStream(string roomId)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null) return;
@@ -311,8 +313,8 @@ public partial class ServerHub
     /// Returns true when the specified streamer is currently sharing an opt-in live
     /// screen-share through the SFU rather than the legacy P2P watcher path.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public Task<bool> IsSfuOptInStreamActive(string token, string roomId, string streamerId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public Task<bool> IsSfuOptInStreamActive(string roomId, string streamerId)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null) return Task.FromResult(false);
@@ -328,8 +330,8 @@ public partial class ServerHub
     /// before invoking this — the method verifies that precondition and does nothing if
     /// the caller is not found in <see cref="Models.Room.ActiveSfuStreamers"/>.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Moderator, AuthenticationType = AuthenticationType.Token)]
-    public async Task ForceSfuBroadcast(string token, string roomId)
+    [Authorize(Policy = AuthorizationPolicies.Moderator)]
+    public async Task ForceSfuBroadcast(string roomId)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null) return;

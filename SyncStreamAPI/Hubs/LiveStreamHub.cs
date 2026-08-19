@@ -3,20 +3,22 @@ using System.Threading.Tasks;
 using SyncStreamAPI.Annotations;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.PostgresModels;
+using Microsoft.AspNetCore.Authorization;
+using SyncStreamAPI.Auth;
 
 namespace SyncStreamAPI.Hubs;
 
 public partial class ServerHub
 {
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task GetLiveUsers(string token)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task GetLiveUsers()
     {
         var liveUser = _manager.LiveUsers;
         if (liveUser.Count > 0) await Clients.Caller.getliveusers(liveUser.Select(x => x.ToDTO()).ToList());
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task GetUsersWatching(string token, string name)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task GetUsersWatching(string name)
     {
         var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.userName == name);
         if (liveUser != null) await Clients.Caller.getwatchingusers(liveUser.watchMember);

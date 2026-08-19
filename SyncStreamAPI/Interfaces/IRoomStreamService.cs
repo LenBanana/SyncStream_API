@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 
@@ -6,19 +6,19 @@ namespace SyncStreamAPI.Interfaces;
 
 public interface IRoomStreamService
 {
-    Task<RoomUploadSessionResult> StartRoomUploadAsync(string token, string uniqueId, string name, string fileEnding,
+    Task<RoomUploadSessionResult> StartRoomUploadAsync(int? userId, string uniqueId, string name, string fileEnding,
         long totalSize, bool skipPlaylist = false);
 
-    Task<RoomUploadSessionResult> UploadRoomChunkAsync(HttpRequest request, string token, string uploadId,
+    Task<RoomUploadSessionResult> UploadRoomChunkAsync(HttpRequest request, int? userId, string uploadId,
         long startByte);
 
-    Task<RoomUploadSessionResult> GetRoomUploadStatusAsync(string token, string uploadId);
+    Task<RoomUploadSessionResult> GetRoomUploadStatusAsync(int? userId, string uploadId);
 
-    Task<RoomUploadSessionResult> CompleteRoomUploadAsync(string token, string uploadId, string publicBaseUrl);
+    Task<RoomUploadSessionResult> CompleteRoomUploadAsync(int? userId, string uploadId, string publicBaseUrl);
 
-    Task<RoomUploadSessionResult> CancelRoomUploadAsync(string token, string uploadId);
+    Task<RoomUploadSessionResult> CancelRoomUploadAsync(int? userId, string uploadId);
 
-    Task<StreamToRoomResult> StreamToRoomAsync(HttpRequest request, string token, string uniqueId, string name,
+    Task<StreamToRoomResult> StreamToRoomAsync(HttpRequest request, int? userId, string uniqueId, string name,
         string fileEnding);
 
     Task<RoomUploadPlaybackAssetResult> GetRoomUploadPlaybackAssetAsync(string uploadId);

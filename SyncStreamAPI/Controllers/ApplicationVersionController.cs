@@ -11,6 +11,8 @@ using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.PostgresModels;
+using Microsoft.AspNetCore.Authorization;
+using SyncStreamAPI.Auth;
 
 namespace SyncStreamAPI.Controllers;
 
@@ -93,9 +95,8 @@ public class ApplicationVersionController : Controller
     /// Requires Administrator API key.
     /// </summary>
     [HttpPost("upload")]
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.API,
-        TokenPosition = 1)]
-    public async Task<IActionResult> UploadUpdate(IFormFile file, string apiKey, string appName,
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task<IActionResult> UploadUpdate(IFormFile file, string appName,
         string version = "0.1", string? releaseNotes = null)
     {
         if (file == null || file.Length == 0)

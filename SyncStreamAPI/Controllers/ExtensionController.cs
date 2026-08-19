@@ -15,6 +15,8 @@ using SyncStreamAPI.Models;
 using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
 using SyncStreamAPI.ServerData.Helper;
+using Microsoft.AspNetCore.Authorization;
+using SyncStreamAPI.Auth;
 
 namespace SyncStreamAPI.Controllers;
 
@@ -39,8 +41,8 @@ public class ExtensionController : Controller
     }
 
     [HttpPost("[action]")]
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.API)]
-    public async Task<IActionResult> AddVideoByExtension(string apiKey, string roomId, string videoUrl,
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task<IActionResult> AddVideoByExtension(string roomId, string videoUrl,
         string password = null)
     {
         var room = MainManager.GetRoom(roomId);
@@ -50,7 +52,7 @@ public class ExtensionController : Controller
             return Unauthorized("Room is password protected");
         if (!string.IsNullOrEmpty(room.password) && room.password != password)
             return Unauthorized("Wrong password");
-        var user = await _postgres.Users.FirstOrDefaultAsync(x => x.ApiKey == apiKey);
+        var user = await _postgres.Users.FirstOrDefaultAsync(x => x.ID == this.CallerUserId());
         if (user == null)
             return BadRequest("User not found");
         var result = await RoomManager.AddVideo(new DreckVideo

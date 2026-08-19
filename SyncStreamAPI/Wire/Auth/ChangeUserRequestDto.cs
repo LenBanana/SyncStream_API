@@ -1,15 +1,21 @@
 namespace SyncStreamAPI.Wire.Auth;
 
 /// <summary>
-///     Inbound profile change. <see cref="ID" /> is still client-supplied here and is only safe
-///     because the caller must also prove the current password; it moves to the connection's
-///     identity when authentication moves to the connection.
+///     Inbound profile change.
 /// </summary>
+/// <remarks>
+///     No account id: the account being changed is the authenticated one. The previous version took an
+///     <c>ID</c> from the wire, which was only not exploitable because the caller also had to supply that
+///     account's current password.
+/// </remarks>
 public class ChangeUserRequestDto
 {
-    public int ID { get; set; }
+    /// <summary>New username, or null or unchanged to leave it alone.</summary>
     public string? username { get; set; }
 
-    /// <summary>New password as a SHA512 hash, or empty to leave it unchanged.</summary>
-    public string? password { get; set; }
+    /// <summary>New password as a SHA512 hash, or null or empty to leave it alone.</summary>
+    public string? newPassword { get; set; }
+
+    /// <summary>The account's current password as a SHA512 hash. Required.</summary>
+    public string? currentPassword { get; set; }
 }

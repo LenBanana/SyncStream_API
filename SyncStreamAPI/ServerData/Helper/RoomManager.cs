@@ -121,13 +121,6 @@ public class RoomManager
             }
     }
 
-    public async void AddMember(int id, string connectionId)
-    {
-        using var scope = ServiceProvider.CreateScope();
-        var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-        await hub.Groups.AddToGroupAsync(connectionId, id.ToString());
-    }
-
     public static async Task<string> AddVideo(DreckVideo key, string UniqueId)
     {
         var room = GetRoom(UniqueId);

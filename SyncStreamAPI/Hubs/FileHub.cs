@@ -14,28 +14,30 @@ using SyncStreamAPI.ServerData.Helper;
 using Xabe.FFmpeg;
 using YoutubeDLSharp.Options;
 using SyncStreamAPI.Wire;
+using Microsoft.AspNetCore.Authorization;
+using SyncStreamAPI.Auth;
 
 namespace SyncStreamAPI.Hubs;
 
 public partial class ServerHub
 {
-    [Privilege(RequiredPrivileges = UserPrivileges.Elevated, AuthenticationType = AuthenticationType.Token)]
-    public async Task ReloadDownloadConfig(string token)
+    [Authorize(Policy = AuthorizationPolicies.Elevated)]
+    public async Task ReloadDownloadConfig()
     {
         GeneralManager.ReadSettings(Configuration);
         await Clients.Caller.dialog(new Dialog
             { Header = "Reload configuration", Question = "Reload successful", Answer1 = "Ok" });
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Elevated, AuthenticationType = AuthenticationType.Token)]
-    public async Task GetAllDownloads(string token)
+    [Authorize(Policy = AuthorizationPolicies.Elevated)]
+    public async Task GetAllDownloads()
     {
         var result = _postgres.Files?.Select(x => new FileDto(x)).OrderBy(x => x.Name).ToList();
         await Clients.Caller.getDownloads(result);
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Elevated, AuthenticationType = AuthenticationType.Token)]
-    public async Task GetStorageInfo(string token)
+    [Authorize(Policy = AuthorizationPolicies.Elevated)]
+    public async Task GetStorageInfo()
     {
         var folders = new List<string> { General.FilePath, General.TemporaryFilePath };
         var storageInfo = folders.Select(f => new FileStorageInfo(f)).ToList();
@@ -43,8 +45,8 @@ public partial class ServerHub
         await Clients.Caller.getStorageInfo(storageInfo);
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Elevated, AuthenticationType = AuthenticationType.Token)]
-    public async Task CleanUpFiles(string token, bool delete = false)
+    [Authorize(Policy = AuthorizationPolicies.Elevated)]
+    public async Task CleanUpFiles(bool delete = false)
     {
         var files = GetDefaultFiles();
         if (files.Count() > 0)
@@ -84,8 +86,8 @@ public partial class ServerHub
         return files;
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task ChangeDownload(string token, int fileId, string name)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task ChangeDownload(int fileId, string name)
     {
         if (name is not { Length: > 2 })
         {
@@ -95,33 +97,41 @@ public partial class ServerHub
         }
 
         var dbUser = _postgres.Users.Include(x => x.RememberTokens)
-            .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == token));
+            .FirstOrDefault(x => x.ID == CallerUserId);
         var result = _postgres.Users.Include(x => x.Files).FirstOrDefault(x => x.ID == dbUser.ID)?.Files
             .FirstOrDefault(x => x.ID == fileId);
         result.Name = name;
         await _postgres.SaveChangesAsync();
-        if (result.DbFileFolderId > 0) await GetFolderFiles(token, result.DbFileFolderId);
+        if (result.DbFileFolderId > 0) await GetFolderFiles(result.DbFileFolderId);
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task GetDownloads(string token)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task GetDownloads()
     {
         var dbUser = _postgres.Users.Include(x => x.RememberTokens)
-            .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == token));
+            .FirstOrDefault(x => x.ID == CallerUserId);
         var userFiles = _postgres.Files?.Where(x => x.DbUserID == dbUser.ID).ToList();
         var result = userFiles.Select(x => new FileDto(x)).OrderBy(x => x.Name).ToList();
         await Clients.Caller.getDownloads(result);
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task GetFolders(string token, int folderId = 1)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public Task GetFolders(int folderId = 1)
     {
-        var dbUser = _postgres.Users.Include(x => x.RememberTokens)
-            .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == token));
+        return SendFoldersToUser(CallerUserId, folderId);
+    }
 
-        if (dbUser == null)
-            // Handle invalid token scenario
-            return;
+    /// <summary>
+    ///     Sends the folder tree as a given account sees it, to that account's connections.
+    /// </summary>
+    /// <remarks>
+    ///     Split out from <see cref="GetFolders" /> so sharing a folder can notify the recipient rather than
+    ///     the person doing the sharing.
+    /// </remarks>
+    private async Task SendFoldersToUser(int? userId, int folderId)
+    {
+        var dbUser = _postgres.Users.FirstOrDefault(x => x.ID == userId);
+        if (dbUser == null) return;
 
         var sharedFolderIds = _postgres.FolderShare
             .Where(x => x.DbUserID == dbUser.ID)
@@ -140,7 +150,7 @@ public partial class ServerHub
         if (resultFolder != null)
         {
             var folderResult = new FolderDto(resultFolder);
-            await Clients.Group(token).getFolders(folderResult);
+            await Clients.Group(dbUser.ID.ToString()).getFolders(folderResult);
         }
     }
 
@@ -160,11 +170,11 @@ public partial class ServerHub
         return allSharedFolders.Distinct().ToList();
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task AddFolder(string token, int folderId)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task AddFolder(int folderId)
     {
         var dbUser = _postgres.Users.Include(x => x.RememberTokens)
-            .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == token));
+            .FirstOrDefault(x => x.ID == CallerUserId);
         var parent = _postgres.Folders?.FirstOrDefault(x => x.Id == folderId);
         if (parent == null)
         {
@@ -181,14 +191,14 @@ public partial class ServerHub
         var newFolder = new DbFileFolder("New Folder", parent.Id, dbUser.ID);
         _postgres.Folders.Add(newFolder);
         await _postgres.SaveChangesAsync();
-        await GetFolders(token, folderId);
+        await GetFolders(folderId);
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task DeleteFolder(string token, int folderId)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task DeleteFolder(int folderId)
     {
         var dbUser = _postgres.Users.Include(x => x.RememberTokens)
-            .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == token));
+            .FirstOrDefault(x => x.ID == CallerUserId);
         var folder = _postgres.Folders?.Include(x => x.Files).FirstOrDefault(x =>
             x.Id == folderId && (x.DbUserID == dbUser.ID || dbUser.userprivileges > UserPrivileges.Administrator));
         if (folder != null)
@@ -205,26 +215,26 @@ public partial class ServerHub
 
             _postgres.Folders.Remove(folder);
             await _postgres.SaveChangesAsync();
-            await GetFolders(token, (int)(folder.ParentId.HasValue ? folder.ParentId : 1));
+            await GetFolders((int)(folder.ParentId.HasValue ? folder.ParentId : 1));
         }
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task DownloadFile(string token, string url, string fileName,
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task DownloadFile(string url, string fileName,
         ConversionPreset preset = ConversionPreset.SuperFast)
     {
         var dbUser = await _postgres.Users.Include(x => x.RememberTokens)
-            .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
+            .FirstOrDefaultAsync(x => x.ID == CallerUserId);
         if (dbUser.userprivileges >= UserPrivileges.Administrator)
-            _ = _manager.AddDownload(new DownloadClientValue(dbUser.ID, fileName, token, url, preset));
+            _ = _manager.AddDownload(new DownloadClientValue(dbUser.ID, fileName, url, preset));
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task DownloadYtVideo(string token, string url, string quality = "1080", bool audioOnly = false,
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task DownloadYtVideo(string url, string quality = "1080", bool audioOnly = false,
         bool embedSubtitles = false)
     {
         var dbUser = await _postgres.Users.Include(x => x.RememberTokens)
-            .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
+            .FirstOrDefaultAsync(x => x.ID == CallerUserId);
         if (url.Contains("playlist?list="))
         {
             var ytdl = General.GetYoutubeDl();
@@ -233,22 +243,22 @@ public partial class ServerHub
                 ForceIPv4 = true
             });
             var vids = playlistInfo.Data.Entries.Select(x =>
-                    new DownloadClientValue(dbUser.ID, x.Title, token, x.Url, quality, audioOnly, embedSubtitles))
+                    new DownloadClientValue(dbUser.ID, x.Title, x.Url, quality, audioOnly, embedSubtitles))
                 .ToList();
             _manager.YtPlaylistDownload(vids);
             return;
         }
 
         var fileName = await General.ResolveUrl(url, Configuration);
-        var conv = new DownloadClientValue(dbUser.ID, fileName, token, url, quality, audioOnly);
+        var conv = new DownloadClientValue(dbUser.ID, fileName, url, quality, audioOnly);
         _ = _manager.YtDlpDownload(conv);
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task GetFileInfo(string token, int id)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task GetFileInfo(int id)
     {
         var dbUser = await _postgres.Users.Include(x => x.RememberTokens)
-            .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
+            .FirstOrDefaultAsync(x => x.ID == CallerUserId);
         var file = _postgres.Files.ToList().FirstOrDefault(x => x.ID == id);
         if (file == null)
         {
@@ -293,11 +303,11 @@ public partial class ServerHub
         await Clients.Caller.getFileInfo(downloadFileInfo);
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task GetFolderUsers(string token, int folderId)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task GetFolderUsers(int folderId)
     {
         var dbUser = await _postgres.Users.Include(x => x.RememberTokens)
-            .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
+            .FirstOrDefaultAsync(x => x.ID == CallerUserId);
         var folder = _postgres.Folders?.FirstOrDefault(x => x.Id == folderId);
         if (folder == null)
         {
@@ -311,11 +321,11 @@ public partial class ServerHub
         await Clients.Caller.getFolderUsers(users.ToSummaries());
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task ShareFolder(string token, int folderId, int userId)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task ShareFolder(int folderId, int userId)
     {
         var dbUser = await _postgres.Users.Include(x => x.RememberTokens)
-            .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
+            .FirstOrDefaultAsync(x => x.ID == CallerUserId);
         if (dbUser == null)
             // Handle invalid token scenario
             return;
@@ -370,16 +380,17 @@ public partial class ServerHub
         }
 
         await _postgres.SaveChangesAsync();
-        var token = shareUser.RememberTokens.MaxBy(x => x.Created)?.Token;
-        if (token != null)
-            await GetFolders(token, shareFolder.Id);
+
+        // Push the updated tree to the user the folder was shared with, addressed by their account. This
+        // used to reach for that user's newest remember token and send to a group named after it.
+        await SendFoldersToUser(shareUser.ID, shareFolder.Id);
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task GetFolderFiles(string token, int folderId)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task GetFolderFiles(int folderId)
     {
         var dbUser = await _postgres.Users.Include(x => x.RememberTokens)
-            .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
+            .FirstOrDefaultAsync(x => x.ID == CallerUserId);
         if (dbUser == null) return;
 
         var dbFolder = await _postgres.Folders.FirstOrDefaultAsync(x => x.Id == folderId);
@@ -437,20 +448,20 @@ public partial class ServerHub
         return ancestorFolders;
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task ChangeFolderName(string token, int folderId, string folderName)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task ChangeFolderName(int folderId, string folderName)
     {
         var folder = _postgres.Folders?.FirstOrDefault(x => x.Id == folderId);
         if (folder != null)
         {
             folder.Name = folderName;
             await _postgres.SaveChangesAsync();
-            if (folder.ParentId != null) await GetFolders(token, (int)folder.ParentId);
+            if (folder.ParentId != null) await GetFolders((int)folder.ParentId);
         }
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task ChangeFolder(string token, int fileId, int folderId)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task ChangeFolder(int fileId, int folderId)
     {
         var file = _postgres.Files?.FirstOrDefault(x => x.ID == fileId);
         if (file != null && file.DbFileFolderId != folderId)
@@ -460,19 +471,19 @@ public partial class ServerHub
         }
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task CancelConversion(string token, string downloadId)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task CancelConversion(string downloadId)
     {
         var dbUser = await _postgres.Users.Include(x => x.RememberTokens)
-            .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
+            .FirstOrDefaultAsync(x => x.ID == CallerUserId);
         await _manager.CancelDownload(dbUser.ID, downloadId);
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task RemoveFile(string token, int id)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task RemoveFile(int id)
     {
         var dbUser = await _postgres.Users.Include(x => x.RememberTokens)
-            .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
+            .FirstOrDefaultAsync(x => x.ID == CallerUserId);
         var file = _postgres.Files.ToList().FirstOrDefault(x => x.ID == id);
         if (file != null && (file.DbUserID == dbUser.ID || dbUser.userprivileges >= UserPrivileges.Elevated))
         {
@@ -483,36 +494,36 @@ public partial class ServerHub
             _postgres.Files.Remove(file);
             await _postgres.SaveChangesAsync();
             await Clients.Caller.downloadRemoved(id.ToString());
-            if (file.DbFileFolderId > 0) await GetFolderFiles(token, file.DbFileFolderId);
+            if (file.DbFileFolderId > 0) await GetFolderFiles(file.DbFileFolderId);
         }
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task MakeFilePermanent(string token, int id)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task MakeFilePermanent(int id)
     {
         var dbUser = await _postgres.Users.Include(x => x.RememberTokens)
-            .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
+            .FirstOrDefaultAsync(x => x.ID == CallerUserId);
         var file = _postgres.Files.ToList().FirstOrDefault(x => x.ID == id);
         if (file is { Temporary: true } &&
             (file.DbUserID == dbUser.ID || dbUser.userprivileges >= UserPrivileges.Elevated))
         {
             file.DateToBeDeleted = null;
             await _postgres.SaveChangesAsync();
-            await GetFolderFiles(token, file.DbFileFolderId);
+            await GetFolderFiles(file.DbFileFolderId);
         }
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task ToggleFilePublic(string token, int id)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task ToggleFilePublic(int id)
     {
         var dbUser = await _postgres.Users.Include(x => x.RememberTokens)
-            .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
+            .FirstOrDefaultAsync(x => x.ID == CallerUserId);
         var file = _postgres.Files.ToList().FirstOrDefault(x => x.ID == id);
         if (file != null && (file.DbUserID == dbUser.ID || dbUser.userprivileges >= UserPrivileges.Elevated))
         {
             file.Public = !file.Public;
             await _postgres.SaveChangesAsync();
-            await GetFolderFiles(token, file.DbFileFolderId);
+            await GetFolderFiles(file.DbFileFolderId);
         }
     }
 }

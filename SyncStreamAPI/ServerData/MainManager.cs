@@ -97,14 +97,13 @@ public class MainManager
         return RoomManager.GetRooms();
     }
 
-    public static async Task<DbUser?> GetUser(string token)
+    public static async Task<DbUser?> GetUser(int? userId)
     {
+        if (userId == null) return null;
+
         using var scope = ServiceProvider.CreateScope();
         var postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
-        var dbUser = await postgres.Users
-            .Include(x => x.RememberTokens)
-            .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
-        return dbUser;
+        return await postgres.Users.FirstOrDefaultAsync(candidate => candidate.ID == userId);
     }
 
     public async Task SendDefaultDialog(string group, string message, AlertType alertType, string header = "")
@@ -153,9 +152,7 @@ public class MainManager
         var postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
         var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
         var userId = downloadClient.UserId.ToString();
-        var dbUser = postgres.Users
-            .Include(x => x.RememberTokens)
-            .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == downloadClient.Token) == true);
+        var dbUser = postgres.Users.FirstOrDefault(x => x.ID == downloadClient.UserId);
         var fileExtension = downloadClient.AudioOnly ? ".mp3" : ".mp4";
         var dbFile = new DbFile(downloadClient.FileName, fileExtension, dbUser);
         dbFile.GetPath();
@@ -318,12 +315,8 @@ public class MainManager
 
         try
         {
-            // All existing database/authentication logic preserved
-            var dbUser = (postgres.Users.Include(x => x.RememberTokens))
-                .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == client.Token));
-
-            var token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == client.Token);
-            if (token == null) return;
+            var dbUser = postgres.Users.FirstOrDefault(x => x.ID == client.UserId);
+            if (dbUser == null) return;
 
             if (dbUser is { userprivileges: >= UserPrivileges.Administrator })
             {

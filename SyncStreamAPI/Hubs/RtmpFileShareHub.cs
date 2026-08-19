@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -11,6 +11,8 @@ using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.RTMP;
 using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
+using Microsoft.AspNetCore.Authorization;
+using SyncStreamAPI.Auth;
 
 namespace SyncStreamAPI.Hubs;
 
@@ -27,9 +29,8 @@ public partial class ServerHub
     /// Viewers and the room's Live modal immediately reflect the stream via the existing
     /// OBS/RTMP infrastructure (ON_PUBLISH fires automatically from nginx-rtmp).
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
     public async Task StartRtmpFileShareFromUpload(
-        string token,
         string roomId,
         string uploadId,
         RtmpPlaybackPreferences? playbackPreferences = null)
@@ -42,7 +43,7 @@ public partial class ServerHub
 
         var dbUser = _postgres.Users?
             .Include(x => x.RememberTokens)
-            .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == token));
+            .FirstOrDefault(x => x.ID == CallerUserId);
         if (dbUser == null) return;
 
         // Mutual exclusion: reject if user is already live via OBS.
@@ -126,8 +127,8 @@ public partial class ServerHub
     }
 
     /// <summary>Stops the active RTMP file-share and notifies all room members.</summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task StopRtmpFileShare(string token, string roomId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task StopRtmpFileShare(string roomId)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null || !room.IsRtmpFileShareActive) return;
@@ -137,8 +138,8 @@ public partial class ServerHub
     }
 
     /// <summary>Toggles play/pause of the active RTMP stream and broadcasts the state to viewers.</summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task RtmpFileSharePlayPause(string token, string roomId, bool isPlaying)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task RtmpFileSharePlayPause(string roomId, bool isPlaying)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null || !room.IsRtmpFileShareActive) return;
@@ -158,8 +159,8 @@ public partial class ServerHub
     /// Seeks the RTMP stream to the given position by killing and restarting ffmpeg.
     /// Blocked while the background upload is still in progress.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task RtmpFileShareSeek(string token, string roomId, double positionSec)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task RtmpFileShareSeek(string roomId, double positionSec)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null || !room.IsRtmpFileShareActive) return;
@@ -184,8 +185,8 @@ public partial class ServerHub
     /// Called by the host after the background chunk upload finishes.
     /// Clears the upload guard so seeking becomes available.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public Task MarkRtmpFileShareUploadComplete(string token, string roomId, string uploadId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public Task MarkRtmpFileShareUploadComplete(string roomId, string uploadId)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null) return Task.CompletedTask;

@@ -6,6 +6,8 @@ using SyncStreamAPI.Models.WebRTC;
 using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
 using SyncStreamAPI.ServerData.Helper;
+using Microsoft.AspNetCore.Authorization;
+using SyncStreamAPI.Auth;
 
 namespace SyncStreamAPI.Hubs;
 
@@ -20,8 +22,8 @@ public partial class ServerHub
     /// <see cref="Models.Room.ActiveStreamers"/> set and notifies all other room
     /// members so they can show a streaming indicator in the user list.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task StartWebRtcStream(string token, string roomId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task StartWebRtcStream(string roomId)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null) return;
@@ -45,8 +47,8 @@ public partial class ServerHub
     /// <summary>
     /// Stop the caller's P2P stream, release server-side state, and notify viewers.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task StopWebRtcStream(string token, string roomId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task StopWebRtcStream(string roomId)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null) return;
@@ -79,8 +81,8 @@ public partial class ServerHub
     /// Viewer calls this to request a P2P offer from a specific streamer.
     /// <paramref name="streamerId"/> is the streamer's SignalR connectionId.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task JoinWebRtcStream(string token, string roomId, string streamerId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task JoinWebRtcStream(string roomId, string streamerId)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null) return;
@@ -95,8 +97,8 @@ public partial class ServerHub
     /// <summary>
     /// Streamer sends its SDP offer to the joining viewer.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task SendOfferToViewer(string token, string connectionId, WebRtcClientOffer offer)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task SendOfferToViewer(string connectionId, WebRtcClientOffer offer)
     {
         await Clients.Client(connectionId).sendOfferToViewer(offer);
     }
@@ -104,8 +106,8 @@ public partial class ServerHub
     /// <summary>
     /// Viewer sends its SDP answer back to the streamer.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task CreateStreamAnswer(string token, string streamerId, WebRtcClientOffer answer)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task CreateStreamAnswer(string streamerId, WebRtcClientOffer answer)
     {
         var room = MainManager.GetRoom(answer.RoomId ?? "");
         bool isActive = room != null && room.ActiveStreamers.Contains(streamerId);
@@ -119,8 +121,8 @@ public partial class ServerHub
     /// Viewer sends an ICE candidate to a specific streamer.
     /// <paramref name="streamerId"/> identifies which streamer's RTCPeerConnection to target.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task SendIceCandidate(string token, string roomId, string streamerId, object iceCandidate)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task SendIceCandidate(string roomId, string streamerId, object iceCandidate)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null) return;
@@ -134,8 +136,8 @@ public partial class ServerHub
     /// <summary>
     /// Streamer sends an ICE candidate to a specific viewer.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task SendIceCandidateToViewer(string token, string connectionId, object iceCandidate)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task SendIceCandidateToViewer(string connectionId, object iceCandidate)
     {
         await Clients.Client(connectionId).sendIceCandidate(iceCandidate);
     }
@@ -143,8 +145,8 @@ public partial class ServerHub
     /// <summary>
     /// Viewer requests an ICE restart from the streamer it is watching.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task RequestIceRestart(string token, string roomId, string streamerId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task RequestIceRestart(string roomId, string streamerId)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null) return;
@@ -163,8 +165,8 @@ public partial class ServerHub
     /// Moderator-only: forces all room members to join the caller's P2P stream.
     /// Sends a <c>broadcastStream</c> event so every client auto-connects.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Moderator, AuthenticationType = AuthenticationType.Token)]
-    public async Task ForceBroadcast(string token, string roomId)
+    [Authorize(Policy = AuthorizationPolicies.Moderator)]
+    public async Task ForceBroadcast(string roomId)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null) return;

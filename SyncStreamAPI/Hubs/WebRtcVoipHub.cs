@@ -5,6 +5,8 @@ using SyncStreamAPI.Enums;
 using SyncStreamAPI.Models.WebRTC;
 using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
+using Microsoft.AspNetCore.Authorization;
+using SyncStreamAPI.Auth;
 
 namespace SyncStreamAPI.Hubs;
 
@@ -13,10 +15,10 @@ public partial class ServerHub
     // Maps connectionId → roomId so OnDisconnectedAsync can notify peers.
     private static readonly ConcurrentDictionary<string, string> _voipRoomByConnection = new();
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task JoinAudioRoom(string token, string roomId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task JoinAudioRoom(string roomId)
     {
-        var user = await MainManager.GetUser(token);
+        var user = await MainManager.GetUser(CallerUserId);
         if (user == null) return;
 
         // If already in another room, leave it first.
@@ -31,8 +33,8 @@ public partial class ServerHub
                 { ParticipantId = Context.ConnectionId, ParticipantName = user.username });
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task LeaveAudioRoom(string token, string roomId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task LeaveAudioRoom(string roomId)
     {
         _voipRoomByConnection.TryRemove(Context.ConnectionId, out _);
         await LeaveAudioRoomInternal(Context.ConnectionId, roomId);
@@ -45,36 +47,36 @@ public partial class ServerHub
             .participantLeft(new VoipParticipantDto { ParticipantId = connectionId });
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task SendStatusToParticipant(string token, VoipParticipantDto participantDto, string roomId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task SendStatusToParticipant(VoipParticipantDto participantDto, string roomId)
     {
         participantDto.ParticipantId = Context.ConnectionId;
         await Clients.GroupExcept($"AudioRoom-{roomId}", [Context.ConnectionId])
             .receiveStatusFromParticipant(participantDto);
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task SendOfferToParticipant(string token, string participantId, VoipOffer offer)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task SendOfferToParticipant(string participantId, VoipOffer offer)
     {
-        var user = await MainManager.GetUser(token);
+        var user = await MainManager.GetUser(CallerUserId);
         if (user == null) return;
         offer.ParticipantName = user.username;
         await Clients.Client(participantId).receiveOfferFromParticipant(Context.ConnectionId, offer);
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task SendAnswerToParticipant(string token, string participantId, VoipOffer answer)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task SendAnswerToParticipant(string participantId, VoipOffer answer)
     {
-        var user = await MainManager.GetUser(token);
+        var user = await MainManager.GetUser(CallerUserId);
         if (user == null) return;
         answer.ParticipantName = user.username;
         await Clients.Client(participantId).receiveAnswerFromParticipant(Context.ConnectionId, answer);
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task SendIceCandidateToParticipant(string token, string participantId, object candidate)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task SendIceCandidateToParticipant(string participantId, object candidate)
     {
-        var user = await MainManager.GetUser(token);
+        var user = await MainManager.GetUser(CallerUserId);
         if (user == null) return;
         await Clients.Client(participantId).receiveIceCandidateFromParticipant(Context.ConnectionId, candidate);
     }

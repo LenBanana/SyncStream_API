@@ -11,13 +11,26 @@ using SyncStreamAPI.ServerData;
 using SyncStreamAPI.ServerData.Helper;
 using SyncStreamAPI.Wire;
 using SyncStreamAPI.Wire.Games;
+using SyncStreamAPI.Auth;
 
 namespace SyncStreamAPI.Hubs;
 
 public partial class ServerHub
 {
+    /// <summary>
+    ///     Joins a room.
+    /// </summary>
+    /// <param name="displayName">
+    ///     The name a guest would like to be called. Ignored for signed-in accounts, which always appear
+    ///     under their account name.
+    /// </param>
+    /// <remarks>
+    ///     This used to take the username to join as, and room privileges were then resolved by looking that
+    ///     name up in the database, so joining as someone else borrowed their privileges. The identity now
+    ///     comes from the connection and only a guest's chosen label is negotiable.
+    /// </remarks>
     [ErrorHandling]
-    public async Task AddUser(string username, string UniqueId, string password)
+    public async Task AddUser(string displayName, string UniqueId, string password)
     {
         var ip = Context.ConnectionId;
         var room = GetRoom(UniqueId);
@@ -38,12 +51,33 @@ public partial class ServerHub
         var mainServer = room.server;
         mainServer.members ??= new List<Member>();
 
+        var caller = Context.GetCaller();
+        var resolvedName = DisplayNames.Resolve(
+            caller,
+            displayName,
+            mainServer.members.Select(member => member?.username),
+            candidate => _postgres.Users.Any(user => user.username == candidate));
+
+        if (resolvedName == null)
+        {
+            await Clients.Caller.adduserupdate((int)UserUpdate.NameNotAllowed);
+            return;
+        }
+
+        // Already in this room on this connection: nothing to add.
+        if (mainServer.members.Any(member => member?.ConnectionId == ip))
+        {
+            await Clients.Caller.adduserupdate((int)UserUpdate.Success);
+            return;
+        }
+
         var newMember = new Member
         {
-            username = username, ishost = mainServer.members.Count == 0 ? true : false, ConnectionId = ip,
+            username = resolvedName, ishost = mainServer.members.Count == 0, ConnectionId = ip,
             RoomId = UniqueId
         };
-        if (mainServer?.bannedMembers.Any(x => x.ConnectionId == newMember.ConnectionId) == true)
+
+        if (mainServer.bannedMembers.Any(banned => banned.username == resolvedName))
         {
             await Clients.Caller.adduserupdate((int)UserUpdate.Banned);
             return;
@@ -152,7 +186,7 @@ public partial class ServerHub
     }
 
     [ErrorHandling]
-    public async Task UpdateUser(string username, string UniqueId)
+    public async Task UpdateUser(string displayName, string UniqueId)
     {
         var room = GetRoom(UniqueId);
         if (room == null) return;
@@ -183,7 +217,7 @@ public partial class ServerHub
         }
         else
         {
-            await AddUser(username, UniqueId, "");
+            await AddUser(displayName, UniqueId, "");
         }
     }
 

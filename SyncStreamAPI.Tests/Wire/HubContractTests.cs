@@ -51,9 +51,7 @@ public class HubContractTests
     /// </summary>
     private static readonly Type[] SelfScopedTypes =
     {
-        typeof(SelfProfileDto),
-        // rememberToken(...): Clients.Caller at all three call sites in LoginHub.
-        typeof(RememberTokenDTO)
+        typeof(SelfProfileDto)
     };
 
     /// <summary>
@@ -97,7 +95,6 @@ public class HubContractTests
         // Cross-cutting
         "Dialog",
         "PrivilegeInfo",
-        "RememberTokenDTO",
         "ServerHealthDto"
     };
 

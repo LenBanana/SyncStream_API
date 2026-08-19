@@ -101,7 +101,7 @@ public static class FFmpegTools
             Text = $"Processing - {outputFileName}...",
             AlertType = AlertType.Info
         };
-        await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
+        await serverHub.Clients.Group(dbUser.ID.ToString()).mediaStatus(editProcess);
         try
         {
             await using (var stream = new FileStream(function.InputPath, FileMode.Create))
@@ -119,7 +119,7 @@ public static class FFmpegTools
             async void Handler(double d)
             {
                 editProcess.Progress = totalFrames.HasValue ? d / totalFrames.Value * 100 : 100;
-                await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
+                await serverHub.Clients.Group(dbUser.ID.ToString()).mediaStatus(editProcess);
             }
 
             var p = new Progress<double>(Handler);
@@ -129,14 +129,14 @@ public static class FFmpegTools
             {
                 editProcess.AlertType = AlertType.Success;
                 editProcess.Text = $"Success - {outputFileName}...";
-                await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
+                await serverHub.Clients.Group(dbUser.ID.ToString()).mediaStatus(editProcess);
                 var fileBytes = await File.ReadAllBytesAsync(function.OutputPath);
                 function.OutputFile.DateToBeDeleted = DateTime.UtcNow.AddMinutes(General.MinutesToKeepFFmpeg.Minutes);
                 postgresContext.Files?.Add(function.OutputFile);
                 await postgresContext.SaveChangesAsync();
-                await serverHub.Clients.Group(dbUser.ApiKey).updateFolders(new FileDto(function.OutputFile));
+                await serverHub.Clients.Group(dbUser.ID.ToString()).updateFolders(new FileDto(function.OutputFile));
                 var fileResult = new FileContentResult(fileBytes, mimeType);
-                await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
+                await serverHub.Clients.Group(dbUser.ID.ToString()).mediaStatus(editProcess);
                 return fileResult;
             }
             else
@@ -145,7 +145,7 @@ public static class FFmpegTools
                     FileCheck.CheckOverrideFile(function.OutputPath);
                 editProcess.AlertType = AlertType.Danger;
                 editProcess.Text = $"Failed - {outputFileName}...";
-                await serverHub.Clients.Group(dbUser.ApiKey).mediaStatus(editProcess);
+                await serverHub.Clients.Group(dbUser.ID.ToString()).mediaStatus(editProcess);
                 return new StatusCodeResult(StatusCodes.Status404NotFound);
             }
         }
@@ -159,7 +159,7 @@ public static class FFmpegTools
             // Wait some time before to give the user time to read the message
             FileCheck.CheckOverrideFile(function.InputPath);
             await Task.Delay(2500);
-            await serverHub.Clients.Group(dbUser.ApiKey).finishStatus(editProcess);
+            await serverHub.Clients.Group(dbUser.ID.ToString()).finishStatus(editProcess);
         }
     }
 
