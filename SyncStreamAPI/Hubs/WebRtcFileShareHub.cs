@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -6,11 +6,14 @@ using Microsoft.EntityFrameworkCore;
 using SyncStreamAPI.Annotations;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper;
+using SyncStreamAPI.Helper.Streaming;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.WebRTC;
 using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
 using SyncStreamAPI.ServerData.Helper;
+using Microsoft.AspNetCore.Authorization;
+using SyncStreamAPI.Auth;
 
 namespace SyncStreamAPI.Hubs;
 
@@ -27,8 +30,8 @@ public partial class ServerHub
     /// to all room members so they switch their player to the FileShare type and
     /// join the SFU room as viewers.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task StartFileShare(string token, string roomId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task StartFileShare(string roomId)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null) return;
@@ -64,8 +67,8 @@ public partial class ServerHub
     /// The server transcodes via ffmpeg and injects audio+video as mediasoup
     /// producers; all room members — including the host — consume via the SFU.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task StartServerFileShare(string token, string roomId, string fileKey)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task StartServerFileShare(string roomId, string fileKey)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null) return;
@@ -88,7 +91,7 @@ public partial class ServerHub
         // Without this check any Approved user could share another user's file by guessing the key.
         var dbUser = _postgres.Users?
             .Include(x => x.RememberTokens)
-            .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == token));
+            .FirstOrDefault(x => x.ID == CallerUserId);
         if (dbUser == null) return;
 
         var dbFile = _postgres.Files?.FirstOrDefault(x => x.FileKey == fileKey);
@@ -161,8 +164,8 @@ public partial class ServerHub
     /// The upload temp file at <c>{uploads}/{uploadId}/data</c> is used directly by ffmpeg;
     /// no DB record is created until <c>CompleteRoomUpload</c> is later called.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task StartServerFileShareFromUpload(string token, string roomId, string uploadId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task StartServerFileShareFromUpload(string roomId, string uploadId)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null) return;
@@ -181,9 +184,17 @@ public partial class ServerHub
         var member = room.server.members.FirstOrDefault(m => m?.ConnectionId == Context.ConnectionId);
         if (member == null) return;
 
-        // uploadId is a GUID (32 hex chars) — cryptographically unguessable; no separate
-        // ownership query needed.  File must already exist (first chunk was written).
-        var filePath = Path.Combine(General.TemporaryFilePath, "room-uploads", uploadId, "upload.bin");
+        // The unguessable-id argument for skipping an ownership query only holds if the id is actually of
+        // that shape, and it arrives from the caller. Unchecked, ../../.. is not unguessable and not a GUID: it
+        // reads an upload.bin from elsewhere on the disk and shares it with the room.
+        if (!RoomUploadIds.IsWellFormed(uploadId))
+        {
+            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+                { Header = "Upload Not Found", Question = "The upload session could not be found. Please try again.", Answer1 = "Ok" });
+            return;
+        }
+
+        var filePath = RoomUploadPaths.DataFileFor(uploadId);
         if (!File.Exists(filePath))
         {
             await Clients.Caller.dialog(new Dialog(AlertType.Danger)
@@ -235,8 +246,8 @@ public partial class ServerHub
     /// The initiator should call <c>stopStreamingSfu</c> on the client side after
     /// this returns to tear down their SFU send-transport and producers.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task StopFileShare(string token, string roomId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task StopFileShare(string roomId)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null || !room.IsFileSharingActive) return;
@@ -249,8 +260,8 @@ public partial class ServerHub
     /// Called by the file-share initiator to broadcast the current play/pause state.
     /// For server-side shares, also controls the ffmpeg process directly.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task FileSharePlayPause(string token, string roomId, bool isPlaying)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task FileSharePlayPause(string roomId, bool isPlaying)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null || !room.IsFileSharingActive) return;
@@ -270,8 +281,8 @@ public partial class ServerHub
     /// Seeks the server-side file share to the given position.
     /// No-op for browser-captureStream shares (seek is handled client-side there).
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task FileShareSeek(string token, string roomId, double positionSec)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task FileShareSeek(string roomId, double positionSec)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null || !room.IsFileSharingActive) return;
@@ -301,8 +312,8 @@ public partial class ServerHub
     /// finished (i.e. after POST /api/video/roomUpload/complete returns 200/202).
     /// Clears the upload-in-progress guard so seeking becomes available.
     /// </summary>
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public Task MarkFileShareUploadComplete(string token, string roomId, string uploadId)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public Task MarkFileShareUploadComplete(string roomId, string uploadId)
     {
         var room = MainManager.GetRoom(roomId);
         if (room == null) return Task.CompletedTask;
@@ -330,10 +341,12 @@ public partial class ServerHub
             room.IsServerFileShare = false;
         }
 
-        // Clean up the upload temp directory left by an early-stream upload.
-        if (!string.IsNullOrWhiteSpace(room.FileShareUploadId))
+        // Clean up the upload staging directory left by an early-stream upload. Tested for shape rather than
+        // just for emptiness, because building the path throws on a malformed id and this runs while a room is
+        // being torn down, where an exception would leave the rest of the teardown undone.
+        if (RoomUploadIds.IsWellFormed(room.FileShareUploadId))
         {
-            var uploadDir = Path.Combine(General.TemporaryFilePath, "room-uploads", room.FileShareUploadId);
+            var uploadDir = RoomUploadPaths.DirectoryFor(room.FileShareUploadId);
             try { if (Directory.Exists(uploadDir)) Directory.Delete(uploadDir, recursive: true); }
             catch (Exception ex) { Console.WriteLine($"[FileShare] Failed to delete upload dir: {ex.Message}"); }
             room.FileShareUploadId = null;

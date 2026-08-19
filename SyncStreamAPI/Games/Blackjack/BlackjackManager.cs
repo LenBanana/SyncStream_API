@@ -12,6 +12,7 @@ using SyncStreamAPI.Models.GameModels;
 using SyncStreamAPI.Models.GameModels.Blackjack;
 using SyncStreamAPI.Models.GameModels.Members;
 using SyncStreamAPI.ServerData;
+using SyncStreamAPI.Wire;
 
 namespace SyncStreamAPI.Games.Blackjack;
 
@@ -83,7 +84,7 @@ public class BlackjackManager
 
     private async void Game_DealerDealed(BlackjackLogic game)
     {
-        await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer);
+        await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer.ToDto());
     }
 
     private void Game_ShuffledDeck(BlackjackLogic game)
@@ -142,12 +143,12 @@ public class BlackjackManager
     {
         foreach (var member in game.members.Where(x => x.ConnectionId.Length > 0).ToList())
         {
-            await _hub.Clients.Client(member.ConnectionId).sendblackjackself(member);
+            await _hub.Clients.Client(member.ConnectionId).sendblackjackself(member.ToDto());
             await _hub.Clients.Client(member.ConnectionId)
-                .sendblackjackmembers(game.members.Where(x => x.ConnectionId != member.ConnectionId).ToList());
+                .sendblackjackmembers(game.members.Where(x => x.ConnectionId != member.ConnectionId).ToDtos());
         }
 
-        await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer);
+        await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer.ToDto());
     }
 
     public async Task<bool> PlayNewRound(string UniqueId)
@@ -352,11 +353,11 @@ public class BlackjackManager
     public async void DealerPull(BlackjackLogic game)
     {
         game.dealer.cards[1].FaceUp = true;
-        await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer);
+        await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer.ToDto());
         await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1250));
         while (game.DealDealerCard())
         {
-            await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer);
+            await _hub.Clients.Group(game.RoomId).sendblackjackdealer(game.dealer.ToDto());
             await BlackjackTimer.RndDelay(TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(1250));
         }
 

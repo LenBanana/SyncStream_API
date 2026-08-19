@@ -18,6 +18,13 @@ using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.Helper.Streaming;
 using SyncStreamAPI.ServerData;
 using SyncStreamAPI.ServerData.Helper;
+using SyncStreamAPI.Wire;
+using System.Text.RegularExpressions;
+using SyncStreamAPI.Wire.Rooms;
+using SyncStreamAPI.Helper;
+using SyncStreamAPI.Auth;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 
 namespace SyncStreamAPI.Hubs;
 
@@ -50,17 +57,47 @@ public partial class ServerHub : Hub<IServerHub>
         _blackjackManager = blackjackManager;
     }
 
+    private static readonly Regex RoomIdRegex = new(@"^[A-Za-z0-9_-]{1,64}$", RegexOptions.Compiled);
+
     private IConfiguration Configuration { get; }
+
+    /// <summary>
+    ///     Puts the connection into the channels its identity entitles it to.
+    /// </summary>
+    /// <remarks>
+    ///     This used to happen inside LoginRequest, which meant a reconnect kept its room but silently lost
+    ///     every per-user channel until the client logged in again. Deriving it from the connection's own
+    ///     identity makes it survive reconnects for free.
+    /// </remarks>
+    public override async Task OnConnectedAsync()
+    {
+        var caller = Context.GetCaller();
+        if (!caller.IsGuest)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, caller.UserId!.Value.ToString());
+            await Groups.AddToGroupAsync(Context.ConnectionId, General.LoggedInGroupName);
+            if (caller.HasAtLeast(UserPrivileges.Elevated))
+                await Groups.AddToGroupAsync(Context.ConnectionId, General.AdminGroupName);
+        }
+
+        await base.OnConnectedAsync();
+    }
 
     public override async Task OnDisconnectedAsync(Exception? ex)
     {
         var rooms = MainManager.GetRooms();
-        var room = rooms.FirstOrDefault(x =>
-            x.server.members.FirstOrDefault(y => y?.ConnectionId == Context.ConnectionId) != null);
+        var room = rooms.FirstOrDefault(x => x.server.FindByConnection(Context.ConnectionId) != null);
         if (room != null)
         {
-            var e = room.server.members.FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
-            e?.InvokeKick();
+            // Departures are handled here, not by a per-member timer. The member is removed, the host role
+            // is handed on if they held it, and the games are told so they can drop the player from a hand.
+            var e = room.server.FindByConnection(Context.ConnectionId);
+            Member? promotedHost = null;
+            if (e != null)
+            {
+                promotedHost = room.server.Leave(e);
+                e.InvokeKick();
+            }
 
             // If this connection owned an active WebRTC file share, stop it cleanly.
             if (room.IsFileSharingActive && room.FileShareInitiator == Context.ConnectionId)
@@ -131,6 +168,15 @@ public partial class ServerHub : Hub<IServerHub>
                 case GameMode.NotPlaying:
                     break;
             }
+
+            if (promotedHost?.ConnectionId != null)
+                await Clients.Client(promotedHost.ConnectionId).hostupdate(true);
+
+            // Nothing else announces the departure now that the timer-driven sweep is gone.
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, room.uniqueId);
+            await Clients.Group(room.uniqueId)
+                .userupdate(room.server.members.Select(member => member?.ToDTO()).ToList());
+            await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
         }
 
         // Clean up VoIP room membership if the connection was in an audio room.
@@ -146,28 +192,40 @@ public partial class ServerHub : Hub<IServerHub>
         await base.OnDisconnectedAsync(ex);
     }
 
-    public bool CheckPrivileges(Room room, int minPriv = 1)
+    /// <summary>The authenticated account's id, or null for a guest.</summary>
+    private int? CallerUserId => Context.GetCaller().UserId;
+
+    /// <summary>
+    ///     Loads the calling account, or null for a guest.
+    /// </summary>
+    /// <remarks>
+    ///     Replaces the pattern this codebase repeated 33 times, looking a user up by a remember token that
+    ///     arrived as a method argument.
+    /// </remarks>
+    private Task<DbUser?> GetCallerUserAsync()
     {
-        if (!room.isPrivileged) return true;
-        var member = room.server.members.FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
-        if (member != null)
-        {
-            if (member.ishost) return true;
-
-            var user = _postgres.Users.FirstOrDefault(x => x.username == member.username);
-            if (user == null || user.userprivileges < (UserPrivileges)minPriv) return false;
-        }
-        else
-        {
-            return false;
-        }
-
-        return true;
+        var userId = CallerUserId;
+        if (userId == null) return Task.FromResult<DbUser?>(null);
+        return _postgres.Users.FirstOrDefaultAsync(candidate => candidate.ID == userId);
     }
 
-    public async Task SendServer(Server server, string UniqueId)
+    /// <summary>
+    ///     Whether the caller may perform a privileged action in this room.
+    /// </summary>
+    /// <remarks>
+    ///     Reads the connection's own claims. It used to look the member's <c>username</c> up in the database
+    ///     and take that account's privileges, and the username was whatever the client passed to AddUser, so
+    ///     joining a privileged room under someone else's name borrowed their privileges.
+    /// </remarks>
+    private bool CheckPrivileges(Room room, UserPrivileges minimum = UserPrivileges.Approved)
     {
-        await Clients.Group(UniqueId).sendserver(server);
+        if (!room.isPrivileged) return true;
+
+        var member = room.server.members.FirstOrDefault(x => x?.ConnectionId == Context.ConnectionId);
+        if (member == null) return false;
+        if (member.ishost) return true;
+
+        return Context.GetCaller().HasAtLeast(minimum);
     }
 
     private Room? GetRoom(string UniqueId)
@@ -179,7 +237,7 @@ public partial class ServerHub : Hub<IServerHub>
 
     public async Task GetRooms()
     {
-        await Clients.Caller.getrooms(MainManager.GetRooms());
+        await Clients.Caller.getrooms(MainManager.GetRooms().ToSummaries());
     }
 
     public async Task AddVideo(DreckVideo key, string UniqueId)
@@ -223,7 +281,7 @@ public partial class ServerHub : Hub<IServerHub>
         {
             room.server.playlist.RemoveAt(idx);
             await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
-            await Clients.All.getrooms(MainManager.GetRooms());
+            await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
         }
     }
 
@@ -255,7 +313,7 @@ public partial class ServerHub : Hub<IServerHub>
                 await RoomManager.SendPlayerType(room);
                 await Clients.Group(UniqueId).videoupdate(mainServer.currentVideo);
                 await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
-                await Clients.All.getrooms(MainManager.GetRooms());
+                await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
                 return;
             case 1:
                 mainServer.currentVideo.ended = true;
@@ -263,9 +321,8 @@ public partial class ServerHub : Hub<IServerHub>
                 room.server.isplaying = false;
                 await Clients.Group(UniqueId).isplayingupdate(room.server.isplaying);
                 await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
-                await Clients.Group(UniqueId).sendserver(room.server);
                 await Clients.Group(UniqueId).playertype(PlayerType.Nothing);
-                await Clients.All.getrooms(MainManager.GetRooms());
+                await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
                 break;
         }
     }
@@ -296,7 +353,7 @@ public partial class ServerHub : Hub<IServerHub>
             mainServer.currentVideo = room.server.playlist[0];
             await Clients.Group(UniqueId).videoupdate(mainServer.currentVideo);
             await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
-            await Clients.All.getrooms(MainManager.GetRooms());
+            await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
         }
     }
 
@@ -321,15 +378,50 @@ public partial class ServerHub : Hub<IServerHub>
         await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
     }
 
-    public async Task SetTime(double time, string UniqueId)
+    /// <summary>
+    ///     Largest host transit time that will be credited to a position report.
+    /// </summary>
+    /// <remarks>
+    ///     A host that has just resumed from sleep, or whose ping reply was stuck behind a stalled upload, can
+    ///     measure a round trip of many seconds. Crediting that in full would shove every viewer that far past
+    ///     the host. The bound is not a trust boundary, since the host chooses the position anyway; it is there
+    ///     so one bad measurement cannot throw the room.
+    /// </remarks>
+    private static readonly TimeSpan MaxHostLatency = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    ///     The host reports where playback has reached.
+    /// </summary>
+    /// <remarks>
+    ///     Only the host may. Any member used to be able to yank everyone else's position, which is now worth
+    ///     refusing rather than tolerating: the host reports on a steady cadence, so a second sender would be
+    ///     fighting it once a second.
+    /// </remarks>
+    /// <param name="oneWayLatencySeconds">
+    ///     The host's own transit time to here. The report is dated back by it, so the age a viewer reads
+    ///     covers the whole path from the host reading its player to this message arriving. Dating from arrival
+    ///     instead left every viewer behind the host by the host's own latency, permanently and invisibly,
+    ///     since the viewers stayed consistent with each other.
+    /// </param>
+    public async Task SetTime(double time, string UniqueId, double oneWayLatencySeconds)
     {
         var room = GetRoom(UniqueId);
         if (room == null) return;
 
         if (!CheckPrivileges(room)) return;
 
-        await Clients.Group(UniqueId).timeupdate(time);
+        var member = room.server.FindByConnection(Context.ConnectionId);
+        if (member?.ishost != true) return;
+
+        var hostLatency = double.IsFinite(oneWayLatencySeconds) && oneWayLatencySeconds > 0
+            ? TimeSpan.FromSeconds(Math.Min(oneWayLatencySeconds, MaxHostLatency.TotalSeconds))
+            : TimeSpan.Zero;
+
         room.server.currenttime = time;
+        room.server.LastTimeUpdateUtc = DateTime.UtcNow - hostLatency;
+
+        // OthersInGroup: this position came from the host, who discarded its own echo anyway.
+        await Clients.OthersInGroup(UniqueId).timeupdate(room.server.ToTimeSync());
     }
 
     public async Task PlayPause(bool isplaying, string UniqueId)
@@ -339,21 +431,72 @@ public partial class ServerHub : Hub<IServerHub>
 
         if (!CheckPrivileges(room)) return;
 
+        // Re-base the position clock: pausing freezes it and resuming restarts it from now, so the age a
+        // viewer adds back stays correct across the transition.
+        room.server.LastTimeUpdateUtc = DateTime.UtcNow;
         room.server.isplaying = isplaying;
         await Clients.Group(UniqueId).isplayingupdate(isplaying);
-        await Clients.All.getrooms(MainManager.GetRooms());
+        await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
     }
 
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token,
-        TokenPosition = 1)]
-    public async Task AddRoom(Room room, string token)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task AddRoom(CreateRoomRequestDto request)
     {
-        var rooms = MainManager.GetRooms();
-        var roomCount = 0;
-        var enumerable = rooms as Room[] ?? rooms.ToArray();
-        while (enumerable?.Any(x => x.uniqueId == room.uniqueId) == true) room.uniqueId = room.uniqueId + roomCount++;
+        if (string.IsNullOrWhiteSpace(request?.name) || string.IsNullOrWhiteSpace(request.uniqueId))
+        {
+            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+                { Header = "Error", Question = "A room needs a name", Answer1 = "Ok" });
+            return;
+        }
 
-        RoomManager.AddRoom(room);
+        if (request.name.Length > General.MaxRoomNameLength)
+        {
+            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+            {
+                Header = "Error",
+                Question = $"Room names are limited to {General.MaxRoomNameLength} characters",
+                Answer1 = "Ok"
+            });
+            return;
+        }
+
+        // The id becomes a SignalR group name and a lookup key, so keep it to a known-safe shape.
+        if (!RoomIdRegex.IsMatch(request.uniqueId))
+        {
+            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+                { Header = "Error", Question = "Invalid room id", Answer1 = "Ok" });
+            return;
+        }
+
+        // Claim an id by adding, rather than checking first and adding after: two callers creating a room
+        // at the same moment both passed a look-then-add check, and one of the rooms then vanished.
+        Room? room = null;
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            var uniqueId = attempt == 0 ? request.uniqueId : request.uniqueId + attempt;
+
+            // Constructed here, not bound: the live server state is the server's to own.
+            var candidate = new Room(request.name, uniqueId, request.deletable, false)
+            {
+                // Hashed here, because the browser no longer pre-hashes it and because storing something a
+                // reader of the table could present back is the thing being removed.
+                password = string.IsNullOrEmpty(request.password)
+                    ? request.password
+                    : PasswordHashing.Hash(request.password)
+            };
+
+            if (!RoomManager.AddRoom(candidate)) continue;
+
+            room = candidate;
+            break;
+        }
+
+        if (room == null)
+        {
+            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+                { Header = "Error", Question = "Could not find a free room id", Answer1 = "Ok" });
+            return;
+        }
         if (!room.deletable)
         {
             var dbRoom = new DbRoom(room);
@@ -361,25 +504,11 @@ public partial class ServerHub : Hub<IServerHub>
             await _postgres.SaveChangesAsync();
         }
 
-        await Clients.All.getrooms(MainManager.GetRooms());
+        await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
     }
 
-    public async Task ChangeRoom(Room room)
-    {
-        var rooms = MainManager.GetRooms();
-        var changeRoom = rooms.FirstOrDefault(x => x.uniqueId == room.uniqueId);
-        if (changeRoom != null)
-        {
-            changeRoom.name = room.name;
-            changeRoom.password = room.password;
-            changeRoom.deletable = room.deletable;
-            await Clients.All.getrooms(MainManager.GetRooms());
-        }
-    }
-
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token,
-        TokenPosition = 1)]
-    public async Task RemoveRoom(string uniqueId, string token)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task RemoveRoom(string uniqueId)
     {
         var room = GetRoom(uniqueId);
         if (room == null || room.isPrivileged) return;
@@ -393,7 +522,7 @@ public partial class ServerHub : Hub<IServerHub>
                 await _postgres.SaveChangesAsync();
             }
 
-            await Clients.All.getrooms(MainManager.GetRooms());
+            await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
         }
         else
         {

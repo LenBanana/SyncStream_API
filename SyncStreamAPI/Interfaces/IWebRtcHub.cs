@@ -9,7 +9,6 @@ public partial interface IServerHub
     /// <summary>Sent to all room members when a moderator forces a broadcast — viewers should auto-join.</summary>
     Task broadcastStream(string streamerId, string roomId);
     Task sendOfferToViewer(WebRtcClientOffer offer);
-    Task getWebRtcCredentials(WebRtcCredentials credentials);
     Task stopWebRtcStream(string connectionId);
     Task joinWebRtcStream(string connectionId);
     Task sendClientAnswer(WebRtcClientOffer answer);

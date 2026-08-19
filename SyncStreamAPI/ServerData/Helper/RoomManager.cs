@@ -15,117 +15,55 @@ using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.Bots;
 using YoutubeDLSharp.Options;
+using SyncStreamAPI.Wire;
 
 namespace SyncStreamAPI.ServerData.Helper;
 
 public class RoomManager
 {
-    private static readonly object LockObj = new();
-
-    public RoomManager(IServiceProvider serviceProvider, BlockingCollection<Room> rooms)
+    public RoomManager(IServiceProvider serviceProvider, ConcurrentDictionary<string, Room> rooms)
     {
         ServiceProvider = serviceProvider;
         Rooms = rooms;
     }
 
     private static IServiceProvider ServiceProvider { get; set; }
-    private static BlockingCollection<Room> Rooms { get; set; } = new();
+
+    /// <summary>
+    ///     Live rooms, keyed by their id.
+    /// </summary>
+    /// <remarks>
+    ///     Was a <see cref="System.Collections.Concurrent.BlockingCollection{T}" />, which is a queue: looking
+    ///     a room up meant copying the whole collection and scanning it, and removing one meant draining every
+    ///     room out under a lock and putting the survivors back. A keyed dictionary is what the code always
+    ///     wanted, and removal stops being a operation that briefly empties the server.
+    /// </remarks>
+    private static ConcurrentDictionary<string, Room> Rooms { get; set; } = new();
 
     public static Room? GetRoom(string UniqueId)
     {
-        return GetRooms().FirstOrDefault(x => x.uniqueId == UniqueId);
+        if (string.IsNullOrEmpty(UniqueId)) return null;
+        return Rooms.TryGetValue(UniqueId, out var room) ? room : null;
     }
 
-    public static void AddRoom(Room room)
+    /// <summary>Adds a room, or returns false when the id is already taken.</summary>
+    public static bool AddRoom(Room room)
     {
-        Rooms.Add(room);
+        return room.uniqueId != null && Rooms.TryAdd(room.uniqueId, room);
     }
 
     public static bool RemoveRoom(string uniqueId)
     {
-        lock (LockObj)
-        {
-            var tempStorage = new List<Room>();
-            Room room;
-
-            // Dequeue rooms until we find the one to remove or the collection is empty
-            while (Rooms.TryTake(out room))
-            {
-                if (room.uniqueId == uniqueId)
-                {
-                    // Re-enqueue the other rooms
-                    foreach (var r in tempStorage) Rooms.Add(r);
-
-                    return true; // Room found and removed
-                }
-
-                tempStorage.Add(room);
-            }
-
-            // If we reach here, the room wasn't found. Re-enqueue all rooms.
-            foreach (var r in tempStorage) Rooms.Add(r);
-
-            return false; // Room not found
-        }
+        return Rooms.TryRemove(uniqueId, out _);
     }
 
     public static IEnumerable<Room> GetRooms()
     {
-        return Rooms.ToList();
+        // Ordered by creation, so the lobby lists rooms the way they were made and a new one appears at the
+        // end. A dictionary returns its values in hash order, which is no order at all.
+        return Rooms.Values.OrderBy(room => room.Sequence).ToList();
     }
 
-    public void AddToMemberCheck(Member member)
-    {
-        member.Kicked += Member_Kicked;
-    }
-
-    private async void Member_Kicked(Member e)
-    {
-        await KickMember(e);
-    }
-
-    private async Task KickMember(Member e)
-    {
-        if (e != null)
-            try
-            {
-                var room = GetRoom(e.RoomId);
-                if (room != null)
-                {
-                    e.Kicked -= Member_Kicked;
-                    if (!room.server.members.Contains(e)) return;
-
-                    room.server.members.Remove(e);
-                    using (var scope = ServiceProvider.CreateScope())
-                    {
-                        var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                        if (room.server.members.Count > 0)
-                        {
-                            if (e.ishost)
-                            {
-                                room.server.members[0].ishost = true;
-                                await hub.Clients.Client(room.server.members[0].ConnectionId).hostupdate(true);
-                            }
-                        }
-
-                        await hub.Clients.Group(room.uniqueId)
-                            .userupdate(room.server.members?.Select(x => x.ToDTO()).ToList());
-                        await hub.Clients.All.getrooms(GetRooms());
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.ToString());
-            }
-    }
-
-    public async void AddMember(int id, string connectionId)
-    {
-        using var scope = ServiceProvider.CreateScope();
-        var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-        await hub.Groups.AddToGroupAsync(connectionId, id.ToString());
-    }
 
     public static async Task<string> AddVideo(DreckVideo key, string UniqueId)
     {
@@ -176,30 +114,13 @@ public class RoomManager
                 }
                 case PlayerType.Twitch:
                 {
-                    var urlPatterns = new (string pattern, string titlePrefix)[]
-                    {
-                        (@"\/videos\/(\d+)", "Twitch Video - "),
-                        (@"clips\.twitch\.tv\/([\w\-]+)", "Twitch Clip - ")
-                    };
+                    // Titling only. The url is passed through untouched because the browser parses it to decide
+                    // which embed to build, and a clip slug is indistinguishable from a channel login once the
+                    // rest of the link is gone.
+                    var twitch = TwitchSource.FromUrl(key.url);
+                    if (twitch == null) return "That Twitch link cannot be played";
 
-                    foreach (var (pattern, titlePrefix) in urlPatterns)
-                    {
-                        var regex = new Regex(pattern);
-                        var matches = regex.Matches(key.url);
-
-                        if (matches.Count <= 0) continue;
-                        key.url = key.url;
-                        key.title = $"{titlePrefix}{key.url}";
-                        break;
-                    }
-
-                    if (string.IsNullOrEmpty(key.title))
-                    {
-                        const string titleRegExString = @"twitch.tv\/(\w+)\/?";
-                        var titleRegEx = new Regex(titleRegExString);
-                        var titleMatches = titleRegEx.Matches(key.url);
-                        if (titleMatches.Count > 0) key.title = titleMatches[0]?.Groups[1]?.Value;
-                    }
+                    if (string.IsNullOrEmpty(key.title)) key.title = twitch.DisplayTitle();
 
                     break;
                 }
@@ -217,7 +138,7 @@ public class RoomManager
         }
 
         await hub.Clients.Group(UniqueId).playlistupdate(room.server.playlist);
-        await hub.Clients.All.getrooms(MainManager.GetRooms());
+        await hub.Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
         return "";
     }
 

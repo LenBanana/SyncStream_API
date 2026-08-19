@@ -1,9 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Threading.Tasks;
-using iText.IO.Image;
-using iText.Kernel.Pdf;
-using iText.Layout;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -21,6 +18,8 @@ using SyncStreamAPI.Enums;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.PostgresModels;
+using PdfSharp.Drawing;
+using PdfSharp.Pdf;
 
 namespace SyncStreamAPI.Helper;
 
@@ -71,7 +70,7 @@ public class ImageTools
 
         await SaveToDb(dbFile, postgresContext);
         var fileBytes = await File.ReadAllBytesAsync(outputPath);
-        await serverHub.Clients.Group(dbUser.ApiKey).updateFolders(new FileDto(dbFile));
+        await serverHub.Clients.Group(dbUser.ID.ToString()).updateFolders(new FileDto(dbFile));
         var result = new FileContentResult(fileBytes, mimeType)
         {
             FileDownloadName = $"{dbFile.Name}{dbFile.FileEnding}"
@@ -85,22 +84,36 @@ public class ImageTools
         await postgresContext.SaveChangesAsync();
     }
 
+    /// <summary>
+    ///     Writes the uploaded image onto a single PDF page sized to the image.
+    /// </summary>
+    /// <remarks>
+    ///     The upload is normalised to PNG with ImageSharp first, so the PDF writer only ever has to
+    ///     handle one format and every input ImageSharp can read is supported.
+    /// </remarks>
     private static async Task ConvertToPdf(string outputPath, IFormFile file)
     {
-        if (file.Length > 0)
-        {
-            var pdfDocument = new PdfDocument(new PdfWriter(outputPath));
-            var document = new Document(pdfDocument);
-            using (var ms = new MemoryStream())
-            {
-                await file.CopyToAsync(ms);
-                var fileBytes = ms.ToArray();
-                var imageData = ImageDataFactory.Create(fileBytes);
-                var image = new iText.Layout.Element.Image(imageData);
-                document.Add(image);
-            }
+        if (file.Length <= 0) return;
 
-            document.Close();
+        using var pngStream = new MemoryStream();
+        using (var image = await Image.LoadAsync(file.OpenReadStream()))
+        {
+            await image.SaveAsync(pngStream, new PngEncoder());
         }
+
+        pngStream.Position = 0;
+
+        using var pdfImage = XImage.FromStream(pngStream);
+        using var pdfDocument = new PdfDocument();
+        var page = pdfDocument.AddPage();
+        page.Width = XUnit.FromPoint(pdfImage.PointWidth);
+        page.Height = XUnit.FromPoint(pdfImage.PointHeight);
+
+        using (var gfx = XGraphics.FromPdfPage(page))
+        {
+            gfx.DrawImage(pdfImage, 0, 0, page.Width.Point, page.Height.Point);
+        }
+
+        pdfDocument.Save(outputPath);
     }
 }

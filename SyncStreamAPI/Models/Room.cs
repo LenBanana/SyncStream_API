@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Threading;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using SyncStreamAPI.Enums.Games;
@@ -18,7 +19,21 @@ public class Room
         uniqueId = UnqiueId;
         deletable = Deletable;
         isPrivileged = Privileged;
+        _server.RoomId = UnqiueId;
     }
+
+    /// <summary>
+    ///     Creation order, used to list rooms the way they were made.
+    /// </summary>
+    /// <remarks>
+    ///     Explicit rather than relying on a collection's incidental ordering. The store used to be a queue,
+    ///     which preserved insertion order by accident; keying rooms by id for lookup lost that, because a
+    ///     dictionary's values come back in hash order, so the lobby order became arbitrary and new rooms
+    ///     turned up wherever they landed instead of at the end.
+    /// </remarks>
+    [NotMapped] public long Sequence { get; } = Interlocked.Increment(ref _sequenceCounter);
+
+    private static long _sequenceCounter;
 
     public string uniqueId { get; set; }
     public string name { get; set; }

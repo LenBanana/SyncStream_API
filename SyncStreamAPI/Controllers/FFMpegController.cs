@@ -14,6 +14,8 @@ using SyncStreamAPI.Helper.FFmpeg;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.PostgresModels;
+using Microsoft.AspNetCore.Authorization;
+using SyncStreamAPI.Auth;
 
 namespace SyncStreamAPI.Controllers;
 
@@ -31,17 +33,17 @@ public class FFMpegController : Controller
     }
 
     [HttpGet("path")]
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.API)]
-    public IActionResult GetFFmpegPath(string apiKey)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public IActionResult GetFFmpegPath()
     {
         return Ok(new { Path = General.GetFFmpegPath() });
     }
 
     [HttpPost("CutMedia")]
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.API)]
-    public async Task<IActionResult> CutMedia(string apiKey, int startMilliSeconds, int endMilliSeconds)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task<IActionResult> CutMedia(int startMilliSeconds, int endMilliSeconds)
     {
-        var dbUser = _postgres.Users.First(u => u.ApiKey == apiKey);
+        var dbUser = _postgres.Users.First(u => u.ID == this.CallerUserId());
         if (Request.ContentLength <= 0 || Request.Form == null || !Request.Form.Files.Any()) return BadRequest();
         var inputFile = Request.Form.Files[0];
         if (startMilliSeconds >= endMilliSeconds)
@@ -57,11 +59,11 @@ public class FFMpegController : Controller
     }
 
     [HttpPost("ConvertMedia")]
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.API)]
-    public async Task<IActionResult> ConvertMedia(string apiKey, MediaType mediaType)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task<IActionResult> ConvertMedia(MediaType mediaType)
     {
         if (Request.ContentLength <= 0 || Request.Form == null || !Request.Form.Files.Any()) return BadRequest();
-        var dbUser = _postgres.Users.First(u => u.ApiKey == apiKey);
+        var dbUser = _postgres.Users.First(u => u.ID == this.CallerUserId());
         var inputFile = Request.Form.Files[0];
         var fileInfo = new FileInfo(inputFile.FileName);
         var mimeType = MimeTypeHelper.GetMimeType(inputFile);

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using HtmlAgilityPack;
 using PuppeteerSharp;
 using SyncStreamAPI.Models;
+using SyncStreamAPI.Net;
 
 namespace SyncStreamAPI.Helper;
 
@@ -48,12 +49,29 @@ public class BrowserAutomation
         }
     }
 
+    /// <summary>
+    ///     Renders a page in the headless browser and reports the media URLs it requested.
+    /// </summary>
+    /// <remarks>
+    ///     The URL comes from a caller, and a real browser is a far better tool for reaching things than a fetch
+    ///     is: it follows redirects, runs script and renders whatever it finds. It is checked before navigating,
+    ///     which narrows it to names that resolve outside this network but does not follow the page afterwards,
+    ///     because the browser opens its own connections and there is nothing here to route them through. The
+    ///     callers are administrator-gated, which is what keeps that gap acceptable rather than the check itself.
+    /// </remarks>
     public static async Task<BrowserM3U8Response> GetM3U8FromUrl(string url)
     {
         var result = new BrowserM3U8Response
         {
             InputUrl = url
         };
+
+        if (!await OutboundHttp.LooksReachableAsync(url))
+        {
+            Console.WriteLine($"Refusing to browse {url}: it is not a reachable public address");
+            return result;
+        }
+
         var page = await Browser.NewPageAsync();
         page.Response += (_, e) =>
         {

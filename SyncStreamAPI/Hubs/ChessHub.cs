@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.SignalR;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.GameModels.Chess;
+using SyncStreamAPI.Wire.Games;
 
 namespace SyncStreamAPI.Hubs;
 
@@ -27,7 +28,7 @@ public partial class ServerHub
         await Clients.Client(lightPlayer.ConnectionId)
             .sendmessage(new SystemMessage("You are now chess player light!"));
         await Clients.Client(darkPlayer.ConnectionId).sendmessage(new SystemMessage("You are now chess player dark!"));
-        await Clients.Group(UniqueId).playchess(game);
+        await Clients.Group(UniqueId).playchess(new ChessGameDto(game));
     }
 
     public async Task EndChess(string UniqueId)

@@ -10,6 +10,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Web;
 using HtmlAgilityPack;
+using SyncStreamAPI.Net;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using SyncStreamAPI.Enums;
@@ -51,7 +52,45 @@ public static class General
     public static TimeSpan MinutesToKeepFFmpeg { get; } = TimeSpan.FromMinutes(10);
     public static TimeSpan CheckIntervalInMinutes { get; } = TimeSpan.FromMinutes(1);
     public static TimeSpan ServerHealthTimeInSeconds { get; } = TimeSpan.FromSeconds(1);
-    public static TimeSpan SecondsToKickMember { get; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    ///     Upper bound on a single request body. Uploads are chunked, so this caps one chunk plus
+    ///     multipart overhead rather than a whole file.
+    /// </summary>
+    public const long MaxRequestBodyBytes = 512L * 1024 * 1024;
+
+    /// <summary>
+    ///     Upper bound on one uploaded file.
+    /// </summary>
+    /// <remarks>
+    ///     Not a quota, and not meant to be reached: the file manager is used for large files on purpose and
+    ///     there was no bound at all before, so a caller could open a session claiming any size. This is high
+    ///     enough that a real upload never meets it and low enough that a typo or a deliberately absurd figure
+    ///     does.
+    /// </remarks>
+    public const long MaxUploadBytes = 250L * 1024 * 1024 * 1024;
+
+    /// <summary>How long a partly-finished upload is kept before it is treated as abandoned.</summary>
+    public static TimeSpan HoursToKeepUnfinishedUploads { get; } = TimeSpan.FromHours(24);
+
+    /// <summary>
+    ///     How long any staging directory is kept, whatever state it claims.
+    /// </summary>
+    /// <remarks>
+    ///     A finished server file-share keeps its file in place while the room plays it, and the room clears it
+    ///     when the share stops. This is the backstop for the case where that never happened, so it has to be
+    ///     comfortably longer than a room could plausibly be playing one file.
+    /// </remarks>
+    public static TimeSpan DaysToKeepUploadStaging { get; } = TimeSpan.FromDays(7);
+
+    /// <summary>Upper bound on a single non-file form value.</summary>
+    public const int MaxFormValueBytes = 4 * 1024 * 1024;
+
+    /// <summary>Upper bound on the combined headers of one multipart section.</summary>
+    public const int MaxMultipartHeaderBytes = 32 * 1024;
+
+    /// <summary>Upper bound on a user-supplied room name.</summary>
+    public const int MaxRoomNameLength = 64;
 
     public static int GallowGameLength => 90;
     public static int GallowGameLengthMin => 60;
@@ -128,9 +167,15 @@ public static class General
         if (string.IsNullOrEmpty(title))
             try
             {
-                var webGet = new HtmlWeb();
-                var document = webGet.Load(url);
-                title = document.DocumentNode.SelectSingleNode("html/head/title").InnerText;
+                // Fetched through the guarded client rather than by handing the URL to HtmlWeb, which opens its
+                // own connections and would happily reach the metadata service, a database on localhost or a
+                // router's admin page, and hand the page title back into the room as the video's name.
+                var markup = await OutboundHttp.Client.GetStringAsync(url);
+                var document = new HtmlDocument();
+                document.LoadHtml(markup);
+                // Empty rather than null when there is no title element, so the fallbacks below still run. The
+                // selector used to be dereferenced without a check and threw into the catch instead.
+                title = document.DocumentNode.SelectSingleNode("html/head/title")?.InnerText ?? string.Empty;
             }
             catch (Exception ex)
             {

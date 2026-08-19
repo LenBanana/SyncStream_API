@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -24,6 +24,8 @@ using SyncStreamAPI.Models;
 using SyncStreamAPI.PostgresModels;
 using YoutubeDLSharp.Options;
 using Path = System.IO.Path;
+using Microsoft.AspNetCore.Authorization;
+using SyncStreamAPI.Auth;
 
 namespace SyncStreamAPI.Controllers;
 
@@ -49,7 +51,7 @@ public class VideoController : Controller
     }
 
     [HttpGet("[action]")]
-    public async Task<IActionResult> fileByToken(string fileKey, string? token)
+    public async Task<IActionResult> fileByToken(string fileKey)
     {
         try
         {
@@ -62,7 +64,7 @@ public class VideoController : Controller
                 var dbUser = _postgres.Users?
                     .Include(x => x.RememberTokens)
                     .FirstOrDefault(x => x.RememberTokens != null &&
-                                         x.RememberTokens.Any(y => y.Token == token));
+                                         x.ID == this.CallerUserId());
                 if (dbUser == null)
                     return Unauthorized("You do not have permissions to view this content");
             }
@@ -105,13 +107,13 @@ public class VideoController : Controller
     }
 
     [HttpGet("[action]")]
-    public async Task<IActionResult> roomUploadByToken(string uploadId, string? token)
+    public async Task<IActionResult> roomUploadByToken(string uploadId)
     {
         try
         {
             var dbUser = _postgres.Users?
                 .Include(x => x.RememberTokens)
-                .FirstOrDefault(x => x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
+                .FirstOrDefault(x => x.ID == this.CallerUserId());
             if (dbUser == null)
                 return Unauthorized("You do not have permissions to view this content");
 
@@ -148,16 +150,14 @@ public class VideoController : Controller
     }
 
     [HttpGet("[action]")]
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token,
-        TokenPosition = 1)]
-    public async Task<IActionResult> getYoutubeQuality(string url, string token)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task<IActionResult> getYoutubeQuality(string url)
     {
         try
         {
             var dbUser = _postgres.Users?.Include(x => x.RememberTokens).FirstOrDefault(x =>
-                x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == token));
-            var tokenObj = dbUser?.RememberTokens.SingleOrDefault(x => x.Token == token);
-            if (tokenObj == null)
+                x.ID == this.CallerUserId());
+            if (dbUser == null)
             {
                 if (dbUser == null) return Unauthorized();
                 const string errorMessage = "You do not have permissions to view this content";
@@ -199,10 +199,10 @@ public class VideoController : Controller
 
     [DisableRequestSizeLimit]
     [HttpPost("[action]")]
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
     [RequestSizeLimit(long.MaxValue)]
     [RequestFormLimits(MultipartBodyLengthLimit = long.MaxValue, ValueLengthLimit = int.MaxValue)]
-    public async Task<IActionResult> addFile(string token)
+    public async Task<IActionResult> addFile()
     {
         var uploadFiles = new List<string>();
 
@@ -213,12 +213,8 @@ public class VideoController : Controller
 
             var dbUser = _postgres.Users
                 .Include(x => x.RememberTokens)
-                .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == token));
+                .FirstOrDefault(x => x.ID == this.CallerUserId());
             if (dbUser == null)
-                return Unauthorized();
-
-            var dbToken = dbUser.RememberTokens.SingleOrDefault(x => x.Token == token);
-            if (dbToken == null)
                 return Unauthorized();
 
             foreach (var file in Request.Form.Files)
@@ -244,7 +240,7 @@ public class VideoController : Controller
 
                     _postgres.Files?.Add(dbFile);
                     await _postgres.SaveChangesAsync();
-                    await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new FileDto(dbFile));
+                    await _hub.Clients.Group(dbUser.ID.ToString()).updateFolders(new FileDto(dbFile));
                     uploadFiles.Remove(path);
                 }
                 catch (Exception ex)
@@ -267,14 +263,14 @@ public class VideoController : Controller
     [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = int.MaxValue)]
     [DisableRequestSizeLimit]
     [HttpPost("[action]")]
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.API)]
-    public async Task<IActionResult> uploadTemporaryImageFile(string apiKey)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task<IActionResult> uploadTemporaryImageFile()
     {
         try
         {
             if (Request.ContentLength <= 0 || Request.Form is not { Files.Count: > 0 }) return Unauthorized();
 
-            var dbUser = _postgres.Users.SingleOrDefault(u => u.ApiKey == apiKey);
+            var dbUser = _postgres.Users.SingleOrDefault(u => u.ID == this.CallerUserId());
             if (dbUser == null) return Unauthorized();
 
             var file = Request.Form.Files[0];
@@ -290,7 +286,7 @@ public class VideoController : Controller
 
             _postgres.Files.Add(dbFile);
             await _postgres.SaveChangesAsync();
-            await _hub.Clients.Group(dbUser.ApiKey).updateFolders(new FileDto(dbFile));
+            await _hub.Clients.Group(dbUser.ID.ToString()).updateFolders(new FileDto(dbFile));
             return Ok(new { fileKey = dbFile.Name, fileId = dbFile.FileKey });
         }
         catch (Exception ex)
@@ -302,11 +298,11 @@ public class VideoController : Controller
 
     [DisableRequestSizeLimit]
     [HttpPost("roomUpload/start")]
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task<IActionResult> startRoomUpload(string token, string uniqueId, string name, string fileEnding,
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task<IActionResult> startRoomUpload(string uniqueId, string name, string fileEnding,
         long totalSize, bool skipPlaylist = false)
     {
-        var result = await _roomStreamService.StartRoomUploadAsync(token, uniqueId, name, fileEnding, totalSize, skipPlaylist);
+        var result = await _roomStreamService.StartRoomUploadAsync(this.CallerUserId(), uniqueId, name, fileEnding, totalSize, skipPlaylist);
         if (string.IsNullOrWhiteSpace(result.ErrorMessage))
             return StatusCode(result.StatusCode, result);
 
@@ -315,43 +311,43 @@ public class VideoController : Controller
 
     [DisableRequestSizeLimit]
     [HttpPut("roomUpload/chunk")]
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task<IActionResult> uploadRoomChunk(string token, string uploadId, long startByte)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task<IActionResult> uploadRoomChunk(string uploadId, long startByte)
     {
-        var result = await _roomStreamService.UploadRoomChunkAsync(Request, token, uploadId, startByte);
+        var result = await _roomStreamService.UploadRoomChunkAsync(Request, this.CallerUserId(), uploadId, startByte);
         return StatusCode(result.StatusCode, result);
     }
 
     [HttpGet("roomUpload/status")]
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task<IActionResult> roomUploadStatus(string token, string uploadId)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task<IActionResult> roomUploadStatus(string uploadId)
     {
-        var result = await _roomStreamService.GetRoomUploadStatusAsync(token, uploadId);
+        var result = await _roomStreamService.GetRoomUploadStatusAsync(this.CallerUserId(), uploadId);
         return StatusCode(result.StatusCode, result);
     }
 
     [HttpPost("roomUpload/complete")]
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task<IActionResult> completeRoomUpload(string token, string uploadId)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task<IActionResult> completeRoomUpload(string uploadId)
     {
-        var result = await _roomStreamService.CompleteRoomUploadAsync(token, uploadId, General.GetPublicBaseUrl(Request));
+        var result = await _roomStreamService.CompleteRoomUploadAsync(this.CallerUserId(), uploadId, General.GetPublicBaseUrl(Request));
         return StatusCode(result.StatusCode, result);
     }
 
     [HttpDelete("roomUpload/cancel")]
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task<IActionResult> cancelRoomUpload(string token, string uploadId)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task<IActionResult> cancelRoomUpload(string uploadId)
     {
-        var result = await _roomStreamService.CancelRoomUploadAsync(token, uploadId);
+        var result = await _roomStreamService.CancelRoomUploadAsync(this.CallerUserId(), uploadId);
         return StatusCode(result.StatusCode, result);
     }
 
     [DisableRequestSizeLimit]
     [HttpPost("[action]")]
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
-    public async Task<IActionResult> streamToRoom(string token, string uniqueId, string name, string fileEnding)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task<IActionResult> streamToRoom(string uniqueId, string name, string fileEnding)
     {
-        var result = await _roomStreamService.StreamToRoomAsync(Request, token, uniqueId, name, fileEnding);
+        var result = await _roomStreamService.StreamToRoomAsync(Request, this.CallerUserId(), uniqueId, name, fileEnding);
         if (result.StatusCode == StatusCodes.Status200OK)
             return Ok(new { fileKey = result.FileKey });
 
@@ -366,8 +362,8 @@ public class VideoController : Controller
     /// existing captureStream() path or request the server-side ffmpeg transcode pipeline.
     /// </summary>
     [HttpGet("[action]")]
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task<IActionResult> probeForShare(string token, string fileKey)
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task<IActionResult> probeForShare(string fileKey)
     {
         var dbFile = _postgres.Files?.FirstOrDefault(x => x.FileKey == fileKey);
         if (dbFile == null)

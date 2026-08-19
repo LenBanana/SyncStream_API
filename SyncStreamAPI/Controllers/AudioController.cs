@@ -11,6 +11,8 @@ using SyncStreamAPI.Helper;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.PostgresModels;
+using Microsoft.AspNetCore.Authorization;
+using SyncStreamAPI.Auth;
 
 namespace SyncStreamAPI.Controllers;
 
@@ -28,8 +30,8 @@ public class AudioController : Controller
     }
 
     [HttpGet("wave")]
-    [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.API)]
-    public IActionResult GetAudioWaveform(string apiKey, string fileKey)
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public IActionResult GetAudioWaveform(string fileKey)
     {
         var dbFile = _postgres.Files.FirstOrDefault(x => x.FileKey == fileKey);
         if (dbFile == null) return StatusCode(StatusCodes.Status404NotFound);

@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
-using SyncStreamAPI.Models.GameModels.Blackjack;
-using SyncStreamAPI.Models.GameModels.Members;
+using SyncStreamAPI.Wire.Games;
 
 namespace SyncStreamAPI.Interfaces;
 
@@ -11,7 +10,7 @@ public partial interface IServerHub
     Task askforbet();
     Task askforpull(bool doubleOption);
     Task askforsplitpull(bool forSplitHand);
-    Task sendblackjackself(BlackjackMember you);
-    Task sendblackjackmembers(List<BlackjackMember> others);
-    Task sendblackjackdealer(BlackjackDealer dealer);
+    Task sendblackjackself(BlackjackMemberDto you);
+    Task sendblackjackmembers(List<BlackjackMemberDto> others);
+    Task sendblackjackdealer(BlackjackDealerDto dealer);
 }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -64,7 +64,7 @@ public class RoomStreamService : IRoomStreamService
     }
 
     public async Task<RoomUploadSessionResult> StartRoomUploadAsync(
-        string token,
+        int? userId,
         string uniqueId,
         string name,
         string fileEnding,
@@ -73,7 +73,7 @@ public class RoomStreamService : IRoomStreamService
     {
         try
         {
-            var dbUser = await GetUserByTokenAsync(token);
+            var dbUser = await GetUserByIdAsync(userId);
             if (dbUser == null)
                 return new RoomUploadSessionResult { StatusCode = StatusCodes.Status401Unauthorized };
 
@@ -92,6 +92,17 @@ public class RoomStreamService : IRoomStreamService
                 {
                     StatusCode = StatusCodes.Status400BadRequest,
                     ErrorMessage = "File size must be greater than zero"
+                };
+            }
+
+            // A ceiling rather than a quota. There was no upper bound at all, so a caller could declare any size
+            // it liked; this is set where no real file reaches it and a mistake or a deliberate absurdity does.
+            if (totalSize > General.MaxUploadBytes)
+            {
+                return new RoomUploadSessionResult
+                {
+                    StatusCode = StatusCodes.Status400BadRequest,
+                    ErrorMessage = $"Files above {General.MaxUploadBytes / 1024 / 1024 / 1024} GB cannot be uploaded"
                 };
             }
 
@@ -145,16 +156,21 @@ public class RoomStreamService : IRoomStreamService
 
     public async Task<RoomUploadSessionResult> UploadRoomChunkAsync(
         HttpRequest request,
-        string token,
+        int? userId,
         string uploadId,
         long startByte)
     {
+        // Refused here rather than reaching the path builder, so a malformed id answers with a status
+        // instead of an exception.
+        if (!RoomUploadIds.IsWellFormed(uploadId))
+            return new RoomUploadSessionResult { StatusCode = StatusCodes.Status404NotFound };
+
         var uploadLock = GetUploadLock(uploadId);
         await uploadLock.WaitAsync(request.HttpContext.RequestAborted);
 
         try
         {
-            var dbUser = await GetUserByTokenAsync(token);
+            var dbUser = await GetUserByIdAsync(userId);
             if (dbUser == null)
                 return new RoomUploadSessionResult { StatusCode = StatusCodes.Status401Unauthorized };
 
@@ -257,14 +273,19 @@ public class RoomStreamService : IRoomStreamService
         }
     }
 
-    public async Task<RoomUploadSessionResult> GetRoomUploadStatusAsync(string token, string uploadId)
+    public async Task<RoomUploadSessionResult> GetRoomUploadStatusAsync(int? userId, string uploadId)
     {
+        // Refused here rather than reaching the path builder, so a malformed id answers with a status
+        // instead of an exception.
+        if (!RoomUploadIds.IsWellFormed(uploadId))
+            return new RoomUploadSessionResult { StatusCode = StatusCodes.Status404NotFound };
+
         var uploadLock = GetUploadLock(uploadId);
         await uploadLock.WaitAsync();
 
         try
         {
-            var dbUser = await GetUserByTokenAsync(token);
+            var dbUser = await GetUserByIdAsync(userId);
             if (dbUser == null)
                 return new RoomUploadSessionResult { StatusCode = StatusCodes.Status401Unauthorized };
 
@@ -290,16 +311,21 @@ public class RoomStreamService : IRoomStreamService
     }
 
     public async Task<RoomUploadSessionResult> CompleteRoomUploadAsync(
-        string token,
+        int? userId,
         string uploadId,
         string publicBaseUrl)
     {
+        // Refused here rather than reaching the path builder, so a malformed id answers with a status
+        // instead of an exception.
+        if (!RoomUploadIds.IsWellFormed(uploadId))
+            return new RoomUploadSessionResult { StatusCode = StatusCodes.Status404NotFound };
+
         var uploadLock = GetUploadLock(uploadId);
         await uploadLock.WaitAsync();
 
         try
         {
-            var dbUser = await GetUserByTokenAsync(token);
+            var dbUser = await GetUserByIdAsync(userId);
             if (dbUser == null)
                 return new RoomUploadSessionResult { StatusCode = StatusCodes.Status401Unauthorized };
 
@@ -354,14 +380,19 @@ public class RoomStreamService : IRoomStreamService
         }
     }
 
-    public async Task<RoomUploadSessionResult> CancelRoomUploadAsync(string token, string uploadId)
+    public async Task<RoomUploadSessionResult> CancelRoomUploadAsync(int? userId, string uploadId)
     {
+        // Refused here rather than reaching the path builder, so a malformed id answers with a status
+        // instead of an exception.
+        if (!RoomUploadIds.IsWellFormed(uploadId))
+            return new RoomUploadSessionResult { StatusCode = StatusCodes.Status404NotFound };
+
         var uploadLock = GetUploadLock(uploadId);
         await uploadLock.WaitAsync();
 
         try
         {
-            var dbUser = await GetUserByTokenAsync(token);
+            var dbUser = await GetUserByIdAsync(userId);
             if (dbUser == null)
                 return new RoomUploadSessionResult { StatusCode = StatusCodes.Status401Unauthorized };
 
@@ -393,6 +424,11 @@ public class RoomStreamService : IRoomStreamService
 
     public async Task<RoomUploadPlaybackAssetResult> GetRoomUploadPlaybackAssetAsync(string uploadId)
     {
+        // Refused here rather than reaching the path builder, so a malformed id answers with a status
+        // instead of an exception.
+        if (!RoomUploadIds.IsWellFormed(uploadId))
+            return new RoomUploadPlaybackAssetResult { StatusCode = StatusCodes.Status404NotFound };
+
         try
         {
             var session = await LoadSessionAsync(uploadId);
@@ -450,7 +486,7 @@ public class RoomStreamService : IRoomStreamService
 
     public async Task<StreamToRoomResult> StreamToRoomAsync(
         HttpRequest request,
-        string token,
+        int? userId,
         string uniqueId,
         string name,
         string fileEnding)
@@ -466,7 +502,7 @@ public class RoomStreamService : IRoomStreamService
                 };
             }
 
-            var startResult = await StartRoomUploadAsync(token, uniqueId, name, fileEnding, request.ContentLength.Value);
+            var startResult = await StartRoomUploadAsync(userId, uniqueId, name, fileEnding, request.ContentLength.Value);
             if (startResult.StatusCode != StatusCodes.Status200OK || string.IsNullOrWhiteSpace(startResult.UploadId))
             {
                 return new StreamToRoomResult
@@ -476,10 +512,10 @@ public class RoomStreamService : IRoomStreamService
                 };
             }
 
-            var chunkResult = await UploadRoomChunkAsync(request, token, startResult.UploadId, 0);
+            var chunkResult = await UploadRoomChunkAsync(request, userId, startResult.UploadId, 0);
             if (chunkResult.StatusCode != StatusCodes.Status200OK)
             {
-                await CancelRoomUploadAsync(token, startResult.UploadId);
+                await CancelRoomUploadAsync(userId, startResult.UploadId);
                 return new StreamToRoomResult
                 {
                     StatusCode = chunkResult.StatusCode,
@@ -487,7 +523,7 @@ public class RoomStreamService : IRoomStreamService
                 };
             }
 
-            var completeResult = await CompleteRoomUploadAsync(token, startResult.UploadId, General.GetPublicBaseUrl(request));
+            var completeResult = await CompleteRoomUploadAsync(userId, startResult.UploadId, General.GetPublicBaseUrl(request));
             return new StreamToRoomResult
             {
                 StatusCode = completeResult.StatusCode,
@@ -540,7 +576,9 @@ public class RoomStreamService : IRoomStreamService
 
     public void CleanupRoomUploadArtifacts(string uploadId)
     {
-        if (string.IsNullOrWhiteSpace(uploadId))
+        // Shape, not just emptiness: building the path throws on a malformed id, and this runs on the way out of
+        // a share, where an exception would leave the rest of the cleanup undone.
+        if (!RoomUploadIds.IsWellFormed(uploadId))
             return;
 
         TryDeleteDirectory(GetUploadDirectory(uploadId));
@@ -661,7 +699,7 @@ public class RoomStreamService : IRoomStreamService
 
             postgres.Files?.Add(dbFile);
             await postgres.SaveChangesAsync();
-            await hub.Clients.Group(dbUser.ApiKey).updateFolders(new FileDto(dbFile));
+            await hub.Clients.Group(dbUser.ID.ToString()).updateFolders(new FileDto(dbFile));
 
             var playbackUrl = $"{session.BaseUrl}/api/video/fileByToken?fileKey={dbFile.FileKey}";
 
@@ -715,11 +753,10 @@ public class RoomStreamService : IRoomStreamService
         }
     }
 
-    private async Task<DbUser?> GetUserByTokenAsync(string token)
+    private async Task<DbUser?> GetUserByIdAsync(int? userId)
     {
-        return await _postgres.Users
-            .Include(x => x.RememberTokens)
-            .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
+        if (userId == null) return null;
+        return await _postgres.Users.FirstOrDefaultAsync(candidate => candidate.ID == userId);
     }
 
     private static readonly HashSet<string> FfmpegContainerExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -769,24 +806,19 @@ public class RoomStreamService : IRoomStreamService
         return System.IO.File.Exists(dataPath) ? new FileInfo(dataPath).Length : 0;
     }
 
-    private static string GetUploadRoot()
-    {
-        return Path.Combine(General.TemporaryFilePath, "room-uploads");
-    }
-
     private static string GetUploadDirectory(string uploadId)
     {
-        return Path.Combine(GetUploadRoot(), uploadId);
+        return RoomUploadPaths.DirectoryFor(uploadId);
     }
 
     private static string GetUploadDataPath(string uploadId)
     {
-        return Path.Combine(GetUploadDirectory(uploadId), "upload.bin");
+        return RoomUploadPaths.DataFileFor(uploadId);
     }
 
     private static string GetUploadMetadataPath(string uploadId)
     {
-        return Path.Combine(GetUploadDirectory(uploadId), "session.json");
+        return RoomUploadPaths.SessionFileFor(uploadId);
     }
 
     private static async Task<RoomUploadSessionState?> LoadSessionAsync(string uploadId)

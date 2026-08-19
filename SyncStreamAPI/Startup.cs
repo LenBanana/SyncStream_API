@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -21,6 +21,7 @@ using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.ServerData;
 using SyncStreamAPI.ServerData.Background;
+using SyncStreamAPI.Auth;
 
 namespace SyncStreamAPI;
 
@@ -37,13 +38,21 @@ public class Startup
     {
         services.AddMemoryCache();
         services.AddHttpClient();
-        services.Configure<KestrelServerOptions>(options => { options.Limits.MaxRequestBodySize = null; });
-        services.Configure<IISServerOptions>(options => { options.MaxRequestBodySize = null; });
+        // Uploads arrive in chunks, so a single request never needs to be huge. These are bounds
+        // against an unauthenticated disk fill, not against the upload feature.
+        services.Configure<KestrelServerOptions>(options =>
+        {
+            options.Limits.MaxRequestBodySize = General.MaxRequestBodyBytes;
+        });
+        services.Configure<IISServerOptions>(options =>
+        {
+            options.MaxRequestBodySize = General.MaxRequestBodyBytes;
+        });
         services.Configure<FormOptions>(options =>
         {
-            options.MultipartBodyLengthLimit = long.MaxValue;
-            options.ValueLengthLimit = int.MaxValue;
-            options.MultipartHeadersLengthLimit = int.MaxValue;
+            options.MultipartBodyLengthLimit = General.MaxRequestBodyBytes;
+            options.ValueLengthLimit = General.MaxFormValueBytes;
+            options.MultipartHeadersLengthLimit = General.MaxMultipartHeaderBytes;
         });
 
         services.AddSingleton<IContentTypeProvider, FileExtensionContentTypeProvider>();
@@ -79,13 +88,28 @@ public class Startup
         services.AddCors(o => o.AddPolicy("CORSPolicy", builder =>
         {
             builder.SetIsOriginAllowedToAllowWildcardSubdomains()
-                .SetIsOriginAllowed(_ => true)
                 .WithOrigins(origins)
                 .AllowAnyMethod()
                 .AllowAnyHeader()
                 .AllowCredentials();
         }));
         services.AddHttpContextAccessor();
+
+        // One place turns a credential into an identity. Anonymous connections are allowed through so
+        // guests can watch; every gated action goes through a policy instead.
+        services.AddAuthentication(TokenAuthDefaults.SmartScheme)
+            .AddPolicyScheme(TokenAuthDefaults.SmartScheme, TokenAuthDefaults.SmartScheme, options =>
+            {
+                options.ForwardDefaultSelector = context =>
+                    context.Request.Headers.ContainsKey(ApiKeyAuthenticationHandler.HeaderName)
+                        ? ApiKeyAuthenticationHandler.Scheme
+                        : TokenAuthDefaults.Scheme;
+            })
+            .AddScheme<TokenAuthOptions, RememberTokenAuthenticationHandler>(TokenAuthDefaults.Scheme, null)
+            .AddScheme<ApiKeyAuthOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationHandler.Scheme, null);
+        services.AddAuthorization(options => options.AddSyncStreamPolicies());
+        services.AddSingleton<IUserIdProvider, DbUserIdProvider>();
+
         services.AddSignalR(options => { options.EnableDetailedErrors = false; }).AddNewtonsoftJsonProtocol();
         services.AddSingleton(provider =>
         {

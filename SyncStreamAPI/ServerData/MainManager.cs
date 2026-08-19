@@ -22,6 +22,7 @@ using SyncStreamAPI.Helper.StreamingSites;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
+using SyncStreamAPI.Net;
 using SyncStreamAPI.Models.Interfaces;
 using SyncStreamAPI.Models.RTMP;
 using SyncStreamAPI.PostgresModels;
@@ -61,7 +62,7 @@ public class MainManager
         GeneralManager.AddDefaultRooms();
     }
 
-    public static BlockingCollection<Room> Rooms { get; set; } = new();
+    public static ConcurrentDictionary<string, Room> Rooms { get; set; } = new();
     public static GeneralManager GeneralManager { get; set; }
     public static RoomManager RoomManager { get; set; }
     public BlockingCollection<LiveUser> LiveUsers { get; set; } = new();
@@ -97,14 +98,13 @@ public class MainManager
         return RoomManager.GetRooms();
     }
 
-    public static async Task<DbUser?> GetUser(string token)
+    public static async Task<DbUser?> GetUser(int? userId)
     {
+        if (userId == null) return null;
+
         using var scope = ServiceProvider.CreateScope();
         var postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
-        var dbUser = await postgres.Users
-            .Include(x => x.RememberTokens)
-            .FirstOrDefaultAsync(x => x.RememberTokens.Any(y => y.Token == token));
-        return dbUser;
+        return await postgres.Users.FirstOrDefaultAsync(candidate => candidate.ID == userId);
     }
 
     public async Task SendDefaultDialog(string group, string message, AlertType alertType, string header = "")
@@ -153,9 +153,7 @@ public class MainManager
         var postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
         var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
         var userId = downloadClient.UserId.ToString();
-        var dbUser = postgres.Users
-            .Include(x => x.RememberTokens)
-            .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == downloadClient.Token) == true);
+        var dbUser = postgres.Users.FirstOrDefault(x => x.ID == downloadClient.UserId);
         var fileExtension = downloadClient.AudioOnly ? ".mp3" : ".mp4";
         var dbFile = new DbFile(downloadClient.FileName, fileExtension, dbUser);
         dbFile.GetPath();
@@ -274,12 +272,10 @@ public class MainManager
         // REPLACED: WebClient with HttpClient for streaming
         try
         {
-            using var httpClient = new HttpClient();
-            httpClient.DefaultRequestHeaders.Add("User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:106.0) Gecko/20100101 Firefox/106.0");
-
-            using var response =
-                await httpClient.GetAsync(downloadClient.Url, HttpCompletionOption.ResponseHeadersRead);
+            // The guarded client: this URL came from a caller, and a plain client would fetch anything the
+            // server can reach, including addresses inside its own network.
+            using var response = await OutboundHttp.Client.GetAsync(
+                downloadClient.Url, HttpCompletionOption.ResponseHeadersRead);
             response.EnsureSuccessStatusCode();
 
             var totalBytes = response.Content.Headers.ContentLength ?? 0;
@@ -318,12 +314,8 @@ public class MainManager
 
         try
         {
-            // All existing database/authentication logic preserved
-            var dbUser = (postgres.Users.Include(x => x.RememberTokens))
-                .FirstOrDefault(x => x.RememberTokens.Any(y => y.Token == client.Token));
-
-            var token = dbUser?.RememberTokens.FirstOrDefault(x => x.Token == client.Token);
-            if (token == null) return;
+            var dbUser = postgres.Users.FirstOrDefault(x => x.ID == client.UserId);
+            if (dbUser == null) return;
 
             if (dbUser is { userprivileges: >= UserPrivileges.Administrator })
             {

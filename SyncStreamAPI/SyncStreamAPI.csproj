@@ -9,23 +9,26 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="AspectInjector" Version="2.8.1"/>
-        <PackageReference Include="HtmlAgilityPack" Version="1.11.46"/>
-        <PackageReference Include="itext7" Version="7.2.5"/>
-        <PackageReference Include="Microsoft.AspNet.SignalR" Version="2.4.1"/>
-        <PackageReference Include="Microsoft.AspNet.SignalR.Utils" Version="2.4.3"/>
-        <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.NewtonsoftJson" Version="5.0.9"/>
-        <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.9.10"/>
-        <PackageReference Include="NAudio" Version="2.1.0"/>
-        <PackageReference Include="Newtonsoft.Json" Version="13.0.1"/>
-        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="5.0.10"/>
-        <PackageReference Include="PuppeteerSharp" Version="8.0.0"/>
-        <PackageReference Include="SixLabors.ImageSharp" Version="3.0.1"/>
-        <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Version="6.4.0"/>
-        <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="6.4.0"/>
-        <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="6.0.1"/>
-        <PackageReference Include="Xabe.FFmpeg" Version="5.2.5"/>
-        <PackageReference Include="Xabe.FFmpeg.Downloader" Version="5.2.5"/>
+        <PackageReference Include="AspectInjector" Version="2.8.1" />
+        <PackageReference Include="HtmlAgilityPack" Version="1.11.46" />
+        <PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.NewtonsoftJson" Version="9.0.4" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4">
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+          <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.4" />
+        <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.9.10" />
+        <PackageReference Include="NAudio" Version="2.1.0" />
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
+        <PackageReference Include="PDFsharp" Version="6.2.4" />
+        <PackageReference Include="PuppeteerSharp" Version="8.0.0" />
+        <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+        <PackageReference Include="Swashbuckle.AspNetCore.SwaggerGen" Version="6.4.0" />
+        <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="6.4.0" />
+        <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="6.0.1" />
+        <PackageReference Include="Xabe.FFmpeg" Version="5.2.5" />
+        <PackageReference Include="Xabe.FFmpeg.Downloader" Version="5.2.5" />
     </ItemGroup>
 
     <ItemGroup>

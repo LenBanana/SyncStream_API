@@ -12,11 +12,10 @@ public class DownloadClientValue
     private readonly WebClient keepAliveClient = new();
     private bool stopKeepAlive;
 
-    public DownloadClientValue(int userId, string fileName, string token, string url, ConversionPreset preset)
+    public DownloadClientValue(int userId, string fileName, string url, ConversionPreset preset)
     {
         UserId = userId;
         Preset = preset;
-        Token = token;
         FileName = fileName;
         Url = url;
         Running = false;
@@ -24,13 +23,12 @@ public class DownloadClientValue
         CancellationToken = new CancellationTokenSource();
     }
 
-    public DownloadClientValue(int userId, string fileName, string token, string url, string quality,
+    public DownloadClientValue(int userId, string fileName, string url, string quality,
         bool audioOnly = false, bool embedSubtitles = false)
     {
         UserId = userId;
         Preset = ConversionPreset.Faster;
         Quality = quality;
-        Token = token;
         FileName = fileName;
         Url = url;
         Running = false;
@@ -45,7 +43,6 @@ public class DownloadClientValue
     public string Quality { get; set; }
     public string FileName { get; set; }
     public string Url { get; set; }
-    public string Token { get; set; }
     public string UniqueId { get; set; }
     public bool Running { get; set; }
     public bool AudioOnly { get; set; }

@@ -6,6 +6,8 @@ using SyncStreamAPI.Annotations;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper.Youtube;
 using SyncStreamAPI.PostgresModels;
+using Microsoft.AspNetCore.Authorization;
+using SyncStreamAPI.Auth;
 
 namespace SyncStreamAPI.Controllers;
 
@@ -21,8 +23,8 @@ public class YoutubeController : Controller
     }
 
     [HttpGet("YoutubeSearch")]
-    [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token)]
-    public async Task<IActionResult> YoutubeSearch(string token, string query, string pageToken = "",
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task<IActionResult> YoutubeSearch(string query, string pageToken = "",
         string order = "relevance", int pageSize = 10)
     {
         var result = await new YoutubeApi(Configuration).Search(query, pageToken, order: order, pageSize: pageSize);
