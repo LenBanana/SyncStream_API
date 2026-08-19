@@ -161,7 +161,7 @@ public partial class ServerHub
             await Clients.Caller.videoupdate(mainServer.playlist[0]);
 
         await Clients.Caller.isplayingupdate(mainServer.isplaying);
-        await Clients.Caller.timeupdate(mainServer.currenttime);
+        await Clients.Caller.timeupdate(mainServer.ToTimeSync());
         await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
         await Clients.Caller.adduserupdate((int)UserUpdate.Success);
         if (room.CurrentStreamer != null)

@@ -378,6 +378,14 @@ public partial class ServerHub : Hub<IServerHub>
         await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
     }
 
+    /// <summary>
+    ///     The host reports where playback has reached.
+    /// </summary>
+    /// <remarks>
+    ///     Only the host may. Any member used to be able to yank everyone else's position, which is now worth
+    ///     refusing rather than tolerating: the host reports on a steady cadence, so a second sender would be
+    ///     fighting it once a second.
+    /// </remarks>
     public async Task SetTime(double time, string UniqueId)
     {
         var room = GetRoom(UniqueId);
@@ -385,8 +393,14 @@ public partial class ServerHub : Hub<IServerHub>
 
         if (!CheckPrivileges(room)) return;
 
-        await Clients.Group(UniqueId).timeupdate(time);
+        var member = room.server.FindByConnection(Context.ConnectionId);
+        if (member?.ishost != true) return;
+
         room.server.currenttime = time;
+        room.server.LastTimeUpdateUtc = DateTime.UtcNow;
+
+        // OthersInGroup: this position came from the host, who discarded its own echo anyway.
+        await Clients.OthersInGroup(UniqueId).timeupdate(room.server.ToTimeSync());
     }
 
     public async Task PlayPause(bool isplaying, string UniqueId)
@@ -396,6 +410,9 @@ public partial class ServerHub : Hub<IServerHub>
 
         if (!CheckPrivileges(room)) return;
 
+        // Re-base the position clock: pausing freezes it and resuming restarts it from now, so the age a
+        // viewer adds back stays correct across the transition.
+        room.server.LastTimeUpdateUtc = DateTime.UtcNow;
         room.server.isplaying = isplaying;
         await Clients.Group(UniqueId).isplayingupdate(isplaying);
         await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());

@@ -1,3 +1,5 @@
+using System;
+using SyncStreamAPI.Wire.Playback;
 using System.Collections.Generic;
 using System.Linq;
 using SyncStreamAPI.Models;
@@ -58,6 +60,23 @@ public static class WireMapping
     public static List<LiveUserDto> ToDtos(this IEnumerable<LiveUser>? users)
     {
         return users?.Select(user => new LiveUserDto(user)).ToList() ?? new List<LiveUserDto>();
+    }
+
+    /// <summary>
+    ///     Dates the room's current position for relay to viewers.
+    /// </summary>
+    /// <remarks>
+    ///     While playing, the age is how long ago the host reported the position, so a viewer can add it back.
+    ///     While paused it is zero, because a paused position does not advance and extrapolating it would send
+    ///     viewers past where everyone else is sitting.
+    /// </remarks>
+    public static TimeSyncDto ToTimeSync(this Server server)
+    {
+        var age = server.isplaying
+            ? Math.Max(0, (DateTime.UtcNow - server.LastTimeUpdateUtc).TotalMilliseconds)
+            : 0;
+
+        return new TimeSyncDto(server.currenttime, age, server.isplaying);
     }
 
     public static RoomSummaryDto ToSummary(this Room room)

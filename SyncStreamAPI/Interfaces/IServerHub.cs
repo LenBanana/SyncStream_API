@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Wire.Rooms;
+using SyncStreamAPI.Wire.Playback;
 
 namespace SyncStreamAPI.Interfaces;
 
@@ -23,7 +24,7 @@ public partial interface IServerHub
 
     Task twitchTimeUpdate(double time);
 
-    Task timeupdate(double time);
+    Task timeupdate(TimeSyncDto sync);
 
     Task twitchPlaying(bool playing);
 

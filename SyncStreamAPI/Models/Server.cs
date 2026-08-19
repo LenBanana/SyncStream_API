@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using SyncStreamAPI.Models.Collections;
@@ -26,6 +27,16 @@ public class Server
     }
 
     public bool isplaying { get; set; }
+
+    /// <summary>
+    ///     When <see cref="currenttime" /> was last reported by the host.
+    /// </summary>
+    /// <remarks>
+    ///     Lets a position be dated when relayed, so a viewer can tell a fresh report from one that has been
+    ///     sitting here, and so a late joiner is told where playback actually is rather than where it was when
+    ///     the host last happened to send an update.
+    /// </remarks>
+    public DateTime LastTimeUpdateUtc { get; set; } = DateTime.UtcNow;
     public string title => playlist.Count > 0 ? playlist[0].title : "Nothing playing";
     private DreckVideo _currentVideo { get; set; }
 

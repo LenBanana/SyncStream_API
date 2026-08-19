@@ -78,6 +78,13 @@ else {
     Invoke-Step 'frontend build' $FrontendPath {
         npx --no-install ng build --configuration production --progress=false
     }
+    # Scoped deliberately. 36 of the 77 spec files are untouched Angular CLI scaffolds that assert only
+    # "should create" and have never passed, because they do not supply the providers their components need.
+    # Running the whole suite would leave this step permanently red and therefore ignored. Extend the pattern
+    # when adding real specs elsewhere, or clear out the scaffolds and drop the filter.
+    Invoke-Step 'frontend tests' $FrontendPath {
+        npx --no-install ng test --watch=false --browsers=ChromeHeadless --include='**/media/sync/*.spec.ts'
+    }
 }
 
 Write-Host ''
