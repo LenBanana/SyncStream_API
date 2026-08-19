@@ -114,30 +114,13 @@ public class RoomManager
                 }
                 case PlayerType.Twitch:
                 {
-                    var urlPatterns = new (string pattern, string titlePrefix)[]
-                    {
-                        (@"\/videos\/(\d+)", "Twitch Video - "),
-                        (@"clips\.twitch\.tv\/([\w\-]+)", "Twitch Clip - ")
-                    };
+                    // Titling only. The url is passed through untouched because the browser parses it to decide
+                    // which embed to build, and a clip slug is indistinguishable from a channel login once the
+                    // rest of the link is gone.
+                    var twitch = TwitchSource.FromUrl(key.url);
+                    if (twitch == null) return "That Twitch link cannot be played";
 
-                    foreach (var (pattern, titlePrefix) in urlPatterns)
-                    {
-                        var regex = new Regex(pattern);
-                        var matches = regex.Matches(key.url);
-
-                        if (matches.Count <= 0) continue;
-                        key.url = key.url;
-                        key.title = $"{titlePrefix}{key.url}";
-                        break;
-                    }
-
-                    if (string.IsNullOrEmpty(key.title))
-                    {
-                        const string titleRegExString = @"twitch.tv\/(\w+)\/?";
-                        var titleRegEx = new Regex(titleRegExString);
-                        var titleMatches = titleRegEx.Matches(key.url);
-                        if (titleMatches.Count > 0) key.title = titleMatches[0]?.Groups[1]?.Value;
-                    }
+                    if (string.IsNullOrEmpty(key.title)) key.title = twitch.DisplayTitle();
 
                     break;
                 }

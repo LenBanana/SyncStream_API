@@ -83,7 +83,7 @@ else {
     # Running the whole suite would leave this step permanently red and therefore ignored. Extend the pattern
     # when adding real specs elsewhere, or clear out the scaffolds and drop the filter.
     Invoke-Step 'frontend tests' $FrontendPath {
-        npx --no-install ng test --watch=false --browsers=ChromeHeadless --include='**/media/sync/*.spec.ts'
+        npx --no-install ng test --watch=false --browsers=ChromeHeadless --include='**/media/sync/*.spec.ts' --include='**/twitch-source.spec.ts'
     }
 }
 
