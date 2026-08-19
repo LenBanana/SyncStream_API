@@ -32,12 +32,6 @@ public class DataBackgroundService : IHostedService, IDisposable
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        using (var scope = _serviceScope.CreateScope())
-        {
-            var dbContext = scope.ServiceProvider.GetRequiredService<PostgresContext>();
-            await dbContext.Database.EnsureCreatedAsync();
-        }
-
         _timer = new Timer(CheckDatabaseAndRemoveFiles, null, TimeSpan.Zero, General.CheckIntervalInMinutes);
     }
 

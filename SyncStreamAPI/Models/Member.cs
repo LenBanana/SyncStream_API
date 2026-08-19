@@ -21,7 +21,10 @@ public class Member
         timer = new Timer(General.SecondsToKickMember.TotalMilliseconds);
         timer.Elapsed += Timer_Elapsed;
         timer.Start();
-        MainManager.GetRoomManager().AddToMemberCheck(this);
+        // Null-conditional because the room manager is a static that is only set once MainManager has
+        // been constructed. Nothing creates a Member that early today, but dereferencing it unconditionally
+        // makes a startup-ordering change an NRE instead of a missed sweep registration.
+        MainManager.GetRoomManager()?.AddToMemberCheck(this);
     }
 
     [Key] public string username { get; set; }

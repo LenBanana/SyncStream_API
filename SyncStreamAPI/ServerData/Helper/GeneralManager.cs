@@ -36,7 +36,6 @@ public class GeneralManager
             using (var scope = _serviceProvider.CreateScope())
             {
                 var _postgres = scope.ServiceProvider.GetRequiredService<PostgresContext>();
-                await _postgres.Database.EnsureCreatedAsync();
                 Rooms.Add(new Room("Dreckroom", "dreck", false, true));
                 Rooms.Add(new Room("Randomkeller", "random", false, true));
                 Rooms.Add(new Room("Guffelstübchen", "guffel", false, true));

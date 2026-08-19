@@ -347,3 +347,12 @@ ASALocalRun/
 # BeatPulse healthcheck temp database
 healthchecksdb
 TwitchStats/
+
+# Downloaded tool binaries. MainManager fetches ffmpeg/ffprobe at startup and yt-dlp on demand,
+# so these appear in the working tree and must never be committed.
+SyncStreamAPI/ffmpeg
+SyncStreamAPI/ffmpeg.exe
+SyncStreamAPI/ffprobe
+SyncStreamAPI/ffprobe.exe
+SyncStreamAPI/yt-dlp
+SyncStreamAPI/yt-dlp.exe
