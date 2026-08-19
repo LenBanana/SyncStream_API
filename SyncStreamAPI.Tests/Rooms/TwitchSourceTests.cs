@@ -42,6 +42,8 @@ public class TwitchSourceTests
     [InlineData("https://nottwitch.tv/somestreamer")]
     // A host that merely ends with the real one, which the contains-check this replaces would have accepted.
     [InlineData("https://evil-twitch.tv/somestreamer")]
+    // The clip frame with no clip named, which would otherwise be read as a clip called "embed".
+    [InlineData("https://clips.twitch.tv/embed")]
     public void Refuses_anything_it_cannot_name(string? url)
     {
         Assert.Null(TwitchSource.FromUrl(url));

@@ -65,7 +65,12 @@ public class TwitchSource
             if (!string.IsNullOrEmpty(embedded)) return new TwitchSource(TwitchSourceKind.Clip, embedded!);
 
             var onHost = SingleSegmentPath.Match(path);
-            return onHost.Success ? new TwitchSource(TwitchSourceKind.Clip, onHost.Groups[1].Value) : null;
+            if (!onHost.Success || onHost.Groups[1].Value.Equals("embed", StringComparison.OrdinalIgnoreCase))
+                // /embed is the frame itself, so with no clip parameter above there is no clip named at all and
+                // taking the path segment would produce a source called "embed".
+                return null;
+
+            return new TwitchSource(TwitchSourceKind.Clip, onHost.Groups[1].Value);
         }
 
         if (host != "twitch.tv") return null;
