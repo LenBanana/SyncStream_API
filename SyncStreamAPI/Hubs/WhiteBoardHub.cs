@@ -13,20 +13,29 @@ namespace SyncStreamAPI.Hubs;
 
 public partial class ServerHub
 {
-    public async Task PlayGallows(string UniqueId)
+    /// <summary>
+    ///     Starts a round of gallows.
+    /// </summary>
+    /// <remarks>
+    ///     Took only the room id and answered with the member list, while the client has always called it with
+    ///     a language and a draw time as well, so SignalR refused every call for having three arguments where
+    ///     one was expected. The round-starting logic it was meant to reach is <see cref="PlayGallowsSettings" />,
+    ///     which the chat command path calls directly, which is why the game worked from chat and not from here.
+    /// </remarks>
+    public async Task PlayGallows(string UniqueId, Language language, int gameLength)
     {
         try
         {
-            var room = GetRoom(UniqueId);
-            if (room == null) return;
-
-            await Clients.Group(UniqueId).gallowusers(room.GallowGame.members.ToDtos());
+            await PlayGallowsSettings(UniqueId, language, gameLength <= 0 ? DefaultGallowsSeconds : gameLength);
         }
         catch (Exception ex)
         {
             Console.WriteLine(ex.ToString());
         }
     }
+
+    /// <summary>Draw time used when a caller does not specify one, matching the chat command's default.</summary>
+    private const int DefaultGallowsSeconds = 90;
 
     private async Task PlayGallowsSettings(string UniqueId, Language language, int gameLength)
     {

@@ -379,6 +379,17 @@ public partial class ServerHub : Hub<IServerHub>
     }
 
     /// <summary>
+    ///     Largest host transit time that will be credited to a position report.
+    /// </summary>
+    /// <remarks>
+    ///     A host that has just resumed from sleep, or whose ping reply was stuck behind a stalled upload, can
+    ///     measure a round trip of many seconds. Crediting that in full would shove every viewer that far past
+    ///     the host. The bound is not a trust boundary, since the host chooses the position anyway; it is there
+    ///     so one bad measurement cannot throw the room.
+    /// </remarks>
+    private static readonly TimeSpan MaxHostLatency = TimeSpan.FromSeconds(2);
+
+    /// <summary>
     ///     The host reports where playback has reached.
     /// </summary>
     /// <remarks>
@@ -386,7 +397,13 @@ public partial class ServerHub : Hub<IServerHub>
     ///     refusing rather than tolerating: the host reports on a steady cadence, so a second sender would be
     ///     fighting it once a second.
     /// </remarks>
-    public async Task SetTime(double time, string UniqueId)
+    /// <param name="oneWayLatencySeconds">
+    ///     The host's own transit time to here. The report is dated back by it, so the age a viewer reads
+    ///     covers the whole path from the host reading its player to this message arriving. Dating from arrival
+    ///     instead left every viewer behind the host by the host's own latency, permanently and invisibly,
+    ///     since the viewers stayed consistent with each other.
+    /// </param>
+    public async Task SetTime(double time, string UniqueId, double oneWayLatencySeconds)
     {
         var room = GetRoom(UniqueId);
         if (room == null) return;
@@ -396,8 +413,12 @@ public partial class ServerHub : Hub<IServerHub>
         var member = room.server.FindByConnection(Context.ConnectionId);
         if (member?.ishost != true) return;
 
+        var hostLatency = double.IsFinite(oneWayLatencySeconds) && oneWayLatencySeconds > 0
+            ? TimeSpan.FromSeconds(Math.Min(oneWayLatencySeconds, MaxHostLatency.TotalSeconds))
+            : TimeSpan.Zero;
+
         room.server.currenttime = time;
-        room.server.LastTimeUpdateUtc = DateTime.UtcNow;
+        room.server.LastTimeUpdateUtc = DateTime.UtcNow - hostLatency;
 
         // OthersInGroup: this position came from the host, who discarded its own echo anyway.
         await Clients.OthersInGroup(UniqueId).timeupdate(room.server.ToTimeSync());

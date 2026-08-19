@@ -77,6 +77,91 @@ public class ClientContractTests
     private static readonly Regex OnHandler =
         new(@"\.on\(\s*'(?<name>[A-Za-z]+)'", RegexOptions.Compiled);
 
+    /// <summary>
+    ///     Every <c>invoke('Name', ...)</c> in the client, with the number of arguments it passes.
+    /// </summary>
+    /// <remarks>
+    ///     Splits the call's argument list on commas at bracket depth zero, so an object literal or a nested
+    ///     call counts as the single argument it is. Quotes are tracked because a comma inside a string is not
+    ///     a separator.
+    /// </remarks>
+    private static IEnumerable<(string Name, int ArgumentCount, string Call)> ClientInvokesWithArity()
+    {
+        foreach (var source in ClientSources())
+        foreach (Match match in InvokeCall.Matches(source))
+        {
+            var open = source.IndexOf('(', match.Index);
+            if (open < 0) continue;
+
+            var arguments = SplitArguments(source, open);
+            if (arguments == null) continue;
+
+            // The first argument is the method name, which is not a parameter of the hub method.
+            yield return (match.Groups["name"].Value, arguments.Count - 1,
+                source.Substring(match.Index, Math.Min(90, source.Length - match.Index)).Split('\n')[0]);
+        }
+    }
+
+    /// <summary>
+    ///     Splits the argument list that starts at <paramref name="open" />, or null if the brackets never
+    ///     balance, which means this is not a call that can be read statically.
+    /// </summary>
+    private static List<string>? SplitArguments(string source, int open)
+    {
+        var arguments = new List<string>();
+        var current = new System.Text.StringBuilder();
+        var depth = 0;
+        char? quote = null;
+
+        for (var index = open; index < source.Length; index++)
+        {
+            var character = source[index];
+
+            if (quote != null)
+            {
+                if (character == '\\') { index++; continue; }
+                if (character == quote) quote = null;
+                continue;
+            }
+
+            switch (character)
+            {
+                case '\'':
+                case '"':
+                case '`':
+                    quote = character;
+                    current.Append(character);
+                    continue;
+                case '(':
+                case '[':
+                case '{':
+                    depth++;
+                    if (depth > 1) current.Append(character);
+                    continue;
+                case ')':
+                case ']':
+                case '}':
+                    depth--;
+                    if (depth == 0)
+                    {
+                        if (current.ToString().Trim().Length > 0) arguments.Add(current.ToString().Trim());
+                        return arguments;
+                    }
+                    current.Append(character);
+                    continue;
+                case ',' when depth == 1:
+                    arguments.Add(current.ToString().Trim());
+                    current.Clear();
+                    continue;
+                default:
+                    current.Append(character);
+                    continue;
+            }
+        }
+
+        return null;
+    }
+
     private static Dictionary<string, MethodInfo> HubMethods()
     {
         return typeof(ServerHub)
@@ -123,6 +208,38 @@ public class ClientContractTests
         Assert.True(missing.Count == 0,
             "The client invokes hub methods that do not exist, so every call is rejected at runtime: "
             + string.Join(", ", missing));
+    }
+
+    [SkippableFact]
+    public void Every_invoke_passes_the_number_of_arguments_the_hub_method_takes()
+    {
+        Skip.IfNot(Enabled, "Set SYNCSTREAM_FRONTEND to the Angular project to run client contract tests.");
+
+        // SignalR binds arguments by position and answers a mismatch with a runtime failure on that one call,
+        // so a hub method that gains or loses a parameter breaks silently until someone uses the feature. The
+        // name-only check above passes throughout, which is how adding the host-latency argument to SetTime
+        // went unnoticed by this file until it was looked for.
+        var methods = HubMethods();
+        var mismatched = new List<string>();
+
+        foreach (var (name, passed, call) in ClientInvokesWithArity())
+        {
+            if (!methods.TryGetValue(name, out var method)) continue;
+
+            var parameters = method.GetParameters();
+            var required = parameters.Count(parameter => !parameter.IsOptional);
+
+            if (passed < required || passed > parameters.Length)
+                mismatched.Add($"{name}: client passes {passed}, hub takes "
+                               + (required == parameters.Length
+                                   ? $"{required}"
+                                   : $"{required} to {parameters.Length}")
+                               + $" ({call.Trim()})");
+        }
+
+        Assert.True(mismatched.Count == 0,
+            "Client calls disagree with the hub on how many arguments to pass, so those calls fail at "
+            + "runtime: " + string.Join("; ", mismatched));
     }
 
     [SkippableFact]
