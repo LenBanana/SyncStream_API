@@ -27,7 +27,7 @@ public partial class ServerHub
         }
     }
 
-    public async Task PlayGallowsSettings(string UniqueId, Language language, int gameLength)
+    private async Task PlayGallowsSettings(string UniqueId, Language language, int gameLength)
     {
         try
         {

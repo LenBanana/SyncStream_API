@@ -53,6 +53,16 @@ function Invoke-Step {
 }
 
 Invoke-Step 'backend build' $root { dotnet build --nologo -v q }
+
+# Lets the client-contract tests compare hub methods and callbacks against the Angular sources. Without
+# it those tests skip, and cross-project drift goes unnoticed until it shows up as a runtime error.
+if (Test-Path (Join-Path $FrontendPath 'src/app')) {
+    $env:SYNCSTREAM_FRONTEND = $FrontendPath
+}
+else {
+    Write-Host ("NOTE: client contract tests will skip, no src/app under '{0}'" -f $FrontendPath) -ForegroundColor Yellow
+}
+
 Invoke-Step 'backend tests' $root { dotnet test --nologo -v q }
 
 if ($SkipFrontend) {

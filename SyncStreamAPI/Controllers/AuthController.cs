@@ -143,6 +143,25 @@ public class AuthController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Issues a fresh API key for the authenticated account and returns the updated profile.</summary>
+    /// <remarks>
+    ///     Was a hub method that answered with a <c>userlogin</c> event. Nothing listened for that event once
+    ///     login moved off the hub, so the key was created and never shown. A request that changes your own
+    ///     credentials should answer in its own response anyway.
+    /// </remarks>
+    [HttpPost("api-key")]
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task<IActionResult> GenerateApiKey()
+    {
+        var user = await _postgres.Users.FirstOrDefaultAsync(candidate => candidate.ID == this.CallerUserId());
+        if (user == null) return Unauthorized(new { message = "Not signed in" });
+
+        user.ApiKey = RememberTokens.Issue().Token;
+        await _postgres.SaveChangesAsync();
+
+        return Ok(user.ToSelfProfile());
+    }
+
     /// <summary>Changes the authenticated account's username and/or password.</summary>
     [HttpPost("change-user")]
     [Authorize(Policy = AuthorizationPolicies.Approved)]

@@ -25,5 +25,4 @@ public partial interface IServerHub
 
     Task gallowtimerupdate(int time);
 
-    Task gallowtimerelapsed(int time);
 }

@@ -72,7 +72,6 @@ public class HubAuthorizationTests
         "TakePull",
         "TakeSplitPull",
         "PlayGallows",
-        "PlayGallowsSettings",
         "NewGallow",
 
         // Whiteboard.

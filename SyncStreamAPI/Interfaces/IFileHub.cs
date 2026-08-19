@@ -8,7 +8,6 @@ namespace SyncStreamAPI.Interfaces;
 
 public partial interface IServerHub
 {
-    Task savedToDb(string id);
     Task getDownloads(List<FileDto> files);
     Task getFolderUsers(List<UserSummaryDto> users);
     Task getFolders(FolderDto folder);

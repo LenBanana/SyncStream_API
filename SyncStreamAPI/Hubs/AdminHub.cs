@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -64,16 +64,6 @@ public partial class ServerHub
         await Clients.All.getusers(_postgres.Users.ToList().ToSummaries());
     }
 
-    [Authorize(Policy = AuthorizationPolicies.Administrator)]
-    public async Task GenerateApiKey()
-    {
-        var actor = await GetCallerUserAsync();
-        if (actor == null) return;
-
-        actor.ApiKey = RememberTokens.Issue().Token;
-        await _postgres.SaveChangesAsync();
-        await Clients.Caller.userlogin(actor.ToSelfProfile());
-    }
 
     [ErrorHandling]
     [Authorize(Policy = AuthorizationPolicies.Administrator)]

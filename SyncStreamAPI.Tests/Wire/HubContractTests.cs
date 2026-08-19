@@ -88,7 +88,6 @@ public class HubContractTests
         "VoipOffer",
         "VoipParticipantDto",
         "WebRtcClientOffer",
-        "WebRtcCredentials",
         // Live streaming and bots
         "BotLiveChannelInfo",
         "LiveUserDTO",

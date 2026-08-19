@@ -9,8 +9,6 @@ namespace SyncStreamAPI.Interfaces;
 public partial interface IServerHub
 {
     Task getPrivilegeInfo(List<PrivilegeInfo> info);
-    Task userlogin(SelfProfileDto user);
-
     Task getusers(List<UserSummaryDto> users);
     Task serverHealth(ServerHealthDto healthDto);
 }
