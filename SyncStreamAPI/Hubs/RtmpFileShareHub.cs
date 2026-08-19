@@ -70,7 +70,20 @@ public partial class ServerHub
             return;
         }
 
-        var filePath = Path.Combine(General.TemporaryFilePath, "room-uploads", uploadId, "upload.bin");
+        // The id becomes a path segment, and it arrived from the caller. Without this, an id of ../../.. reads
+        // an upload.bin from somewhere else on the disk and streams it to the room.
+        if (!RoomUploadIds.IsWellFormed(uploadId))
+        {
+            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+            {
+                Header   = "Upload Not Found",
+                Question = "The upload session could not be found. Please try again.",
+                Answer1  = "Ok"
+            });
+            return;
+        }
+
+        var filePath = RoomUploadPaths.DataFileFor(uploadId);
         if (!File.Exists(filePath))
         {
             await Clients.Caller.dialog(new Dialog(AlertType.Danger)

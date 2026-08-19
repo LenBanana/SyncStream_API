@@ -43,6 +43,10 @@ public class DataBackgroundService : IHostedService, IDisposable
 
     private async void CheckDatabaseAndRemoveFiles(object state)
     {
+        // Runs before the database work, and on its own, so a staging directory that will not delete cannot stop
+        // the temporary-file cleanup from happening.
+        UploadStagingSweep.Run(Console.WriteLine);
+
         using var scope = _serviceScope.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<PostgresContext>();
         var thresholdDate = DateTime.UtcNow;

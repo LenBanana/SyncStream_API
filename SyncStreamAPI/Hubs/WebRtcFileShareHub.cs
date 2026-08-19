@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using SyncStreamAPI.Annotations;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper;
+using SyncStreamAPI.Helper.Streaming;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.WebRTC;
 using SyncStreamAPI.PostgresModels;
@@ -183,9 +184,17 @@ public partial class ServerHub
         var member = room.server.members.FirstOrDefault(m => m?.ConnectionId == Context.ConnectionId);
         if (member == null) return;
 
-        // uploadId is a GUID (32 hex chars) — cryptographically unguessable; no separate
-        // ownership query needed.  File must already exist (first chunk was written).
-        var filePath = Path.Combine(General.TemporaryFilePath, "room-uploads", uploadId, "upload.bin");
+        // The unguessable-id argument for skipping an ownership query only holds if the id is actually of
+        // that shape, and it arrives from the caller. Unchecked, ../../.. is not unguessable and not a GUID: it
+        // reads an upload.bin from elsewhere on the disk and shares it with the room.
+        if (!RoomUploadIds.IsWellFormed(uploadId))
+        {
+            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+                { Header = "Upload Not Found", Question = "The upload session could not be found. Please try again.", Answer1 = "Ok" });
+            return;
+        }
+
+        var filePath = RoomUploadPaths.DataFileFor(uploadId);
         if (!File.Exists(filePath))
         {
             await Clients.Caller.dialog(new Dialog(AlertType.Danger)
@@ -335,7 +344,7 @@ public partial class ServerHub
         // Clean up the upload temp directory left by an early-stream upload.
         if (!string.IsNullOrWhiteSpace(room.FileShareUploadId))
         {
-            var uploadDir = Path.Combine(General.TemporaryFilePath, "room-uploads", room.FileShareUploadId);
+            var uploadDir = RoomUploadPaths.DirectoryFor(room.FileShareUploadId);
             try { if (Directory.Exists(uploadDir)) Directory.Delete(uploadDir, recursive: true); }
             catch (Exception ex) { Console.WriteLine($"[FileShare] Failed to delete upload dir: {ex.Message}"); }
             room.FileShareUploadId = null;
