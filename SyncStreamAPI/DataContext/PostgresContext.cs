@@ -1,4 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.Linq;
+using Microsoft.EntityFrameworkCore;
+using SyncStreamAPI.Helper.SponsorBlock;
 using SyncStreamAPI.PostgresModels;
 
 namespace SyncStreamAPI.DataContext;
@@ -18,10 +20,19 @@ public class PostgresContext : DbContext
     public DbSet<DbRememberToken> RememberTokens { get; set; }
     public DbSet<DbMessage> Messages { get; set; }
     public DbSet<DbConversation> Conversations { get; set; }
+    public DbSet<DbServerSettings> ServerSettings { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        // Seeded so the row always exists and reading it never has to cope with its absence. The values are the
+        // shipped defaults; an administrator changing them updates this row rather than inserting another.
+        builder.Entity<DbServerSettings>().HasData(new DbServerSettings
+        {
+            ID = DbServerSettings.SingletonId,
+            SponsorBlockSkipCategories = SponsorBlockCategories.Default.ToList()
+        });
 
         // Every authenticated request looks a session up by this digest, so it is indexed, and unique because
         // two sessions sharing one digest would mean the random source repeated itself.
