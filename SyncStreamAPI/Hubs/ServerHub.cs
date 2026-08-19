@@ -86,12 +86,18 @@ public partial class ServerHub : Hub<IServerHub>
     public override async Task OnDisconnectedAsync(Exception? ex)
     {
         var rooms = MainManager.GetRooms();
-        var room = rooms.FirstOrDefault(x =>
-            x.server.members.FirstOrDefault(y => y?.ConnectionId == Context.ConnectionId) != null);
+        var room = rooms.FirstOrDefault(x => x.server.FindByConnection(Context.ConnectionId) != null);
         if (room != null)
         {
-            var e = room.server.members.FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
-            e?.InvokeKick();
+            // Departures are handled here, not by a per-member timer. The member is removed, the host role
+            // is handed on if they held it, and the games are told so they can drop the player from a hand.
+            var e = room.server.FindByConnection(Context.ConnectionId);
+            Member? promotedHost = null;
+            if (e != null)
+            {
+                promotedHost = room.server.Leave(e);
+                e.InvokeKick();
+            }
 
             // If this connection owned an active WebRTC file share, stop it cleanly.
             if (room.IsFileSharingActive && room.FileShareInitiator == Context.ConnectionId)
@@ -162,6 +168,15 @@ public partial class ServerHub : Hub<IServerHub>
                 case GameMode.NotPlaying:
                     break;
             }
+
+            if (promotedHost?.ConnectionId != null)
+                await Clients.Client(promotedHost.ConnectionId).hostupdate(true);
+
+            // Nothing else announces the departure now that the timer-driven sweep is gone.
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, room.uniqueId);
+            await Clients.Group(room.uniqueId)
+                .userupdate(room.server.members.Select(member => member?.ToDTO()).ToList());
+            await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
         }
 
         // Clean up VoIP room membership if the connection was in an audio room.

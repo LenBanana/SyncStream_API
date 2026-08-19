@@ -62,51 +62,6 @@ public class RoomManager
         return Rooms.Values.ToList();
     }
 
-    public void AddToMemberCheck(Member member)
-    {
-        member.Kicked += Member_Kicked;
-    }
-
-    private async void Member_Kicked(Member e)
-    {
-        await KickMember(e);
-    }
-
-    private async Task KickMember(Member e)
-    {
-        if (e != null)
-            try
-            {
-                var room = GetRoom(e.RoomId);
-                if (room != null)
-                {
-                    e.Kicked -= Member_Kicked;
-                    if (!room.server.members.Contains(e)) return;
-
-                    room.server.members.Remove(e);
-                    using (var scope = ServiceProvider.CreateScope())
-                    {
-                        var hub = scope.ServiceProvider.GetRequiredService<IHubContext<ServerHub, IServerHub>>();
-                        if (room.server.members.Count > 0)
-                        {
-                            if (e.ishost)
-                            {
-                                room.server.members[0].ishost = true;
-                                await hub.Clients.Client(room.server.members[0].ConnectionId).hostupdate(true);
-                            }
-                        }
-
-                        await hub.Clients.Group(room.uniqueId)
-                            .userupdate(room.server.members?.Select(x => x.ToDTO()).ToList());
-                        await hub.Clients.All.getrooms(GetRooms().ToSummaries());
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.ToString());
-            }
-    }
 
     public static async Task<string> AddVideo(DreckVideo key, string UniqueId)
     {

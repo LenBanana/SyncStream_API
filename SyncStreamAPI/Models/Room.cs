@@ -18,6 +18,7 @@ public class Room
         uniqueId = UnqiueId;
         deletable = Deletable;
         isPrivileged = Privileged;
+        _server.RoomId = UnqiueId;
     }
 
     public string uniqueId { get; set; }

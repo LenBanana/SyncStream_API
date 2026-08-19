@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 
 using SyncStreamAPI.Models.Collections;
 
@@ -8,7 +9,6 @@ public class Server
 {
     public Server()
     {
-        bannedMembers = new List<Member>();
         playlist = new List<DreckVideo>();
         members = new MemberList();
         chatmessages = new List<ChatMessage>();
@@ -41,7 +41,87 @@ public class Server
 
     public List<DreckVideo> playlist { get; set; } = new();
     public MemberList members { get; set; } = new();
-    public List<Member> bannedMembers { get; set; } = new();
     public List<ChatMessage> chatmessages { get; set; } = new();
-    public string RoomId => members.Count > 0 ? members[0]?.RoomId : "";
+
+    /// <summary>
+    ///     Identities barred from this room.
+    /// </summary>
+    /// <remarks>
+    ///     Keyed by identity rather than by connection id, which is what made a ban last exactly as long as
+    ///     the banned person's current connection: a page refresh produced a new connection id and let them
+    ///     straight back in.
+    /// </remarks>
+    public HashSet<string> BannedIdentities { get; } = new();
+
+    /// <summary>
+    ///     The room this state belongs to.
+    /// </summary>
+    /// <remarks>
+    ///     Set when the room is created. It used to be derived from the first member's RoomId, so an empty
+    ///     room reported the empty string, and chat sent to that room went to a group named "" which nobody
+    ///     is in.
+    /// </remarks>
+    public string RoomId { get; set; } = string.Empty;
+
+    /// <summary>The member on this connection, or null.</summary>
+    public Member? FindByConnection(string? connectionId)
+    {
+        return connectionId == null ? null : members.Find(member => member?.ConnectionId == connectionId);
+    }
+
+    /// <summary>The member with this identity, or null. Used so a reconnecting account reclaims its seat.</summary>
+    public Member? FindByIdentity(string? identity)
+    {
+        return string.IsNullOrEmpty(identity)
+            ? null
+            : members.Find(member => member?.Identity == identity);
+    }
+
+    public bool IsBanned(string identity)
+    {
+        return !string.IsNullOrEmpty(identity) && BannedIdentities.Contains(identity);
+    }
+
+    /// <summary>Adds a member, making them host when the room was empty.</summary>
+    public void Join(Member member)
+    {
+        member.ishost = members.Count == 0;
+        members.Add(member);
+    }
+
+    /// <summary>
+    ///     Removes a member and hands the host role on when they held it.
+    /// </summary>
+    /// <returns>The member promoted to host, or null when nobody was or nobody is left.</returns>
+    /// <remarks>
+    ///     Succession is by join time rather than by list position. The previous code promoted
+    ///     <c>members[0]</c> from six different places, which depends on an ordering nothing guaranteed once
+    ///     joins and leaves interleaved.
+    /// </remarks>
+    public Member? Leave(Member member)
+    {
+        var wasHost = member.ishost;
+        if (!members.Remove(member)) return null;
+
+        return wasHost ? PromoteLongestPresent() : null;
+    }
+
+    /// <summary>Gives the host role to the member who has been here longest.</summary>
+    public Member? PromoteLongestPresent()
+    {
+        var snapshot = members.Snapshot;
+        if (snapshot.Count == 0) return null;
+
+        var successor = snapshot
+            .Where(candidate => candidate != null)
+            .OrderBy(candidate => candidate.JoinedUtc)
+            .FirstOrDefault();
+        if (successor == null) return null;
+
+        foreach (var candidate in snapshot)
+            if (candidate != null)
+                candidate.ishost = ReferenceEquals(candidate, successor);
+
+        return successor;
+    }
 }

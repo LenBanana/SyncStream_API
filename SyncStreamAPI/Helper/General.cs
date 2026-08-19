@@ -51,7 +51,6 @@ public static class General
     public static TimeSpan MinutesToKeepFFmpeg { get; } = TimeSpan.FromMinutes(10);
     public static TimeSpan CheckIntervalInMinutes { get; } = TimeSpan.FromMinutes(1);
     public static TimeSpan ServerHealthTimeInSeconds { get; } = TimeSpan.FromSeconds(1);
-    public static TimeSpan SecondsToKickMember { get; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
     ///     Upper bound on a single request body. Uploads are chunked, so this caps one chunk plus

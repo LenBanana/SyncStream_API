@@ -51,6 +51,34 @@ public partial class ServerHub
         var mainServer = room.server;
 
         var caller = Context.GetCaller();
+
+        if (mainServer.IsBanned(caller.Key))
+        {
+            await Clients.Caller.adduserupdate((int)UserUpdate.Banned);
+            return;
+        }
+
+        // Already here on this connection: joining twice is not an error, it is a repeated request.
+        if (mainServer.FindByConnection(ip) != null)
+        {
+            await Clients.Caller.adduserupdate((int)UserUpdate.Success);
+            return;
+        }
+
+        // A reconnecting account reclaims its seat, keeping its name, its host role and its place in the
+        // turn order. Its previous connection is already gone, or about to be, and the old entry would
+        // otherwise linger as a ghost in everyone's member list.
+        var existing = caller.IsGuest ? null : mainServer.FindByIdentity(caller.Key);
+        if (existing != null)
+        {
+            existing.ConnectionId = ip;
+            await Groups.AddToGroupAsync(ip, UniqueId);
+            await Clients.Group(UniqueId).userupdate(mainServer.members.Select(x => x?.ToDTO()).ToList());
+            await Clients.Caller.hostupdate(existing.ishost);
+            await Clients.Caller.adduserupdate((int)UserUpdate.Success);
+            return;
+        }
+
         var resolvedName = DisplayNames.Resolve(
             caller,
             displayName,
@@ -63,29 +91,16 @@ public partial class ServerHub
             return;
         }
 
-        // Already in this room on this connection: nothing to add.
-        if (mainServer.members.Any(member => member?.ConnectionId == ip))
-        {
-            await Clients.Caller.adduserupdate((int)UserUpdate.Success);
-            return;
-        }
-
         var newMember = new Member
         {
-            username = resolvedName, ishost = mainServer.members.Count == 0, ConnectionId = ip,
+            Identity = caller.Key,
+            username = resolvedName,
+            ConnectionId = ip,
             RoomId = UniqueId
         };
 
-        if (mainServer.bannedMembers.Any(banned => banned.username == resolvedName))
-        {
-            await Clients.Caller.adduserupdate((int)UserUpdate.Banned);
-            return;
-        }
-
-        mainServer.chatmessages ??= new List<ChatMessage>();
-
         await Groups.AddToGroupAsync(Context.ConnectionId, UniqueId);
-        mainServer.members.Add(newMember);
+        mainServer.Join(newMember);
 
         await Clients.Group(UniqueId).userupdate(mainServer.members?.Select(x => x?.ToDTO()).ToList());
         switch (room.GameMode)
@@ -185,42 +200,6 @@ public partial class ServerHub
     }
 
     [ErrorHandling]
-    public async Task UpdateUser(string displayName, string UniqueId)
-    {
-        var room = GetRoom(UniqueId);
-        if (room == null) return;
-
-        var mainServer = room.server;
-        var idx = mainServer.members.FindIndex(x => x != null && x.ConnectionId == Context.ConnectionId);
-        if (idx != -1)
-        {
-            var ip = Context.ConnectionId;
-            mainServer.members[idx].ConnectionId = ip;
-            if (mainServer?.bannedMembers.Any(x => x.ConnectionId == mainServer.members[idx].ConnectionId) == true)
-            {
-                mainServer.members.RemoveAt(idx);
-                await Clients.Caller.adduserupdate((int)UserUpdate.Banned);
-                await Clients.Group(UniqueId).userupdate(mainServer.members?.Select(x => x.ToDTO()).ToList());
-                await Groups.RemoveFromGroupAsync(Context.ConnectionId, UniqueId);
-                return;
-            }
-
-            mainServer.members[idx].uptime = DateTime.UtcNow.ToString("MM.dd.yyyy HH:mm:ss");
-            if (mainServer.members.Count == 1)
-                if (!mainServer.members[idx].ishost)
-                {
-                    mainServer.members[idx].ishost = true;
-                    await Clients.Client(mainServer.members[idx].ConnectionId).hostupdate(true);
-                    await Clients.Group(UniqueId).userupdate(mainServer.members?.Select(x => x.ToDTO()).ToList());
-                }
-        }
-        else
-        {
-            await AddUser(displayName, UniqueId, "");
-        }
-    }
-
-    [ErrorHandling]
     public async Task ChangeHost(string usernameMember, string UniqueId)
     {
         var room = GetRoom(UniqueId);
@@ -250,26 +229,27 @@ public partial class ServerHub
         }
 
         var mainServer = room.server;
-        var idxHost = mainServer.members.FindIndex(x => x.ishost);
-        var idxMember = mainServer.members.FindIndex(x =>
-            !x.ishost && (x.username == usernameMember || x.ConnectionId == usernameMember));
-        if (idxMember != -1)
+        var successor = mainServer.members.Find(candidate =>
+            candidate != null && !candidate.ishost
+            && (candidate.username == usernameMember || candidate.ConnectionId == usernameMember));
+        if (successor == null) return;
+
+        var game = room.GallowGame;
+        if (game is { PlayingGallows: true }) game.UpdateGallowWord(true);
+
+        var previous = mainServer.members.Find(candidate => candidate != null && candidate.ishost);
+        if (previous != null)
         {
-            var game = room.GallowGame;
-            if (game is { PlayingGallows: true }) game.UpdateGallowWord(true);
-
-            if (idxHost != -1)
-            {
-                mainServer.members[idxHost].uptime = DateTime.UtcNow.ToString("MM.dd.yyyy HH:mm:ss");
-                mainServer.members[idxHost].ishost = false;
-                await Clients.Client(mainServer.members[idxHost].ConnectionId).hostupdate(false);
-            }
-
-            mainServer.members[idxMember].uptime = DateTime.UtcNow.ToString("MM.dd.yyyy HH:mm:ss");
-            mainServer.members[idxMember].ishost = true;
-            await Clients.Client(mainServer.members[idxMember].ConnectionId).hostupdate(true);
-            await Clients.Group(UniqueId).userupdate(mainServer.members?.Select(x => x.ToDTO()).ToList());
+            previous.ishost = false;
+            if (previous.ConnectionId != null)
+                await Clients.Client(previous.ConnectionId).hostupdate(false);
         }
+
+        successor.ishost = true;
+        if (successor.ConnectionId != null)
+            await Clients.Client(successor.ConnectionId).hostupdate(true);
+
+        await Clients.Group(UniqueId).userupdate(mainServer.members.Select(x => x?.ToDTO()).ToList());
     }
 
     [ErrorHandling]
@@ -279,27 +259,26 @@ public partial class ServerHub
         if (room == null) return;
 
         var mainServer = room.server;
-        var member = mainServer.members.FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
+        var member = mainServer.FindByConnection(Context.ConnectionId);
         if (member == null) return;
 
-        var isHost = member.ishost;
-        mainServer.members.Remove(member);
+        var wasHost = member.ishost;
+        var promoted = mainServer.Leave(member);
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, UniqueId);
+
         if (mainServer.members.Count > 0)
         {
             var gallowGame = room.GallowGame;
             if (gallowGame is { PlayingGallows: true })
+            {
                 if (mainServer.members.Count < 2)
                     await PlayGallowsSettings(UniqueId, gallowGame.GameLanguage, gallowGame.GameLength);
 
-            if (isHost)
-            {
-                if (gallowGame is { PlayingGallows: true }) gallowGame.UpdateGallowWord(true);
-
-                if (mainServer.members.Count > 0 && mainServer.members[0] != null) mainServer.members[0].ishost = true;
-
-                await Clients.Client(mainServer.members[0]?.ConnectionId).hostupdate(true);
+                if (wasHost) gallowGame.UpdateGallowWord(true);
             }
+
+            if (promoted?.ConnectionId != null)
+                await Clients.Client(promoted.ConnectionId).hostupdate(true);
         }
 
         if (room.GameMode == GameMode.Chess)
@@ -359,20 +338,22 @@ public partial class ServerHub
         }
 
         var mainServer = room.server;
-        var member = mainServer.members.FirstOrDefault(x => x.username == username);
+        var member = mainServer.members.Find(candidate => candidate?.username == username);
         if (member == null) return;
 
-        mainServer.members.Remove(member);
-        mainServer.bannedMembers.Add(member);
-        if (member.ishost && mainServer.members.Count > 0)
-        {
-            mainServer.members[0].ishost = true;
-            await Clients.Client(mainServer.members[0].ConnectionId).hostupdate(true);
-        }
+        // Recorded against the identity, so the ban survives a refresh. Keying it to a connection id made a
+        // ban last exactly as long as the connection it was issued against.
+        mainServer.BannedIdentities.Add(member.Identity);
+
+        var promoted = mainServer.Leave(member);
+        if (promoted?.ConnectionId != null)
+            await Clients.Client(promoted.ConnectionId).hostupdate(true);
 
         // Addressed by connection, not by user identifier: Clients.User expects an IUserIdProvider
         // identifier, so the previous Clients.User(ConnectionId) call never reached anyone.
-        await Clients.Client(member.ConnectionId).adduserupdate((int)UserUpdate.Banned);
+        if (member.ConnectionId != null)
+            await Clients.Client(member.ConnectionId).adduserupdate((int)UserUpdate.Banned);
+        member.InvokeKick();
         await Clients.Group(UniqueId).userupdate(mainServer.members.Select(x => x?.ToDTO()).ToList());
         await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
     }

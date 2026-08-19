@@ -36,7 +36,6 @@ public class HubAuthorizationTests
 
         // Joining, presence and leaving. A guest has to be able to get into a room.
         "AddUser",
-        "UpdateUser",
         "RemoveUser",
         "GetRooms",
         "Ping",

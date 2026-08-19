@@ -1,54 +1,55 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Timers;
 using SyncStreamAPI.DTOModel;
 using SyncStreamAPI.Games.Blackjack;
-using SyncStreamAPI.Helper;
 using SyncStreamAPI.Models.GameModels.Members;
-using SyncStreamAPI.ServerData;
 
 namespace SyncStreamAPI.Models;
 
+/// <summary>
+///     Somebody present in a room.
+/// </summary>
+/// <remarks>
+///     Liveness used to be a per-member <see cref="System.Timers.Timer" /> with a ten second fuse, kept alive
+///     by the client calling UpdateUser every 2.5 seconds. That duplicated work SignalR already does: its
+///     keep-alive and client timeout drop a dead connection and raise OnDisconnectedAsync, which is where
+///     departures are handled now. One OS timer per member and a poll per member per 2.5 seconds bought
+///     nothing, and the poll's fall-back path silently locked reconnecting users out of password rooms.
+/// </remarks>
 public class Member
 {
     public delegate void KickEvent(Member e);
 
-    private readonly Timer timer;
+    /// <summary>
+    ///     Who this member is, stable across reconnects for an account and not for a guest.
+    /// </summary>
+    /// <remarks>
+    ///     Comes from the connection's identity, never from the client. An account reconnecting reclaims its
+    ///     seat because the identity matches; a guest gets a new one, which is correct, since a guest has no
+    ///     durable identity to reclaim with.
+    /// </remarks>
+    public string Identity { get; set; } = string.Empty;
 
-    public Member()
-    {
-        timer = new Timer(General.SecondsToKickMember.TotalMilliseconds);
-        timer.Elapsed += Timer_Elapsed;
-        timer.Start();
-        // Null-conditional because the room manager is a static that is only set once MainManager has
-        // been constructed. Nothing creates a Member that early today, but dereferencing it unconditionally
-        // makes a startup-ordering change an NRE instead of a missed sweep registration.
-        MainManager.GetRoomManager()?.AddToMemberCheck(this);
-    }
+    public string? username { get; set; }
 
-    [Key] public string username { get; set; }
+    public string? RoomId { get; set; }
 
-    public string RoomId { get; set; }
-    public string ConnectionId { get; set; }
-    private string _uptime { get; set; } = DateTime.UtcNow.ToString("MM.dd.yyyy HH:mm:ss");
+    public string? ConnectionId { get; set; }
 
-    public string uptime
-    {
-        get => _uptime;
-        set
-        {
-            _uptime = value;
-            timer.Stop();
-            timer.Start();
-        }
-    }
+    /// <summary>When this member joined, for display and for deterministic host succession.</summary>
+    public DateTime JoinedUtc { get; set; } = DateTime.UtcNow;
 
     public bool ishost { get; set; }
+
     /// <summary>True while the member is actively streaming (P2P screen-share).</summary>
     public bool IsStreaming { get; set; }
+
     public Dictionary<string, List<string>> PrivateMessages { get; set; } = new();
-    public event KickEvent Kicked;
+
+    /// <summary>
+    ///     Raised when the member leaves, so the games can drop them from a hand or a round.
+    /// </summary>
+    public event KickEvent? Kicked;
 
     public MemberDTO ToDTO()
     {
@@ -65,16 +66,10 @@ public class Member
         return new BlackjackMember(this, manager);
     }
 
-    private void Timer_Elapsed(object sender, ElapsedEventArgs e)
-    {
-        InvokeKick();
-    }
-
+    /// <summary>Announces that this member has left. Raised by whoever removes them from a room.</summary>
     public void InvokeKick()
     {
         Kicked?.Invoke(this);
-        timer.Stop();
-        timer.Dispose();
     }
 
     public List<string> GetMessages(string User)
