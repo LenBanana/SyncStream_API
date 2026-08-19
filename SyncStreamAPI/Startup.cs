@@ -97,7 +97,14 @@ public class Startup
 
         // One place turns a credential into an identity. Anonymous connections are allowed through so
         // guests can watch; every gated action goes through a policy instead.
-        services.AddAuthentication(TokenAuthDefaults.Scheme)
+        services.AddAuthentication(TokenAuthDefaults.SmartScheme)
+            .AddPolicyScheme(TokenAuthDefaults.SmartScheme, TokenAuthDefaults.SmartScheme, options =>
+            {
+                options.ForwardDefaultSelector = context =>
+                    context.Request.Headers.ContainsKey(ApiKeyAuthenticationHandler.HeaderName)
+                        ? ApiKeyAuthenticationHandler.Scheme
+                        : TokenAuthDefaults.Scheme;
+            })
             .AddScheme<TokenAuthOptions, RememberTokenAuthenticationHandler>(TokenAuthDefaults.Scheme, null)
             .AddScheme<ApiKeyAuthOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationHandler.Scheme, null);
         services.AddAuthorization(options => options.AddSyncStreamPolicies());

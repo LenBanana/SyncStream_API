@@ -37,7 +37,15 @@ public class DbUser
     public List<DbConversation> StartedConversations { get; set; }
     public List<DbConversation> ReceivedConversations { get; set; }
     public string StreamToken { get; set; }
-    public string ApiKey { get; set; }
+    /// <summary>
+    ///     Key for programmatic callers, null until one is generated.
+    /// </summary>
+    /// <remarks>
+    ///     Nullable because most accounts never have one. It used to be a non-null column that nothing set on
+    ///     the server, and only worked because the client happened to post an empty string inside the entity
+    ///     it was allowed to bind. Creating a user server-side violated the constraint.
+    /// </remarks>
+    public string? ApiKey { get; set; }
     public List<DbFile> Files { get; set; }
 }
 

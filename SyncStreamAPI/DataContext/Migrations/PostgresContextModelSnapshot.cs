@@ -261,7 +261,6 @@ namespace SyncStreamAPI.DataContext.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ID"));
 
                     b.Property<string>("ApiKey")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("StreamToken")

@@ -25,6 +25,11 @@ public static class AuthorizationPolicies
     private static void RequirePrivilege(this AuthorizationPolicyBuilder policy, UserPrivileges required)
     {
         policy.AddAuthenticationSchemes(TokenAuthDefaults.Scheme, ApiKeyAuthenticationHandler.Scheme);
+
+        // Separates the two failures the client has to tell apart: no credential challenges (401, "sign
+        // in"), a valid credential without the level forbids (403, "not allowed"). A bare assertion would
+        // return 403 for both.
+        policy.RequireAuthenticatedUser();
         policy.RequireAssertion(context =>
             CallerIdentity.From(context.User, string.Empty).HasAtLeast(required));
     }

@@ -15,4 +15,15 @@ public static class TokenAuthDefaults
     ///     HttpOnly it is unreadable by script, so an XSS cannot exfiltrate it.
     /// </remarks>
     public const string CookieName = "syncstream-auth";
+
+    /// <summary>
+    ///     The default scheme, which forwards to whichever credential the request actually carries.
+    /// </summary>
+    /// <remarks>
+    ///     Needed because a hub connection's <c>Context.User</c> is established once, at the handshake, from
+    ///     the default scheme alone. Policy evaluation authenticates every scheme a policy lists, so
+    ///     controllers were fine either way, but a programmatic client presenting an API key header would
+    ///     have arrived at the hub unauthenticated and been refused by its own [Authorize] attribute.
+    /// </remarks>
+    public const string SmartScheme = "SyncStreamSmart";
 }
