@@ -74,8 +74,7 @@ public partial class ServerHub
             existing.ConnectionId = ip;
             await Groups.AddToGroupAsync(ip, UniqueId);
             await Clients.Group(UniqueId).userupdate(mainServer.members.Select(x => x?.ToDTO()).ToList());
-            await Clients.Caller.hostupdate(existing.ishost);
-            await Clients.Caller.adduserupdate((int)UserUpdate.Success);
+            await SendRoomStateToCaller(room, existing);
             return;
         }
 
@@ -103,6 +102,22 @@ public partial class ServerHub
         mainServer.Join(newMember);
 
         await Clients.Group(UniqueId).userupdate(mainServer.members?.Select(x => x?.ToDTO()).ToList());
+        await SendRoomStateToCaller(room, newMember);
+    }
+
+    /// <summary>
+    ///     Brings one caller up to date with everything happening in a room.
+    /// </summary>
+    /// <remarks>
+    ///     Shared by a first join and by a reconnecting member reclaiming their seat. The reclaim path used to
+    ///     return early, so somebody who dropped and came back rejoined the room and then sat looking at a
+    ///     blank or stale player: no player type, no current video, no position, no playlist, and no notice of
+    ///     an active file share.
+    /// </remarks>
+    private async Task SendRoomStateToCaller(Room room, Member member)
+    {
+        var mainServer = room.server;
+
         switch (room.GameMode)
         {
             case GameMode.Chess:
@@ -115,9 +130,9 @@ public partial class ServerHub
             case GameMode.Gallows:
             {
                 var game = room.GallowGame;
-                if (game.members.FindIndex(x => x.ConnectionId == newMember.ConnectionId) == -1)
+                if (game.members.FindIndex(x => x.ConnectionId == member.ConnectionId) == -1)
                 {
-                    game.AddMember(newMember);
+                    game.AddMember(member);
                     await Clients.Caller.playinggallows(game.GallowWord);
                     await Clients.Caller.gallowusers(game.members.ToDtos());
                 }
@@ -127,9 +142,9 @@ public partial class ServerHub
             case GameMode.Blackjack:
             {
                 var game = room.BlackjackGame;
-                if (game.members.FindIndex(x => x.ConnectionId == newMember.ConnectionId) == -1)
+                if (game.members.FindIndex(x => x.ConnectionId == member.ConnectionId) == -1)
                 {
-                    game.AddMember(newMember, _blackjackManager);
+                    game.AddMember(member, _blackjackManager);
                     await Clients.Caller.playblackjack(true);
                     //give time to build component
                     await Task.Delay(500);
@@ -142,7 +157,7 @@ public partial class ServerHub
                 break;
         }
 
-        await Clients.Caller.hostupdate(newMember.ishost);
+        await Clients.Caller.hostupdate(member.ishost);
         var type = await RoomManager.SendPlayerType(room, sendToUsers: false);
         await Clients.Caller.playertype(type);
         if (type != PlayerType.Nothing && !string.IsNullOrWhiteSpace(mainServer.currentVideo?.url) && !mainServer.currentVideo.ended)
@@ -198,6 +213,7 @@ public partial class ServerHub
 
         if (mainServer.playlist.Count > 0) await Clients.Caller.playlistupdate(mainServer.playlist);
     }
+
 
     [ErrorHandling]
     public async Task ChangeHost(string usernameMember, string UniqueId)
