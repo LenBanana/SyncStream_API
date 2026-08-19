@@ -22,11 +22,7 @@ public partial interface IServerHub
 
     Task playertype(PlayerType type);
 
-    Task twitchTimeUpdate(double time);
-
     Task timeupdate(TimeSyncDto sync);
-
-    Task twitchPlaying(bool playing);
 
     Task PingTest(DateTime dateSend);
 }

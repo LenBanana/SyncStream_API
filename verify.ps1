@@ -78,12 +78,13 @@ else {
     Invoke-Step 'frontend build' $FrontendPath {
         npx --no-install ng build --configuration production --progress=false
     }
-    # Scoped deliberately. 36 of the 77 spec files are untouched Angular CLI scaffolds that assert only
-    # "should create" and have never passed, because they do not supply the providers their components need.
-    # Running the whole suite would leave this step permanently red and therefore ignored. Extend the pattern
-    # when adding real specs elsewhere, or clear out the scaffolds and drop the filter.
+    # The whole suite, with nothing scoped out. This was filtered while the repository still held the untouched
+    # Angular CLI scaffolds, which asserted only "should create" and had never passed because they supplied none
+    # of the providers their components need. A filtered test step hides a real failure the moment one lands
+    # outside the pattern, which is exactly what happened to a YouTube spec, so the scaffolds were deleted
+    # instead.
     Invoke-Step 'frontend tests' $FrontendPath {
-        npx --no-install ng test --watch=false --browsers=ChromeHeadless --include='**/media/sync/*.spec.ts' --include='**/twitch-source.spec.ts'
+        npx --no-install ng test --watch=false --browsers=ChromeHeadless
     }
 }
 
