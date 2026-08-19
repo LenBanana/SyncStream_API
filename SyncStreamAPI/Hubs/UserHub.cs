@@ -40,60 +40,55 @@ public partial class ServerHub
             return;
         }
 
-        if (!string.IsNullOrEmpty(room.password) && room.password != password)
-        {
-            if (password == null || password.Length > 0)
-                await Clients.Caller.adduserupdate((int)UserUpdate.WrongPassword);
-
-            return;
-        }
-
         var mainServer = room.server;
-
         var caller = Context.GetCaller();
 
-        if (mainServer.IsBanned(caller.Key))
-        {
-            await Clients.Caller.adduserupdate((int)UserUpdate.Banned);
-            return;
-        }
-
-        // Already here on this connection: joining twice is not an error, it is a repeated request.
-        if (mainServer.FindByConnection(ip) != null)
-        {
-            await Clients.Caller.adduserupdate((int)UserUpdate.Success);
-            return;
-        }
-
-        // A reconnecting account reclaims its seat, keeping its name, its host role and its place in the
-        // turn order. Its previous connection is already gone, or about to be, and the old entry would
-        // otherwise linger as a ghost in everyone's member list.
-        var existing = caller.IsGuest ? null : mainServer.FindByIdentity(caller.Key);
-        if (existing != null)
-        {
-            existing.ConnectionId = ip;
-            await Groups.AddToGroupAsync(ip, UniqueId);
-            await Clients.Group(UniqueId).userupdate(mainServer.members.Select(x => x?.ToDTO()).ToList());
-            await SendRoomStateToCaller(room, existing);
-            return;
-        }
-
-        var resolvedName = DisplayNames.Resolve(
+        var admission = RoomAdmission.Evaluate(
+            mainServer,
             caller,
+            ip,
             displayName,
-            mainServer.members.Select(member => member?.username),
+            password,
+            room.password,
             candidate => _postgres.Users.Any(user => user.username == candidate));
 
-        if (resolvedName == null)
+        switch (admission.Outcome)
         {
-            await Clients.Caller.adduserupdate((int)UserUpdate.NameNotAllowed);
-            return;
+            case AdmissionOutcome.WrongPassword:
+                await Clients.Caller.adduserupdate((int)UserUpdate.WrongPassword);
+                return;
+
+            case AdmissionOutcome.Banned:
+                await Clients.Caller.adduserupdate((int)UserUpdate.Banned);
+                return;
+
+            case AdmissionOutcome.NameNotAllowed:
+                await Clients.Caller.adduserupdate((int)UserUpdate.NameNotAllowed);
+                return;
+
+            case AdmissionOutcome.AlreadyPresent:
+                // Joining twice on one connection is a repeated request, not an error.
+                await Clients.Caller.adduserupdate((int)UserUpdate.Success);
+                return;
+
+            case AdmissionOutcome.Reclaimed:
+            {
+                // A reconnecting account keeps its name, host role and place in the turn order. Its previous
+                // connection is already gone, or about to be, and the old entry would otherwise linger as a
+                // ghost in everyone's member list.
+                var existing = admission.Existing!;
+                existing.ConnectionId = ip;
+                await Groups.AddToGroupAsync(ip, UniqueId);
+                await Clients.Group(UniqueId).userupdate(mainServer.members.Select(x => x?.ToDTO()).ToList());
+                await SendRoomStateToCaller(room, existing);
+                return;
+            }
         }
 
         var newMember = new Member
         {
             Identity = caller.Key,
-            username = resolvedName,
+            username = admission.ResolvedName,
             ConnectionId = ip,
             RoomId = UniqueId
         };

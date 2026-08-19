@@ -59,7 +59,9 @@ public class RoomManager
 
     public static IEnumerable<Room> GetRooms()
     {
-        return Rooms.Values.ToList();
+        // Ordered by creation, so the lobby lists rooms the way they were made and a new one appears at the
+        // end. A dictionary returns its values in hash order, which is no order at all.
+        return Rooms.Values.OrderBy(room => room.Sequence).ToList();
     }
 
 
