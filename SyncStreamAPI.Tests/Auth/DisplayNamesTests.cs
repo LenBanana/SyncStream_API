@@ -74,6 +74,20 @@ public class DisplayNamesTests
     }
 
     [Theory]
+    [InlineData("Anon#1234")]
+    [InlineData("Anon#100")]
+    public void The_guest_name_the_client_generates_is_accepted(string generated)
+    {
+        // The client builds guest names as 'Anon' + '#' + a random number. The validator originally excluded
+        // '#', so the app's own name failed its own rules and no guest could join a room at all. Pinned to
+        // the shape the client actually produces rather than to what the rules were meant to allow.
+        var resolved = DisplayNames.Resolve(
+            CallerIdentity.Guest("conn-1"), generated, NoOneInRoom, NothingRegistered);
+
+        Assert.Equal(generated + " (guest)", resolved);
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]

@@ -19,7 +19,15 @@ public static class DisplayNames
     public const int MinLength = 2;
     public const int MaxLength = 20;
 
-    private static readonly Regex Allowed = new(@"^[\w \-.]+$", RegexOptions.Compiled);
+    /// <summary>
+    ///     Characters a display name may contain.
+    /// </summary>
+    /// <remarks>
+    ///     Includes '#' because the client's own generated guest name looks like <c>Anon#1234</c>. Leaving it
+    ///     out rejected every guest: the name the app itself produces failed its own validation, so nobody
+    ///     could join without an account. Word characters are Unicode-aware here, so accented names pass.
+    /// </remarks>
+    private static readonly Regex Allowed = new(@"^[\w #\-.]+$", RegexOptions.Compiled);
 
     /// <summary>Marks a name as belonging to a guest rather than an account.</summary>
     public const string GuestSuffix = " (guest)";
