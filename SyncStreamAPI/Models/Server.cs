@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 
+using SyncStreamAPI.Models.Collections;
+
 namespace SyncStreamAPI.Models;
 
 public class Server
@@ -8,7 +10,7 @@ public class Server
     {
         bannedMembers = new List<Member>();
         playlist = new List<DreckVideo>();
-        members = new List<Member>();
+        members = new MemberList();
         chatmessages = new List<ChatMessage>();
         currentVideo = new DreckVideo { title = "Nothing playing", url = "", ended = true };
         isplaying = false;
@@ -38,7 +40,7 @@ public class Server
     }
 
     public List<DreckVideo> playlist { get; set; } = new();
-    public List<Member> members { get; set; } = new();
+    public MemberList members { get; set; } = new();
     public List<Member> bannedMembers { get; set; } = new();
     public List<ChatMessage> chatmessages { get; set; } = new();
     public string RoomId => members.Count > 0 ? members[0]?.RoomId : "";

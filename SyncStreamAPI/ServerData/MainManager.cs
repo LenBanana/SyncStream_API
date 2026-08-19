@@ -61,7 +61,7 @@ public class MainManager
         GeneralManager.AddDefaultRooms();
     }
 
-    public static BlockingCollection<Room> Rooms { get; set; } = new();
+    public static ConcurrentDictionary<string, Room> Rooms { get; set; } = new();
     public static GeneralManager GeneralManager { get; set; }
     public static RoomManager RoomManager { get; set; }
     public BlockingCollection<LiveUser> LiveUsers { get; set; } = new();

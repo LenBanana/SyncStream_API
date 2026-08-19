@@ -415,18 +415,31 @@ public partial class ServerHub : Hub<IServerHub>
             return;
         }
 
-        var uniqueId = request.uniqueId;
-        var rooms = MainManager.GetRooms().ToList();
-        var roomCount = 0;
-        while (rooms.Any(x => x.uniqueId == uniqueId)) uniqueId = request.uniqueId + roomCount++;
-
-        // Constructed here, not bound: the live server state is the server's to own.
-        var room = new Room(request.name, uniqueId, request.deletable, false)
+        // Claim an id by adding, rather than checking first and adding after: two callers creating a room
+        // at the same moment both passed a look-then-add check, and one of the rooms then vanished.
+        Room? room = null;
+        for (var attempt = 0; attempt < 100; attempt++)
         {
-            password = request.password
-        };
+            var uniqueId = attempt == 0 ? request.uniqueId : request.uniqueId + attempt;
 
-        RoomManager.AddRoom(room);
+            // Constructed here, not bound: the live server state is the server's to own.
+            var candidate = new Room(request.name, uniqueId, request.deletable, false)
+            {
+                password = request.password
+            };
+
+            if (!RoomManager.AddRoom(candidate)) continue;
+
+            room = candidate;
+            break;
+        }
+
+        if (room == null)
+        {
+            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+                { Header = "Error", Question = "Could not find a free room id", Answer1 = "Ok" });
+            return;
+        }
         if (!room.deletable)
         {
             var dbRoom = new DbRoom(room);

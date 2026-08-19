@@ -49,7 +49,6 @@ public partial class ServerHub
         }
 
         var mainServer = room.server;
-        mainServer.members ??= new List<Member>();
 
         var caller = Context.GetCaller();
         var resolvedName = DisplayNames.Resolve(

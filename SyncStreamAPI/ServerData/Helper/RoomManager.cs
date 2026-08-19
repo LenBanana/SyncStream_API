@@ -21,58 +21,45 @@ namespace SyncStreamAPI.ServerData.Helper;
 
 public class RoomManager
 {
-    private static readonly object LockObj = new();
-
-    public RoomManager(IServiceProvider serviceProvider, BlockingCollection<Room> rooms)
+    public RoomManager(IServiceProvider serviceProvider, ConcurrentDictionary<string, Room> rooms)
     {
         ServiceProvider = serviceProvider;
         Rooms = rooms;
     }
 
     private static IServiceProvider ServiceProvider { get; set; }
-    private static BlockingCollection<Room> Rooms { get; set; } = new();
+
+    /// <summary>
+    ///     Live rooms, keyed by their id.
+    /// </summary>
+    /// <remarks>
+    ///     Was a <see cref="System.Collections.Concurrent.BlockingCollection{T}" />, which is a queue: looking
+    ///     a room up meant copying the whole collection and scanning it, and removing one meant draining every
+    ///     room out under a lock and putting the survivors back. A keyed dictionary is what the code always
+    ///     wanted, and removal stops being a operation that briefly empties the server.
+    /// </remarks>
+    private static ConcurrentDictionary<string, Room> Rooms { get; set; } = new();
 
     public static Room? GetRoom(string UniqueId)
     {
-        return GetRooms().FirstOrDefault(x => x.uniqueId == UniqueId);
+        if (string.IsNullOrEmpty(UniqueId)) return null;
+        return Rooms.TryGetValue(UniqueId, out var room) ? room : null;
     }
 
-    public static void AddRoom(Room room)
+    /// <summary>Adds a room, or returns false when the id is already taken.</summary>
+    public static bool AddRoom(Room room)
     {
-        Rooms.Add(room);
+        return room.uniqueId != null && Rooms.TryAdd(room.uniqueId, room);
     }
 
     public static bool RemoveRoom(string uniqueId)
     {
-        lock (LockObj)
-        {
-            var tempStorage = new List<Room>();
-            Room room;
-
-            // Dequeue rooms until we find the one to remove or the collection is empty
-            while (Rooms.TryTake(out room))
-            {
-                if (room.uniqueId == uniqueId)
-                {
-                    // Re-enqueue the other rooms
-                    foreach (var r in tempStorage) Rooms.Add(r);
-
-                    return true; // Room found and removed
-                }
-
-                tempStorage.Add(room);
-            }
-
-            // If we reach here, the room wasn't found. Re-enqueue all rooms.
-            foreach (var r in tempStorage) Rooms.Add(r);
-
-            return false; // Room not found
-        }
+        return Rooms.TryRemove(uniqueId, out _);
     }
 
     public static IEnumerable<Room> GetRooms()
     {
-        return Rooms.ToList();
+        return Rooms.Values.ToList();
     }
 
     public void AddToMemberCheck(Member member)
