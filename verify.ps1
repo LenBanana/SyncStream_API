@@ -65,6 +65,14 @@ else {
 
 Invoke-Step 'backend tests' $root { dotnet test --nologo -v q }
 
+# The model and the migrations have to agree, or the application throws on startup while applying them and never
+# serves a request. Nothing else here notices: the build succeeds, every test passes, and the failure waits until
+# the process starts. That is exactly how a HasData seed that rebuilt a collection on every model build reached a
+# startup attempt.
+Invoke-Step 'migrations match the model' $root {
+    dotnet ef migrations has-pending-model-changes --project SyncStreamAPI/SyncStreamAPI.csproj --context PostgresContext
+}
+
 if ($SkipFrontend) {
     Write-Host ''
     Write-Host 'SKIPPED: frontend (-SkipFrontend)' -ForegroundColor Yellow

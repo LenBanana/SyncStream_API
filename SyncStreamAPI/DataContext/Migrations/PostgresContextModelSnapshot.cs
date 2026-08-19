@@ -47,7 +47,7 @@ namespace SyncStreamAPI.DataContext.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("AppVersions");
+                    b.ToTable("AppVersions", (string)null);
                 });
 
             modelBuilder.Entity("SyncStreamAPI.PostgresModels.DbConversation", b =>
@@ -78,7 +78,7 @@ namespace SyncStreamAPI.DataContext.Migrations
 
                     b.HasIndex("SenderId");
 
-                    b.ToTable("Conversations");
+                    b.ToTable("Conversations", (string)null);
                 });
 
             modelBuilder.Entity("SyncStreamAPI.PostgresModels.DbFile", b =>
@@ -125,7 +125,7 @@ namespace SyncStreamAPI.DataContext.Migrations
 
                     b.HasIndex("DbUserID");
 
-                    b.ToTable("Files");
+                    b.ToTable("Files", (string)null);
                 });
 
             modelBuilder.Entity("SyncStreamAPI.PostgresModels.DbFileFolder", b =>
@@ -150,7 +150,7 @@ namespace SyncStreamAPI.DataContext.Migrations
 
                     b.HasIndex("ParentId");
 
-                    b.ToTable("Folders");
+                    b.ToTable("Folders", (string)null);
                 });
 
             modelBuilder.Entity("SyncStreamAPI.PostgresModels.DbFolderUserShare", b =>
@@ -169,7 +169,7 @@ namespace SyncStreamAPI.DataContext.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("FolderShare");
+                    b.ToTable("FolderShare", (string)null);
                 });
 
             modelBuilder.Entity("SyncStreamAPI.PostgresModels.DbMessage", b =>
@@ -194,7 +194,7 @@ namespace SyncStreamAPI.DataContext.Migrations
 
                     b.HasIndex("SenderId");
 
-                    b.ToTable("Messages");
+                    b.ToTable("Messages", (string)null);
                 });
 
             modelBuilder.Entity("SyncStreamAPI.PostgresModels.DbRememberToken", b =>
@@ -231,7 +231,7 @@ namespace SyncStreamAPI.DataContext.Migrations
                     b.HasIndex("TokenHash")
                         .IsUnique();
 
-                    b.ToTable("RememberTokens");
+                    b.ToTable("RememberTokens", (string)null);
                 });
 
             modelBuilder.Entity("SyncStreamAPI.PostgresModels.DbRoom", b =>
@@ -262,7 +262,7 @@ namespace SyncStreamAPI.DataContext.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("Rooms");
+                    b.ToTable("Rooms", (string)null);
                 });
 
             modelBuilder.Entity("SyncStreamAPI.PostgresModels.DbServerSettings", b =>
@@ -279,14 +279,7 @@ namespace SyncStreamAPI.DataContext.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("ServerSettings");
-
-                    b.HasData(
-                        new
-                        {
-                            ID = 1,
-                            SponsorBlockSkipCategories = new List<string> { "sponsor", "selfpromo" }
-                        });
+                    b.ToTable("ServerSettings", (string)null);
                 });
 
             modelBuilder.Entity("SyncStreamAPI.PostgresModels.DbUser", b =>
@@ -320,7 +313,7 @@ namespace SyncStreamAPI.DataContext.Migrations
 
                     b.HasKey("ID");
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
                 });
 
             modelBuilder.Entity("SyncStreamAPI.PostgresModels.DbConversation", b =>

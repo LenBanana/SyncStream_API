@@ -1,6 +1,4 @@
-﻿using System.Linq;
-using Microsoft.EntityFrameworkCore;
-using SyncStreamAPI.Helper.SponsorBlock;
+﻿using Microsoft.EntityFrameworkCore;
 using SyncStreamAPI.PostgresModels;
 
 namespace SyncStreamAPI.DataContext;
@@ -26,13 +24,11 @@ public class PostgresContext : DbContext
     {
         base.OnModelCreating(builder);
 
-        // Seeded so the row always exists and reading it never has to cope with its absence. The values are the
-        // shipped defaults; an administrator changing them updates this row rather than inserting another.
-        builder.Entity<DbServerSettings>().HasData(new DbServerSettings
-        {
-            ID = DbServerSettings.SingletonId,
-            SponsorBlockSkipCategories = SponsorBlockCategories.Default.ToList()
-        });
+        // Deliberately not seeded through HasData. Seed data is for rows the model owns and expects to stay as
+        // declared, and this row is edited by an administrator: EF would compare it against the declaration and
+        // could emit an update that puts their choice back. It is inserted once by its migration, and read
+        // through a helper that creates it when absent. HasData also rebuilt the category list on every model
+        // build, which made the model look different each time and stopped the application starting at all.
 
         // Every authenticated request looks a session up by this digest, so it is indexed, and unique because
         // two sessions sharing one digest would mean the random source repeated itself.

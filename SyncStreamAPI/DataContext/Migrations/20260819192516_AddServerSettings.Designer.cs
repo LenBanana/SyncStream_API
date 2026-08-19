@@ -13,7 +13,7 @@ using SyncStreamAPI.DataContext;
 namespace SyncStreamAPI.DataContext.Migrations
 {
     [DbContext(typeof(PostgresContext))]
-    [Migration("20260819191544_AddServerSettings")]
+    [Migration("20260819192516_AddServerSettings")]
     partial class AddServerSettings
     {
         /// <inheritdoc />
@@ -283,13 +283,6 @@ namespace SyncStreamAPI.DataContext.Migrations
                     b.HasKey("ID");
 
                     b.ToTable("ServerSettings");
-
-                    b.HasData(
-                        new
-                        {
-                            ID = 1,
-                            SponsorBlockSkipCategories = new List<string> { "sponsor", "selfpromo" }
-                        });
                 });
 
             modelBuilder.Entity("SyncStreamAPI.PostgresModels.DbUser", b =>
