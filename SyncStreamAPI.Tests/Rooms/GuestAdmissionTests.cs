@@ -70,10 +70,44 @@ public class GuestAdmissionTests
         Assert.Equal(GeneratedGuestName + " (guest)", result.ResolvedName);
     }
 
+    /// <summary>A room password as it is now stored: hashed, never the value the client sends.</summary>
+    private static string Stored(string password)
+    {
+        return PasswordHashing.Hash(password);
+    }
+
     [Fact]
     public void A_guest_can_join_a_password_room_with_the_right_password()
     {
-        var result = Evaluate(new Server(), Guest(), supplied: "hash", roomPassword: "hash");
+        var result = Evaluate(new Server(), Guest(), supplied: "the room password",
+            roomPassword: Stored("the room password"));
+
+        Assert.Equal(AdmissionOutcome.Admitted, result.Outcome);
+    }
+
+    [Fact]
+    public void The_stored_room_password_cannot_be_presented_back_to_join()
+    {
+        // What the room holds is no longer what a joiner sends, so reading it out of the database or off the
+        // wire does not get anybody into the room.
+        var stored = Stored("the room password");
+
+        var result = Evaluate(new Server(), Guest(), supplied: stored, roomPassword: stored);
+
+        Assert.Equal(AdmissionOutcome.WrongPassword, result.Outcome);
+    }
+
+    [Fact]
+    public void A_room_password_stored_in_the_old_form_still_admits_the_right_password()
+    {
+        // Rooms created before passwords were hashed hold the digest the browser used to send, wrapped at
+        // startup. Joining one has to keep working without the room being recreated.
+        var wrapped = PasswordHashing.WrapLegacyDigest(
+            System.Convert.ToHexString(
+                System.Security.Cryptography.SHA512.HashData(
+                    System.Text.Encoding.UTF8.GetBytes("the room password"))).ToLowerInvariant());
+
+        var result = Evaluate(new Server(), Guest(), supplied: "the room password", roomPassword: wrapped);
 
         Assert.Equal(AdmissionOutcome.Admitted, result.Outcome);
     }
@@ -81,12 +115,13 @@ public class GuestAdmissionTests
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    [InlineData("wrong-hash")]
+    [InlineData("the wrong password")]
     public void A_wrong_or_missing_password_is_always_answered(string? supplied)
     {
         // Including the empty string. That case used to fall through without replying at all, so a client
         // that supplied one waited forever for an answer that never came.
-        var result = Evaluate(new Server(), Guest(), supplied: supplied, roomPassword: "hash");
+        var result = Evaluate(new Server(), Guest(), supplied: supplied,
+            roomPassword: Stored("the room password"));
 
         Assert.Equal(AdmissionOutcome.WrongPassword, result.Outcome);
     }

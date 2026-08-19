@@ -50,7 +50,11 @@ public class ExtensionController : Controller
             return BadRequest("Room not found");
         if (!string.IsNullOrEmpty(room.password) && string.IsNullOrEmpty(password))
             return Unauthorized("Room is password protected");
-        if (!string.IsNullOrEmpty(room.password) && room.password != password)
+        // Through the password hash, like the hub's join path. This was the second place a room password was
+        // compared by string equality, and leaving it that way would have refused every correct password once
+        // the stored form stopped being the value the caller sends.
+        if (!string.IsNullOrEmpty(room.password)
+            && PasswordHashing.Verify(room.password, password) == PasswordVerdict.NoMatch)
             return Unauthorized("Wrong password");
         var user = await _postgres.Users.FirstOrDefaultAsync(x => x.ID == this.CallerUserId());
         if (user == null)

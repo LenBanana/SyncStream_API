@@ -13,7 +13,7 @@ public class CreateRoomRequestDto
     public string? uniqueId { get; set; }
     public string? name { get; set; }
 
-    /// <summary>SHA512 of the room password, or null for an open room.</summary>
+    /// <summary>The room password as typed, or null for an open room. Hashed on arrival, never stored as sent.</summary>
     public string? password { get; set; }
 
     public bool deletable { get; set; } = true;

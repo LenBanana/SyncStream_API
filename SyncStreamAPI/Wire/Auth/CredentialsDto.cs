@@ -9,6 +9,13 @@ public class CredentialsDto
 {
     public string? username { get; set; }
 
-    /// <summary>SHA512 of the plaintext, computed in the browser. Never the plaintext itself.</summary>
+    /// <summary>
+    ///     The password as typed.
+    /// </summary>
+    /// <remarks>
+    ///     Used to be a SHA512 digest computed in the browser, which the server then stored and compared
+    ///     verbatim. That made the stored value the credential: whoever read the table could send it back. The
+    ///     server hashes this before storing it and never keeps it.
+    /// </remarks>
     public string? password { get; set; }
 }

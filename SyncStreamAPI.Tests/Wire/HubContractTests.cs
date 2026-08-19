@@ -31,6 +31,9 @@ public class HubContractTests
     private static readonly string[] CredentialPropertyNames =
     {
         "password",
+
+        // Kept after the column was dropped, so reintroducing a field by that name fails here rather than
+        // quietly shipping it.
         "usersalt",
         "StreamToken",
         "ApiKey",

@@ -15,6 +15,7 @@ using Microsoft.Extensions.Hosting;
 using Npgsql;
 using SyncStreamAPI.Auth;
 using SyncStreamAPI.DataContext;
+using SyncStreamAPI.Helper;
 using SyncStreamAPI.PostgresModels;
 using Xunit;
 
@@ -161,22 +162,22 @@ public class AuthPipelineTests : IAsyncLifetime
     {
         await using var context = ContextFor(_database);
 
-        var token = RememberTokens.Issue();
-        if (tokenCreated != null) token.Created = tokenCreated.Value;
+        var issuedAt = tokenCreated ?? DateTime.UtcNow;
+        var (token, record) = RememberTokens.Issue(issuedAt);
 
         var user = new DbUser
         {
             username = $"user_{Guid.NewGuid():N}"[..12],
-            password = new string('a', 128),
+            password = PasswordHashing.Hash("a password that is long enough"),
             approved = approved,
             userprivileges = privileges,
             ApiKey = apiKey
         };
-        user.RememberTokens.Add(token);
+        user.RememberTokens.Add(record);
 
         context.Users.Add(user);
         await context.SaveChangesAsync();
-        return (user, token.Token);
+        return (user, token);
     }
 
     private static HttpRequestMessage WithCookie(string path, string token)
@@ -227,7 +228,7 @@ public class AuthPipelineTests : IAsyncLifetime
 
         // This is the case the forwarding scheme exists for. With the cookie scheme as the plain default, a
         // caller presenting only an API key reached the pipeline unauthenticated.
-        var apiKey = RememberTokens.Issue().Token;
+        var apiKey = RandomKeys.Readable();
         var (user, _) = await SeedUserAsync(UserPrivileges.Administrator, 1, apiKey);
 
         var request = new HttpRequestMessage(HttpMethod.Get, "/whoami");
@@ -267,13 +268,16 @@ public class AuthPipelineTests : IAsyncLifetime
     {
         Skip.IfNot(Enabled, "Set SYNCSTREAM_TEST_DB to run auth pipeline tests.");
 
-        var expired = DateTime.UtcNow - RememberTokenAuthenticationHandler.TokenLifetime - TimeSpan.FromDays(1);
+        var expired = DateTime.UtcNow - RememberTokens.Lifetime - TimeSpan.FromDays(1);
         var (_, token) = await SeedUserAsync(UserPrivileges.Approved, 1, tokenCreated: expired);
 
         var whoami = await Client().SendAsync(WithCookie("/whoami", token));
         Assert.Equal("guest", await whoami.Content.ReadAsStringAsync());
 
+        // The row stays. An expired session is now distinguishable from one that never existed, which deleting
+        // it threw away, and the sweep of dead rows is a separate job.
         await using var context = ContextFor(_database);
-        Assert.False(await context.RememberTokens.AnyAsync(candidate => candidate.Token == token));
+        var digest = RememberTokens.Digest(token);
+        Assert.True(await context.RememberTokens.AnyAsync(candidate => candidate.TokenHash == digest));
     }
 }

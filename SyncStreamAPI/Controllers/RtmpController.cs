@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Net.Http.Headers;
+using SyncStreamAPI.Auth;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Helper.Streaming;
@@ -177,8 +178,7 @@ public class RtmpController : Controller
                 string.Equals(x.userName, rtmpData.name, StringComparison.CurrentCultureIgnoreCase));
             if (liveUser == null) return StatusCode(StatusCodes.Status404NotFound);
 
-            var dbUser = _postgres.Users?.Include(x => x.RememberTokens)?.FirstOrDefault(x =>
-                x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == rtmpData.token));
+            var dbUser = FindByRememberToken(rtmpData.token);
             if (dbUser == null || dbUser.userprivileges < UserPrivileges.Approved) return Unauthorized();
 
             liveUser.watchMember.Add(dbUser.ToSummary());
@@ -204,8 +204,7 @@ public class RtmpController : Controller
                 string.Equals(x.userName, rtmpData.name, StringComparison.CurrentCultureIgnoreCase));
             if (liveUser == null) return StatusCode(StatusCodes.Status404NotFound);
 
-            var dbUser = _postgres.Users?.Include(x => x.RememberTokens)?.FirstOrDefault(x =>
-                x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == rtmpData.token));
+            var dbUser = FindByRememberToken(rtmpData.token);
             if (dbUser == null || dbUser.userprivileges < UserPrivileges.Approved) return Unauthorized();
 
             var watchMemberIdx = liveUser.watchMember.FindIndex(x => x.ID == dbUser.ID);
@@ -221,5 +220,26 @@ public class RtmpController : Controller
             Console.WriteLine(ex.ToString());
             return StatusCode(StatusCodes.Status500InternalServerError);
         }
+    }
+
+    /// <summary>
+    ///     Finds the account behind a remember token presented by the streaming server.
+    /// </summary>
+    /// <remarks>
+    ///     Looked up by digest, because that is all that is stored now. This also checks that the session is
+    ///     live, which the two inline lookups it replaces did not: a revoked or long-expired token authenticated
+    ///     a viewer here for as long as the row existed.
+    /// </remarks>
+    private DbUser? FindByRememberToken(string? token)
+    {
+        if (string.IsNullOrWhiteSpace(token)) return null;
+
+        var digest = RememberTokens.Digest(token);
+        var now = DateTime.UtcNow;
+
+        return _postgres.Users?
+            .Include(candidate => candidate.RememberTokens)
+            .FirstOrDefault(candidate => candidate.RememberTokens.Any(remembered =>
+                remembered.TokenHash == digest && remembered.RevokedUtc == null && now < remembered.ExpiresUtc));
     }
 }

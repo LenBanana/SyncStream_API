@@ -23,6 +23,11 @@ public class PostgresContext : DbContext
     {
         base.OnModelCreating(builder);
 
+        // Every authenticated request looks a session up by this digest, so it is indexed, and unique because
+        // two sessions sharing one digest would mean the random source repeated itself.
+        builder.Entity<DbRememberToken>().Property(token => token.TokenHash).IsRequired();
+        builder.Entity<DbRememberToken>().HasIndex(token => token.TokenHash).IsUnique();
+
         builder.Entity<DbFileFolder>().HasMany(x => x.Children).WithOne(x => x.Parent);
         builder.Entity<DbFileFolder>().HasMany(x => x.Files);
 

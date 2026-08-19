@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SyncStreamAPI.Auth;
 using SyncStreamAPI.DataContext;
+using SyncStreamAPI.Helper;
 using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.Wire;
 using SyncStreamAPI.Wire.Auth;
@@ -35,9 +36,6 @@ public class AuthController : ControllerBase
 {
     private const string UsernamePattern = @"^\w(?:\w|.-){2,31}$";
 
-    /// <summary>Length of a SHA512 hex digest, which is what the browser sends.</summary>
-    private const int ExpectedPasswordHashLength = 128;
-
     private readonly IHubContext<ServerHub, IServerHub> _hub;
     private readonly PostgresContext _postgres;
 
@@ -59,17 +57,27 @@ public class AuthController : ControllerBase
 
         // One message and one code for "no such account" and "wrong password", so the endpoint cannot be
         // used to enumerate usernames.
-        if (user == null || !PasswordMatches(user, credentials.password))
+        var verdict = user == null
+            ? PasswordVerdict.NoMatch
+            : PasswordHashing.Verify(user.password, credentials.password);
+
+        if (user == null || verdict == PasswordVerdict.NoMatch)
             return Unauthorized(new { message = "Username or password is incorrect" });
 
         if (user.approved <= 0)
             return StatusCode(403, new { message = "This account is waiting for admin approval" });
 
-        var token = RememberTokens.Issue();
-        user.RememberTokens.Add(token);
+        // This is the only moment the plaintext exists on this side, so it is the only moment an account still
+        // stored in an older form can be rewritten into the current one. Nobody is prompted and nobody is
+        // signed out; the row simply stops being in the old shape.
+        if (verdict == PasswordVerdict.MatchNeedsUpgrade) user.password = PasswordHashing.Hash(credentials.password);
+
+        var now = DateTime.UtcNow;
+        var (token, record) = RememberTokens.Issue(now);
+        user.RememberTokens.Add(record);
         await _postgres.SaveChangesAsync();
 
-        AuthCookie.Issue(Response, token.Token, token.Created);
+        AuthCookie.Issue(Response, token, record.Created);
         return Ok(user.ToSelfProfile());
     }
 
@@ -82,8 +90,8 @@ public class AuthController : ControllerBase
         if (!Regex.IsMatch(credentials.username, UsernamePattern))
             return BadRequest(new { message = $"Username {credentials.username} not allowed" });
 
-        if (credentials.password.Length != ExpectedPasswordHashLength)
-            return BadRequest(new { message = "Invalid password hash" });
+        if (!PasswordPolicy.IsAcceptable(credentials.password, out var rejection))
+            return BadRequest(new { message = rejection });
 
         if (await _postgres.Users.AnyAsync(candidate => candidate.username == credentials.username))
             return Conflict(new { message = "Username already exists" });
@@ -93,11 +101,10 @@ public class AuthController : ControllerBase
         var user = new DbUser
         {
             username = credentials.username,
-            password = credentials.password,
+            password = PasswordHashing.Hash(credentials.password),
             approved = 0,
             userprivileges = UserPrivileges.NotApproved
         };
-        user.StreamToken = RememberTokens.Issue().Token;
 
         await _postgres.Users.AddAsync(user);
         await _postgres.SaveChangesAsync();
@@ -129,12 +136,15 @@ public class AuthController : ControllerBase
         var presented = Request.Cookies[TokenAuthDefaults.CookieName];
         if (!string.IsNullOrWhiteSpace(presented))
         {
-            // Revoke server-side as well as clearing the cookie, so a copied token stops working.
+            // Revoke server-side as well as clearing the cookie, so a copied token stops working. Marked
+            // rather than deleted, so a token presented afterwards is recognisably a revoked session rather
+            // than an unknown one.
+            var digest = RememberTokens.Digest(presented);
             var token = await _postgres.RememberTokens
-                .FirstOrDefaultAsync(candidate => candidate.Token == presented);
-            if (token != null)
+                .FirstOrDefaultAsync(candidate => candidate.TokenHash == digest);
+            if (token is { RevokedUtc: null })
             {
-                _postgres.RememberTokens.Remove(token);
+                token.RevokedUtc = DateTime.UtcNow;
                 await _postgres.SaveChangesAsync();
             }
         }
@@ -156,7 +166,9 @@ public class AuthController : ControllerBase
         var user = await _postgres.Users.FirstOrDefaultAsync(candidate => candidate.ID == this.CallerUserId());
         if (user == null) return Unauthorized(new { message = "Not signed in" });
 
-        user.ApiKey = RememberTokens.Issue().Token;
+        // A readable key, not a session token: this one is displayed so it can be pasted into a client, which
+        // means it cannot be stored as a digest the way the cookie's token is.
+        user.ApiKey = RandomKeys.Readable();
         await _postgres.SaveChangesAsync();
 
         return Ok(user.ToSelfProfile());
@@ -177,7 +189,8 @@ public class AuthController : ControllerBase
 
         if (user == null) return Unauthorized(new { message = "Not signed in" });
 
-        if (!PasswordMatches(user, request.currentPassword))
+        var currentVerdict = PasswordHashing.Verify(user.password, request.currentPassword);
+        if (currentVerdict == PasswordVerdict.NoMatch)
             return Unauthorized(new { message = "Your current password was not correct" });
 
         var changes = new List<string>();
@@ -198,15 +211,26 @@ public class AuthController : ControllerBase
         }
 
         var passwordChanged = false;
-        if (!string.IsNullOrEmpty(request.newPassword) && request.newPassword != user.password)
+        if (!string.IsNullOrEmpty(request.newPassword))
         {
-            if (request.newPassword.Length != ExpectedPasswordHashLength)
-                return BadRequest(new { message = "Invalid password hash" });
+            if (!PasswordPolicy.IsAcceptable(request.newPassword, out var rejection))
+                return BadRequest(new { message = rejection });
 
-            user.password = request.newPassword;
-            passwordChanged = true;
-            changes.Add("Password");
+            // Compared against the current password rather than against the stored hash, which the previous
+            // version did: with a per-password salt, no two hashes of the same password are equal, so that
+            // comparison could never have detected "the same password again".
+            if (PasswordHashing.Verify(user.password, request.newPassword) == PasswordVerdict.NoMatch)
+            {
+                user.password = PasswordHashing.Hash(request.newPassword);
+                passwordChanged = true;
+                changes.Add("Password");
+            }
         }
+
+        // Nothing else about the account changed, but the stored form is out of date and the plaintext that was
+        // just verified is the only thing that can bring it up to date.
+        if (!passwordChanged && currentVerdict == PasswordVerdict.MatchNeedsUpgrade)
+            user.password = PasswordHashing.Hash(request.currentPassword);
 
         if (changes.Count == 0) return Ok(new { message = "Nothing changed." });
 
@@ -215,11 +239,11 @@ public class AuthController : ControllerBase
             // Changing a password ends every other session, which the deterministic tokens this replaced
             // could not express: the same token string was regenerated on the next login.
             var presented = Request.Cookies[TokenAuthDefaults.CookieName];
-            foreach (var stale in user.RememberTokens.Where(candidate => candidate.Token != presented).ToList())
-            {
-                user.RememberTokens.Remove(stale);
-                _postgres.RememberTokens.Remove(stale);
-            }
+            var keep = string.IsNullOrWhiteSpace(presented) ? null : RememberTokens.Digest(presented);
+            var now = DateTime.UtcNow;
+            foreach (var stale in user.RememberTokens.Where(candidate =>
+                         candidate.TokenHash != keep && candidate.RevokedUtc == null))
+                stale.RevokedUtc = now;
         }
 
         await _postgres.SaveChangesAsync();
@@ -228,18 +252,4 @@ public class AuthController : ControllerBase
         return Ok(new { message = string.Join(" & ", changes) + " successfully changed" });
     }
 
-    /// <summary>
-    ///     Compares the browser-computed SHA512 against what is stored.
-    /// </summary>
-    /// <remarks>
-    ///     Still the pre-hardening comparison: unsalted, no server-side work factor, and the stored value is
-    ///     what the client sends, so reading the table is enough to sign in as anyone. Replacing it with
-    ///     Argon2id over this same input needs a schema change and is the password phase's job. It lives in
-    ///     one method so that phase has one place to change.
-    /// </remarks>
-    private static bool PasswordMatches(DbUser user, string providedHash)
-    {
-        return !string.IsNullOrEmpty(user.password)
-               && string.Equals(user.password, providedHash, StringComparison.Ordinal);
-    }
 }

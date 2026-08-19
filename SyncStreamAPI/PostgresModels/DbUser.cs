@@ -13,8 +13,7 @@ public class DbUser
         StartedConversations = new List<DbConversation>();
         ReceivedConversations = new List<DbConversation>();
         Files = new List<DbFile>();
-        usersalt = Guid.NewGuid().ToString();
-        StreamToken = this.GenerateStreamToken().Token;
+        StreamToken = RandomKeys.Readable();
     }
 
     public DbUser(string user)
@@ -32,7 +31,6 @@ public class DbUser
     public string password { get; set; }
     public int approved { get; set; }
     public UserPrivileges userprivileges { get; set; }
-    public string usersalt { get; set; }
     public List<DbRememberToken> RememberTokens { get; set; }
     public List<DbConversation> StartedConversations { get; set; }
     public List<DbConversation> ReceivedConversations { get; set; }

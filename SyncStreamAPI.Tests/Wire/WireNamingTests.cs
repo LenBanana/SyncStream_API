@@ -116,20 +116,18 @@ public class WireNamingTests
     }
 
     [Fact]
-    public void Self_profile_never_serialises_the_password_or_salt()
+    public void Self_profile_never_serialises_the_password()
     {
         var user = new DbUser
         {
             ID = 7,
             username = "someone",
-            password = "the-password-hash",
-            usersalt = "the-salt"
+            password = "the-password-hash"
         };
 
         var json = JsonConvert.SerializeObject(new SelfProfileDto(user), HubSerializerSettings);
 
         Assert.DoesNotContain("the-password-hash", json);
-        Assert.DoesNotContain("the-salt", json);
     }
 
     [Fact]

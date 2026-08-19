@@ -478,7 +478,11 @@ public partial class ServerHub : Hub<IServerHub>
             // Constructed here, not bound: the live server state is the server's to own.
             var candidate = new Room(request.name, uniqueId, request.deletable, false)
             {
-                password = request.password
+                // Hashed here, because the browser no longer pre-hashes it and because storing something a
+                // reader of the table could present back is the thing being removed.
+                password = string.IsNullOrEmpty(request.password)
+                    ? request.password
+                    : PasswordHashing.Hash(request.password)
             };
 
             if (!RoomManager.AddRoom(candidate)) continue;

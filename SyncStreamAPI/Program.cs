@@ -21,6 +21,9 @@ public class Program
             var context = scope.ServiceProvider.GetRequiredService<PostgresContext>();
             var logger = scope.ServiceProvider.GetRequiredService<ILogger<PostgresContext>>();
             MigrationBootstrapper.Run(context, logger);
+
+            // After the schema, because it reads and writes rows the migrations may have just reshaped.
+            StoredSecretUpgrade.Run(context, logger);
         }
 
         host.Run();

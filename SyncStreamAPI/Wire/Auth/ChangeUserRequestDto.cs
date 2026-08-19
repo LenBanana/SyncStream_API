@@ -13,9 +13,9 @@ public class ChangeUserRequestDto
     /// <summary>New username, or null or unchanged to leave it alone.</summary>
     public string? username { get; set; }
 
-    /// <summary>New password as a SHA512 hash, or null or empty to leave it alone.</summary>
+    /// <summary>New password as typed, or null or empty to leave it alone.</summary>
     public string? newPassword { get; set; }
 
-    /// <summary>The account's current password as a SHA512 hash. Required.</summary>
+    /// <summary>The account's current password as typed. Required.</summary>
     public string? currentPassword { get; set; }
 }

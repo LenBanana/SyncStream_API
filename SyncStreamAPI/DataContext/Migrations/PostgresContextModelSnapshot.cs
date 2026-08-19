@@ -210,13 +210,25 @@ namespace SyncStreamAPI.DataContext.Migrations
                     b.Property<int?>("DbUserID")
                         .HasColumnType("integer");
 
-                    b.Property<string>("Token")
+                    b.Property<DateTime>("ExpiresUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("LastUsedUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("RevokedUtc")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.HasKey("ID");
 
                     b.HasIndex("DbUserID");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
 
                     b.ToTable("RememberTokens");
                 });
@@ -280,10 +292,6 @@ namespace SyncStreamAPI.DataContext.Migrations
 
                     b.Property<int>("userprivileges")
                         .HasColumnType("integer");
-
-                    b.Property<string>("usersalt")
-                        .IsRequired()
-                        .HasColumnType("text");
 
                     b.HasKey("ID");
 

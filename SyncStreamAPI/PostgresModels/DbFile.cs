@@ -13,7 +13,7 @@ public class DbFile
         DbUserID = user == null ? -1 : user.ID;
         Name = name;
         FileEnding = fileEnding;
-        FileKey = user?.GenerateToken(Guid.NewGuid() + name).Token;
+        FileKey = user == null ? null : RandomKeys.Readable();
         Created = DateTime.UtcNow;
         Temporary = temporary;
         Public = temporary;

@@ -81,7 +81,7 @@ public static class RoomAdmission
     /// <param name="caller">Who is asking, taken from the connection.</param>
     /// <param name="connectionId">The connection asking.</param>
     /// <param name="proposedName">The name a guest would like. Ignored for accounts.</param>
-    /// <param name="suppliedPassword">The room password as supplied, already hashed by the client.</param>
+    /// <param name="suppliedPassword">The room password as typed.</param>
     /// <param name="roomPassword">The room's password, or null or empty when it is open.</param>
     /// <param name="isRegisteredName">Whether a name belongs to a registered account.</param>
     public static AdmissionResult Evaluate(
@@ -95,7 +95,13 @@ public static class RoomAdmission
     {
         // Always answered, even for an empty password. The old code stayed silent in that one case, which is
         // how a reconnect into a password room turned into a client waiting forever for a reply.
-        if (!string.IsNullOrEmpty(roomPassword) && roomPassword != suppliedPassword)
+        //
+        // Compared through the password hash rather than by string equality, so the stored value is not
+        // something a reader of the table can present back, and so the comparison does not leak where two
+        // values first differ. Rooms created before this was true hold a wrapped digest, which verifies the
+        // same way.
+        if (!string.IsNullOrEmpty(roomPassword)
+            && PasswordHashing.Verify(roomPassword, suppliedPassword) == PasswordVerdict.NoMatch)
             return AdmissionResult.Refused(AdmissionOutcome.WrongPassword);
 
         if (server.IsBanned(caller.Key))

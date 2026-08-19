@@ -29,6 +29,7 @@ public partial class ServerHub
     ///     name up in the database, so joining as someone else borrowed their privileges. The identity now
     ///     comes from the connection and only a guest's chosen label is negotiable.
     /// </remarks>
+    /// <param name="password">The room password as typed, or null for an open room.</param>
     [ErrorHandling]
     public async Task AddUser(string displayName, string UniqueId, string password)
     {
