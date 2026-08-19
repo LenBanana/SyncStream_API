@@ -22,6 +22,7 @@ using SyncStreamAPI.Helper.StreamingSites;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
+using SyncStreamAPI.Net;
 using SyncStreamAPI.Models.Interfaces;
 using SyncStreamAPI.Models.RTMP;
 using SyncStreamAPI.PostgresModels;
@@ -271,12 +272,10 @@ public class MainManager
         // REPLACED: WebClient with HttpClient for streaming
         try
         {
-            using var httpClient = new HttpClient();
-            httpClient.DefaultRequestHeaders.Add("User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:106.0) Gecko/20100101 Firefox/106.0");
-
-            using var response =
-                await httpClient.GetAsync(downloadClient.Url, HttpCompletionOption.ResponseHeadersRead);
+            // The guarded client: this URL came from a caller, and a plain client would fetch anything the
+            // server can reach, including addresses inside its own network.
+            using var response = await OutboundHttp.Client.GetAsync(
+                downloadClient.Url, HttpCompletionOption.ResponseHeadersRead);
             response.EnsureSuccessStatusCode();
 
             var totalBytes = response.Content.Headers.ContentLength ?? 0;
