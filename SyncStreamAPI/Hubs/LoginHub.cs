@@ -9,15 +9,24 @@ using SyncStreamAPI.Helper;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
+using SyncStreamAPI.Wire;
+using SyncStreamAPI.Wire.Auth;
+using SyncStreamAPI.Wire.Users;
 
 namespace SyncStreamAPI.Hubs;
 
 public partial class ServerHub
 {
     [ErrorHandling]
-    public async Task LoginRequest(DbUser requestUser, string userInfo)
+    public async Task LoginRequest(CredentialsDto requestUser, string userInfo)
     {
-        var result = new DbUser();
+        DbUser? result = null;
+        if (string.IsNullOrWhiteSpace(requestUser?.username) || string.IsNullOrWhiteSpace(requestUser.password))
+        {
+            await Clients.Caller.userlogin(new SelfProfileDto());
+            return;
+        }
+
         var user = _postgres.Users.Include(x => x.RememberTokens).FirstOrDefault(x =>
             x.username == requestUser.username && x.password == requestUser.password);
         if (user != null)
@@ -57,13 +66,20 @@ public partial class ServerHub
             result = user;
         }
 
-        await Clients.Caller.userlogin(result.ToDTO());
+        await Clients.Caller.userlogin(result?.ToSelfProfile() ?? new SelfProfileDto());
     }
 
 
     [ErrorHandling]
-    public async Task RegisterRequest(DbUser requestUser)
+    public async Task RegisterRequest(CredentialsDto requestUser)
     {
+        if (string.IsNullOrWhiteSpace(requestUser?.username) || requestUser.password == null)
+        {
+            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+                { Header = "Error", Question = "Username and password are required", Answer1 = "Ok" });
+            return;
+        }
+
         if (_postgres.Users?.Any(x => x.username == requestUser.username) == false)
         {
             var userNameRegexString = @"^\w(?:\w|.-){2,31}$";
@@ -83,12 +99,22 @@ public partial class ServerHub
                 return;
             }
 
-            requestUser.StreamToken = requestUser.GenerateStreamToken().Token;
-            await _postgres.Users.AddAsync(requestUser);
+            // Built here rather than bound from the request: approval state and privileges are the
+            // server's to decide, and binding them from the wire let a client register as an admin.
+            var newUser = new DbUser
+            {
+                username = requestUser.username,
+                password = requestUser.password,
+                approved = 0,
+                userprivileges = UserPrivileges.NotApproved
+            };
+            newUser.StreamToken = newUser.GenerateStreamToken().Token;
+
+            await _postgres.Users.AddAsync(newUser);
             await _postgres.SaveChangesAsync();
 
-            await Clients.Group(General.LoggedInGroupName).getusers(_postgres.Users.Select(x => x.ToDTO()).ToList());
-            await Clients.Caller.userRegister(requestUser.ToDTO());
+            await Clients.Group(General.LoggedInGroupName).getusers(_postgres.Users.ToList().ToSummaries());
+            await Clients.Caller.userRegister(newUser.ToSelfProfile());
         }
         else
         {
@@ -122,7 +148,7 @@ public partial class ServerHub
             var dbUser = _postgres.Users?.Where(x => x.ID == userID).Include(x => x.RememberTokens).FirstOrDefault();
             if (dbUser == null || dbUser?.RememberTokens.Any(x => x.Token == token) == false)
             {
-                await Clients.Caller.userlogin(new DbUser("").ToDTO());
+                await Clients.Caller.userlogin(new DbUser("").ToSelfProfile());
                 return;
             }
 
@@ -157,27 +183,32 @@ public partial class ServerHub
                     await Groups.AddToGroupAsync(Context.ConnectionId, dbUser.ApiKey);
                 if (dbUser.userprivileges >= UserPrivileges.Elevated)
                     await Groups.AddToGroupAsync(Context.ConnectionId, General.AdminGroupName);
-                await Clients.Caller.userlogin(dbUser.ToDTO());
+                await Clients.Caller.userlogin(dbUser.ToSelfProfile());
                 Token.Created = DateTime.UtcNow;
             }
             else
             {
-                await Clients.Caller.userlogin(new DbUser("").ToDTO());
+                await Clients.Caller.userlogin(new DbUser("").ToSelfProfile());
             }
 
             await _postgres.SaveChangesAsync();
         }
         catch (Exception ex)
         {
-            await Clients.Caller.userlogin(new DbUser("").ToDTO());
+            await Clients.Caller.userlogin(new DbUser("").ToSelfProfile());
             Console.WriteLine(ex.ToString());
         }
     }
 
 
     [ErrorHandling]
-    public async Task ChangeUser(DbUser user, string password)
+    public async Task ChangeUser(ChangeUserRequestDto user, string password)
     {
+        if (user == null)
+        {
+            return;
+        }
+
         var changeUser = _postgres.Users.FirstOrDefault(x => x.ID == user.ID && password == x.password);
         if (changeUser != null)
         {
@@ -198,7 +229,7 @@ public partial class ServerHub
                 }
             }
 
-            if (user.password.Length > 2 && changeUser.password != user.password)
+            if (user.password?.Length > 2 && changeUser.password != user.password)
             {
                 changeUser.password = user.password;
                 endMsg += endMsg.Length > 0 ? " & " : "";
@@ -213,7 +244,7 @@ public partial class ServerHub
             await _postgres.SaveChangesAsync();
             await Clients.Caller.dialog(new Dialog { Header = "Success", Question = endMsg, Answer1 = "Ok" });
             var users = _postgres.Users.ToList();
-            await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
+            await Clients.All.getusers(users.ToSummaries());
         }
         else
         {

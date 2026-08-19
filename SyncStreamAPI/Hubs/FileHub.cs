@@ -13,6 +13,7 @@ using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData.Helper;
 using Xabe.FFmpeg;
 using YoutubeDLSharp.Options;
+using SyncStreamAPI.Wire;
 
 namespace SyncStreamAPI.Hubs;
 
@@ -307,7 +308,7 @@ public partial class ServerHub
         var folderShares = _postgres.FolderShare?.Where(x => x.DbFolderID == folderId);
         var users = _postgres.Users?.Where(x =>
             x.ID == folder.DbUserID || folderShares.FirstOrDefault(y => y.DbUserID == x.ID) != null).ToList();
-        await Clients.Caller.getFolderUsers(users?.Select(x => new UserDTO(x)).ToList());
+        await Clients.Caller.getFolderUsers(users.ToSummaries());
     }
 
     [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]

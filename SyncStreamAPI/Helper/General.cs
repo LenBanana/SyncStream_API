@@ -53,6 +53,21 @@ public static class General
     public static TimeSpan ServerHealthTimeInSeconds { get; } = TimeSpan.FromSeconds(1);
     public static TimeSpan SecondsToKickMember { get; } = TimeSpan.FromSeconds(10);
 
+    /// <summary>
+    ///     Upper bound on a single request body. Uploads are chunked, so this caps one chunk plus
+    ///     multipart overhead rather than a whole file.
+    /// </summary>
+    public const long MaxRequestBodyBytes = 512L * 1024 * 1024;
+
+    /// <summary>Upper bound on a single non-file form value.</summary>
+    public const int MaxFormValueBytes = 4 * 1024 * 1024;
+
+    /// <summary>Upper bound on the combined headers of one multipart section.</summary>
+    public const int MaxMultipartHeaderBytes = 32 * 1024;
+
+    /// <summary>Upper bound on a user-supplied room name.</summary>
+    public const int MaxRoomNameLength = 64;
+
     public static int GallowGameLength => 90;
     public static int GallowGameLengthMin => 60;
     public static int GallowGameLengthMax => 300;

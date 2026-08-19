@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Builder;
+﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -37,13 +37,21 @@ public class Startup
     {
         services.AddMemoryCache();
         services.AddHttpClient();
-        services.Configure<KestrelServerOptions>(options => { options.Limits.MaxRequestBodySize = null; });
-        services.Configure<IISServerOptions>(options => { options.MaxRequestBodySize = null; });
+        // Uploads arrive in chunks, so a single request never needs to be huge. These are bounds
+        // against an unauthenticated disk fill, not against the upload feature.
+        services.Configure<KestrelServerOptions>(options =>
+        {
+            options.Limits.MaxRequestBodySize = General.MaxRequestBodyBytes;
+        });
+        services.Configure<IISServerOptions>(options =>
+        {
+            options.MaxRequestBodySize = General.MaxRequestBodyBytes;
+        });
         services.Configure<FormOptions>(options =>
         {
-            options.MultipartBodyLengthLimit = long.MaxValue;
-            options.ValueLengthLimit = int.MaxValue;
-            options.MultipartHeadersLengthLimit = int.MaxValue;
+            options.MultipartBodyLengthLimit = General.MaxRequestBodyBytes;
+            options.ValueLengthLimit = General.MaxFormValueBytes;
+            options.MultipartHeadersLengthLimit = General.MaxMultipartHeaderBytes;
         });
 
         services.AddSingleton<IContentTypeProvider, FileExtensionContentTypeProvider>();
@@ -79,7 +87,6 @@ public class Startup
         services.AddCors(o => o.AddPolicy("CORSPolicy", builder =>
         {
             builder.SetIsOriginAllowedToAllowWildcardSubdomains()
-                .SetIsOriginAllowed(_ => true)
                 .WithOrigins(origins)
                 .AllowAnyMethod()
                 .AllowAnyHeader()

@@ -1,5 +1,4 @@
 ﻿using System;
-using SyncStreamAPI.Models;
 using SyncStreamAPI.PostgresModels;
 
 namespace SyncStreamAPI.Helper;
@@ -26,10 +25,5 @@ public static class ModelExtensions
             Token = md5Uid
         };
         return token;
-    }
-
-    public static UserDTO ToDTO(this DbUser user)
-    {
-        return new UserDTO(user);
     }
 }

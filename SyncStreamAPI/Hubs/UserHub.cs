@@ -9,6 +9,8 @@ using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.GameModels.Chess;
 using SyncStreamAPI.ServerData;
 using SyncStreamAPI.ServerData.Helper;
+using SyncStreamAPI.Wire;
+using SyncStreamAPI.Wire.Games;
 
 namespace SyncStreamAPI.Hubs;
 
@@ -58,7 +60,7 @@ public partial class ServerHub
             case GameMode.Chess:
             {
                 var game = ChessLogic.GetChessGame(room.uniqueId);
-                if (game != null) await Clients.Caller.playchess(game);
+                if (game != null) await Clients.Caller.playchess(new ChessGameDto(game));
 
                 break;
             }
@@ -102,7 +104,7 @@ public partial class ServerHub
 
         await Clients.Caller.isplayingupdate(mainServer.isplaying);
         await Clients.Caller.timeupdate(mainServer.currenttime);
-        await Clients.All.getrooms(MainManager.GetRooms());
+        await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
         await Clients.Caller.adduserupdate((int)UserUpdate.Success);
         if (room.CurrentStreamer != null)
         {
@@ -304,7 +306,7 @@ public partial class ServerHub
         }
 
         await Clients.Group(UniqueId).userupdate(mainServer.members?.Select(x => x?.ToDTO()).ToList());
-        await Clients.All.getrooms(MainManager.GetRooms());
+        await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
     }
 
     [ErrorHandling]
@@ -313,22 +315,32 @@ public partial class ServerHub
         var room = GetRoom(UniqueId);
         if (room == null) return;
 
-        var mainServer = room.server;
-        var member = mainServer.members.FirstOrDefault(x => x.username == username);
-        if (member != null)
+        if (!CheckPrivileges(room))
         {
-            mainServer.members.Remove(member);
-            mainServer.bannedMembers.Add(member);
-            if (member.ishost && mainServer.members.Count > 0)
+            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
             {
-                mainServer.members[0].ishost = true;
-                await Clients.Client(mainServer.members[0].ConnectionId).hostupdate(true);
-                await Clients.Group(UniqueId).userupdate(mainServer.members?.Select(x => x.ToDTO()).ToList());
-            }
+                Header = "Error", Question = "You don't have permissions to ban users from this room",
+                Answer1 = "Ok"
+            });
+            return;
         }
 
-        await Clients.User(member.ConnectionId).adduserupdate((int)UserUpdate.Banned);
-        await Clients.Group(UniqueId).userupdate(mainServer.members?.Select(x => x.ToDTO()).ToList());
-        await Clients.All.getrooms(MainManager.GetRooms());
+        var mainServer = room.server;
+        var member = mainServer.members.FirstOrDefault(x => x.username == username);
+        if (member == null) return;
+
+        mainServer.members.Remove(member);
+        mainServer.bannedMembers.Add(member);
+        if (member.ishost && mainServer.members.Count > 0)
+        {
+            mainServer.members[0].ishost = true;
+            await Clients.Client(mainServer.members[0].ConnectionId).hostupdate(true);
+        }
+
+        // Addressed by connection, not by user identifier: Clients.User expects an IUserIdProvider
+        // identifier, so the previous Clients.User(ConnectionId) call never reached anyone.
+        await Clients.Client(member.ConnectionId).adduserupdate((int)UserUpdate.Banned);
+        await Clients.Group(UniqueId).userupdate(mainServer.members.Select(x => x?.ToDTO()).ToList());
+        await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
     }
 }

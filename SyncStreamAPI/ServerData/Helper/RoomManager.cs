@@ -15,6 +15,7 @@ using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.Bots;
 using YoutubeDLSharp.Options;
+using SyncStreamAPI.Wire;
 
 namespace SyncStreamAPI.ServerData.Helper;
 
@@ -110,7 +111,7 @@ public class RoomManager
 
                         await hub.Clients.Group(room.uniqueId)
                             .userupdate(room.server.members?.Select(x => x.ToDTO()).ToList());
-                        await hub.Clients.All.getrooms(GetRooms());
+                        await hub.Clients.All.getrooms(GetRooms().ToSummaries());
                     }
                 }
             }
@@ -217,7 +218,7 @@ public class RoomManager
         }
 
         await hub.Clients.Group(UniqueId).playlistupdate(room.server.playlist);
-        await hub.Clients.All.getrooms(MainManager.GetRooms());
+        await hub.Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
         return "";
     }
 

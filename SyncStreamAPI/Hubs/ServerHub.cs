@@ -18,6 +18,10 @@ using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.Helper.Streaming;
 using SyncStreamAPI.ServerData;
 using SyncStreamAPI.ServerData.Helper;
+using SyncStreamAPI.Wire;
+using System.Text.RegularExpressions;
+using SyncStreamAPI.Wire.Rooms;
+using SyncStreamAPI.Helper;
 
 namespace SyncStreamAPI.Hubs;
 
@@ -49,6 +53,8 @@ public partial class ServerHub : Hub<IServerHub>
         _gallowGameManager = gallowGameManager;
         _blackjackManager = blackjackManager;
     }
+
+    private static readonly Regex RoomIdRegex = new(@"^[A-Za-z0-9_-]{1,64}$", RegexOptions.Compiled);
 
     private IConfiguration Configuration { get; }
 
@@ -165,11 +171,6 @@ public partial class ServerHub : Hub<IServerHub>
         return true;
     }
 
-    public async Task SendServer(Server server, string UniqueId)
-    {
-        await Clients.Group(UniqueId).sendserver(server);
-    }
-
     private Room? GetRoom(string UniqueId)
     {
         var rooms = MainManager.GetRooms();
@@ -179,7 +180,7 @@ public partial class ServerHub : Hub<IServerHub>
 
     public async Task GetRooms()
     {
-        await Clients.Caller.getrooms(MainManager.GetRooms());
+        await Clients.Caller.getrooms(MainManager.GetRooms().ToSummaries());
     }
 
     public async Task AddVideo(DreckVideo key, string UniqueId)
@@ -223,7 +224,7 @@ public partial class ServerHub : Hub<IServerHub>
         {
             room.server.playlist.RemoveAt(idx);
             await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
-            await Clients.All.getrooms(MainManager.GetRooms());
+            await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
         }
     }
 
@@ -255,7 +256,7 @@ public partial class ServerHub : Hub<IServerHub>
                 await RoomManager.SendPlayerType(room);
                 await Clients.Group(UniqueId).videoupdate(mainServer.currentVideo);
                 await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
-                await Clients.All.getrooms(MainManager.GetRooms());
+                await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
                 return;
             case 1:
                 mainServer.currentVideo.ended = true;
@@ -263,9 +264,8 @@ public partial class ServerHub : Hub<IServerHub>
                 room.server.isplaying = false;
                 await Clients.Group(UniqueId).isplayingupdate(room.server.isplaying);
                 await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
-                await Clients.Group(UniqueId).sendserver(room.server);
                 await Clients.Group(UniqueId).playertype(PlayerType.Nothing);
-                await Clients.All.getrooms(MainManager.GetRooms());
+                await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
                 break;
         }
     }
@@ -296,7 +296,7 @@ public partial class ServerHub : Hub<IServerHub>
             mainServer.currentVideo = room.server.playlist[0];
             await Clients.Group(UniqueId).videoupdate(mainServer.currentVideo);
             await Clients.Group(UniqueId).playlistupdate(room.server.playlist);
-            await Clients.All.getrooms(MainManager.GetRooms());
+            await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
         }
     }
 
@@ -341,17 +341,49 @@ public partial class ServerHub : Hub<IServerHub>
 
         room.server.isplaying = isplaying;
         await Clients.Group(UniqueId).isplayingupdate(isplaying);
-        await Clients.All.getrooms(MainManager.GetRooms());
+        await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
     }
 
     [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token,
         TokenPosition = 1)]
-    public async Task AddRoom(Room room, string token)
+    public async Task AddRoom(CreateRoomRequestDto request, string token)
     {
-        var rooms = MainManager.GetRooms();
+        if (string.IsNullOrWhiteSpace(request?.name) || string.IsNullOrWhiteSpace(request.uniqueId))
+        {
+            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+                { Header = "Error", Question = "A room needs a name", Answer1 = "Ok" });
+            return;
+        }
+
+        if (request.name.Length > General.MaxRoomNameLength)
+        {
+            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+            {
+                Header = "Error",
+                Question = $"Room names are limited to {General.MaxRoomNameLength} characters",
+                Answer1 = "Ok"
+            });
+            return;
+        }
+
+        // The id becomes a SignalR group name and a lookup key, so keep it to a known-safe shape.
+        if (!RoomIdRegex.IsMatch(request.uniqueId))
+        {
+            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
+                { Header = "Error", Question = "Invalid room id", Answer1 = "Ok" });
+            return;
+        }
+
+        var uniqueId = request.uniqueId;
+        var rooms = MainManager.GetRooms().ToList();
         var roomCount = 0;
-        var enumerable = rooms as Room[] ?? rooms.ToArray();
-        while (enumerable?.Any(x => x.uniqueId == room.uniqueId) == true) room.uniqueId = room.uniqueId + roomCount++;
+        while (rooms.Any(x => x.uniqueId == uniqueId)) uniqueId = request.uniqueId + roomCount++;
+
+        // Constructed here, not bound: the live server state is the server's to own.
+        var room = new Room(request.name, uniqueId, request.deletable, false)
+        {
+            password = request.password
+        };
 
         RoomManager.AddRoom(room);
         if (!room.deletable)
@@ -361,20 +393,7 @@ public partial class ServerHub : Hub<IServerHub>
             await _postgres.SaveChangesAsync();
         }
 
-        await Clients.All.getrooms(MainManager.GetRooms());
-    }
-
-    public async Task ChangeRoom(Room room)
-    {
-        var rooms = MainManager.GetRooms();
-        var changeRoom = rooms.FirstOrDefault(x => x.uniqueId == room.uniqueId);
-        if (changeRoom != null)
-        {
-            changeRoom.name = room.name;
-            changeRoom.password = room.password;
-            changeRoom.deletable = room.deletable;
-            await Clients.All.getrooms(MainManager.GetRooms());
-        }
+        await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
     }
 
     [Privilege(RequiredPrivileges = UserPrivileges.Approved, AuthenticationType = AuthenticationType.Token,
@@ -393,7 +412,7 @@ public partial class ServerHub : Hub<IServerHub>
                 await _postgres.SaveChangesAsync();
             }
 
-            await Clients.All.getrooms(MainManager.GetRooms());
+            await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
         }
         else
         {

@@ -7,6 +7,7 @@ using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.PostgresModels;
+using SyncStreamAPI.Wire;
 
 namespace SyncStreamAPI.Hubs;
 
@@ -30,7 +31,7 @@ public partial class ServerHub
     public async Task GetUsers(string token, int userId)
     {
         var users = _postgres.Users.ToList();
-        await Clients.Caller.getusers(users?.Select(x => x.ToDTO()).ToList());
+        await Clients.Caller.getusers(users.ToSummaries());
     }
 
     [Privilege(RequiredPrivileges = UserPrivileges.Administrator, AuthenticationType = AuthenticationType.Token)]
@@ -55,7 +56,7 @@ public partial class ServerHub
         if (_postgres.Users != null)
         {
             var users = _postgres.Users.ToList();
-            await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
+            await Clients.All.getusers(users.ToSummaries());
         }
     }
 
@@ -68,7 +69,7 @@ public partial class ServerHub
         {
             dbUser.ApiKey = dbUser.GenerateStreamToken().Token;
             await _postgres.SaveChangesAsync();
-            await Clients.Caller.userlogin(dbUser.ToDTO());
+            await Clients.Caller.userlogin(dbUser.ToSelfProfile());
         }
     }
 
@@ -109,7 +110,7 @@ public partial class ServerHub
                 }
 
                 var users = _postgres.Users.ToList();
-                await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
+                await Clients.All.getusers(users.ToSummaries());
             }
             else
             {
@@ -143,6 +144,6 @@ public partial class ServerHub
         changeUser.approved = changeUser.userprivileges == UserPrivileges.NotApproved ? 0 : 1;
         await _postgres.SaveChangesAsync();
         var users = _postgres.Users.ToList();
-        await Clients.All.getusers(users?.Select(x => x.ToDTO()).ToList());
+        await Clients.All.getusers(users.ToSummaries());
     }
 }

@@ -18,6 +18,7 @@ using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models.RTMP;
 using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
+using SyncStreamAPI.Wire;
 
 namespace SyncStreamAPI.Controllers;
 
@@ -180,7 +181,7 @@ public class RtmpController : Controller
                 x.RememberTokens != null && x.RememberTokens.Any(y => y.Token == rtmpData.token));
             if (dbUser == null || dbUser.userprivileges < UserPrivileges.Approved) return Unauthorized();
 
-            liveUser.watchMember.Add(dbUser.ToDTO());
+            liveUser.watchMember.Add(dbUser.ToSummary());
             var liveUsers = _manager.LiveUsers;
             await _hub.Clients.Groups(General.LoggedInGroupName)
                 .getliveusers(liveUsers.Select(x => x.ToDTO()).ToList());
