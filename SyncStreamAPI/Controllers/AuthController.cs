@@ -229,10 +229,20 @@ public class AuthController : ControllerBase
 
         // Nothing else about the account changed, but the stored form is out of date and the plaintext that was
         // just verified is the only thing that can bring it up to date.
+        var rewroteStoredForm = false;
         if (!passwordChanged && currentVerdict == PasswordVerdict.MatchNeedsUpgrade)
+        {
             user.password = PasswordHashing.Hash(request.currentPassword);
+            rewroteStoredForm = true;
+        }
 
-        if (changes.Count == 0) return Ok(new { message = "Nothing changed." });
+        if (changes.Count == 0)
+        {
+            // Saved even though the caller asked for no change, because the line above rewrote the stored form
+            // and returning without saving would throw that away and leave the row in the old shape.
+            if (rewroteStoredForm) await _postgres.SaveChangesAsync();
+            return Ok(new { message = "Nothing changed." });
+        }
 
         if (passwordChanged)
         {
