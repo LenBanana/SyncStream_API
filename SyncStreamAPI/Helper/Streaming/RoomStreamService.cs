@@ -576,7 +576,9 @@ public class RoomStreamService : IRoomStreamService
 
     public void CleanupRoomUploadArtifacts(string uploadId)
     {
-        if (string.IsNullOrWhiteSpace(uploadId))
+        // Shape, not just emptiness: building the path throws on a malformed id, and this runs on the way out of
+        // a share, where an exception would leave the rest of the cleanup undone.
+        if (!RoomUploadIds.IsWellFormed(uploadId))
             return;
 
         TryDeleteDirectory(GetUploadDirectory(uploadId));

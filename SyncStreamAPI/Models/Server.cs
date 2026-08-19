@@ -46,7 +46,14 @@ public class Server
         set
         {
             _currentVideo = value;
+
+            // A new video starts at the beginning, as of now. Resetting the position without re-dating it left
+            // the previous video's timestamp attached to a position of zero, and a viewer who asked for the room
+            // state in that window added the gap since that timestamp to zero and seeked that far into a video
+            // that had only just started. Every path that changes the video assigns this property, so dating it
+            // here covers skipping, playing a specific entry, and a new video arriving into an ended room.
             currenttime = 0;
+            LastTimeUpdateUtc = DateTime.UtcNow;
         }
     }
 

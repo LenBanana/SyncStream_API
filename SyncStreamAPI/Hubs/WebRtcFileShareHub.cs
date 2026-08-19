@@ -341,8 +341,10 @@ public partial class ServerHub
             room.IsServerFileShare = false;
         }
 
-        // Clean up the upload temp directory left by an early-stream upload.
-        if (!string.IsNullOrWhiteSpace(room.FileShareUploadId))
+        // Clean up the upload staging directory left by an early-stream upload. Tested for shape rather than
+        // just for emptiness, because building the path throws on a malformed id and this runs while a room is
+        // being torn down, where an exception would leave the rest of the teardown undone.
+        if (RoomUploadIds.IsWellFormed(room.FileShareUploadId))
         {
             var uploadDir = RoomUploadPaths.DirectoryFor(room.FileShareUploadId);
             try { if (Directory.Exists(uploadDir)) Directory.Delete(uploadDir, recursive: true); }
