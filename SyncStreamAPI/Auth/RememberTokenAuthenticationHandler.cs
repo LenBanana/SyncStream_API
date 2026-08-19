@@ -42,14 +42,7 @@ public class RememberTokenAuthenticationHandler : AuthenticationHandler<TokenAut
     /// </remarks>
     public static TimeSpan TokenLifetime => RememberTokens.Lifetime;
 
-    /// <summary>
-    ///     How stale the last-used stamp is allowed to get before it is written again.
-    /// </summary>
-    /// <remarks>
-    ///     This runs on every authenticated request, including every hub message, so recording the exact moment
-    ///     each time would mean a database write per request to store something nothing needs to that precision.
-    /// </remarks>
-    private static readonly TimeSpan LastUsedPrecision = TimeSpan.FromHours(1);
+
 
     private readonly PostgresContext _postgres;
 
@@ -84,12 +77,18 @@ public class RememberTokenAuthenticationHandler : AuthenticationHandler<TokenAut
         var now = DateTime.UtcNow;
         if (!remembered.IsUsable(now)) return AuthenticateResult.NoResult();
 
-        // Left in place rather than deleted, so an expired or revoked session stays distinguishable from one
-        // that never existed. Sweeping them is a separate job with its own schedule.
-        if (remembered.LastUsedUtc == null || now - remembered.LastUsedUtc > LastUsedPrecision)
+        // Left in place rather than deleted when it does expire, so an expired or revoked session stays
+        // distinguishable from one that never existed. Sweeping them is a separate job with its own schedule.
+        if (SessionRefresh.IsDue(remembered, now))
         {
-            remembered.LastUsedUtc = now;
+            SessionRefresh.Apply(remembered, now);
             await _postgres.SaveChangesAsync();
+
+            // The browser drops a cookie at its own expiry whether or not the server would still accept the
+            // token, so sliding the row without re-issuing the cookie would slide nothing that anyone can see.
+            // Skipped once the response is underway, which is the case for a websocket handshake: the row has
+            // still been extended, and the next ordinary request carries the new cookie.
+            if (!Response.HasStarted) AuthCookie.Issue(Response, token, now);
         }
 
         // An unapproved account authenticates but carries no privileges, so it can watch as a guest can
