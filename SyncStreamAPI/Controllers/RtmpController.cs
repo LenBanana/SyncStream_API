@@ -53,13 +53,14 @@ public class RtmpController : Controller
     public async Task<IActionResult> onpublish([FromForm] RtmpData rtmpData)
     {
         if (string.IsNullOrWhiteSpace(rtmpData.name) || string.IsNullOrWhiteSpace(rtmpData.token))
-            return Unauthorized();
+            return Refuse("publish", rtmpData.name, "no stream name or key");
 
         if (RtmpFileShareManager.IsShareStream(rtmpData.name))
         {
             var share = _rtmpFileShareManager.AcceptPublisher(rtmpData.name, rtmpData.token);
-            if (share == null) return Unauthorized();
+            if (share == null) return Refuse("publish", rtmpData.name, "not a running file share, or the wrong key");
 
+            Log("publish", rtmpData.name, $"accepted, file share in room {share.RoomId}");
             // Every run is a new stream with timestamps starting from zero; players connect afresh.
             await _hub.Clients.Group(share.RoomId).rtmpFileShareStreamReady(share.Status().PositionSec);
             return Ok();
@@ -68,10 +69,12 @@ public class RtmpController : Controller
         var name = rtmpData.name.ToLower();
         var dbUser = await _postgres.Users.FirstOrDefaultAsync(user =>
             user.StreamToken == rtmpData.token && user.username.ToLower() == name);
-        if (dbUser == null || dbUser.userprivileges < UserPrivileges.Approved) return Unauthorized();
+        if (dbUser == null) return Refuse("publish", rtmpData.name, "no account with that name and stream key");
+        if (dbUser.userprivileges < UserPrivileges.Approved) return Refuse("publish", rtmpData.name, "account not approved");
 
         var added = _manager.LiveUsers.TryAdd(dbUser.StreamToken,
             new LiveUser { id = dbUser.StreamToken, userName = dbUser.username, StreamName = rtmpData.name });
+        Log("publish", rtmpData.name, added ? "accepted" : "accepted, already listed live");
         if (added) await SendLiveUsersAsync(toBots: true);
         return Ok();
     }
@@ -79,6 +82,7 @@ public class RtmpController : Controller
     [HttpPost("[action]")]
     public async Task<IActionResult> onpublishdone([FromForm] RtmpData rtmpData)
     {
+        Log("publish done", rtmpData.name, "stream ended");
         if (RtmpFileShareManager.IsShareStream(rtmpData.name))
         {
             _rtmpFileShareManager.PublisherGone(rtmpData.name, rtmpData.token);
@@ -95,10 +99,12 @@ public class RtmpController : Controller
     [HttpPost("[action]")]
     public async Task<IActionResult> onplay([FromForm] RtmpData rtmpData)
     {
-        if (!_tickets.TryRead(rtmpData.token, out var ticket) || ticket.Stream != rtmpData.name ||
-            ticket.ExpiresAt < DateTimeOffset.UtcNow)
-            return Unauthorized();
+        if (!_tickets.TryRead(rtmpData.token, out var ticket) || ticket.Stream != rtmpData.name)
+            return Refuse("play", rtmpData.name, "no ticket for this stream");
+        if (ticket.ExpiresAt < DateTimeOffset.UtcNow)
+            return Refuse("play", rtmpData.name, "ticket expired");
 
+        Log("play", rtmpData.name, ticket.UserId is { } account ? $"accepted for account {account}" : "accepted for a guest");
         var liveUser = _manager.FindLiveUser(rtmpData.name);
         if (liveUser == null || ticket.UserId is not { } viewerId) return Ok();
 
@@ -131,6 +137,19 @@ public class RtmpController : Controller
 
         if (removed) await SendLiveUsersAsync(toBots: false);
         return Ok();
+    }
+
+    /// <summary>
+    ///     One line per decision, so the server log shows whether the streaming server reached the API and what it
+    ///     was told. Keys and tickets stay out of it.
+    /// </summary>
+    private static void Log(string callback, string? stream, string outcome)
+        => Console.WriteLine($"[RTMP] {callback} {stream ?? "(no stream)"}: {outcome}");
+
+    private UnauthorizedResult Refuse(string callback, string? stream, string reason)
+    {
+        Log(callback, stream, $"refused, {reason}");
+        return Unauthorized();
     }
 
     private async Task SendLiveUsersAsync(bool toBots)
