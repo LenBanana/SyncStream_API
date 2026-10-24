@@ -89,7 +89,11 @@ public class HubAuthorizationTests
         "CreateWebRtcTransport",
         "ConnectTransport",
         "RestartSfuIce",
-        "Consume"
+        "Consume",
+
+        // A play URL for a live stream. Guests may have one for what the room they are in shows, which is
+        // checked in-method.
+        "GetLivePlayUrl"
     };
 
     [Fact]

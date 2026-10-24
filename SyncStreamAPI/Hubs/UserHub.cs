@@ -7,6 +7,7 @@ using SyncStreamAPI.Enums;
 using SyncStreamAPI.Enums.Games;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.GameModels.Chess;
+using SyncStreamAPI.Models.RTMP;
 using SyncStreamAPI.ServerData;
 using SyncStreamAPI.ServerData.Helper;
 using SyncStreamAPI.Wire;
@@ -185,37 +186,18 @@ public partial class ServerHub
             if (room.ActiveRecording != null) await Clients.Caller.sfuRecordingStarted(room.ActiveRecording);
         }
 
-        if (room.IsRtmpFileShareActive && !string.IsNullOrWhiteSpace(room.RtmpStreamUrl))
+        if (room.IsRtmpFileShareActive && _rtmpFileShareManager.Get(room.uniqueId) is { } rtmpShare)
         {
-            var rtmpSession = _rtmpFileShareManager.Get(room.uniqueId);
-            var rtmpSharer = room.server.members.FirstOrDefault(member => member?.ConnectionId == room.RtmpFileShareInitiator);
-
-            await Clients.Caller.rtmpFileShareStarted(
-                room.RtmpFileShareInitiator ?? string.Empty,
-                rtmpSharer?.username ?? string.Empty,
-                room.uniqueId,
-                room.RtmpStreamUrl,
-                room.RtmpFileShareDurationSec ?? rtmpSession?.DurationSec);
-
-            await Clients.Caller.rtmpFileShareMetadata(
-                room.RtmpFileShareDurationSec ?? rtmpSession?.DurationSec,
-                room.RtmpFileShareUsesVodPlayback || string.IsNullOrWhiteSpace(room.RtmpFileShareUploadId));
-
-            if (room.RtmpFileShareUsesVodPlayback)
-            {
-                await Clients.Caller.rtmpFileShareVodReady(
-                    room.RtmpStreamUrl,
-                    room.RtmpFileShareDurationSec ?? rtmpSession?.DurationSec,
-                    room.RtmpFileSharePlaybackContentType);
-            }
-
-            if (rtmpSession != null)
-            {
-                if (rtmpSession.Paused)
-                    await Clients.Caller.rtmpFileSharePlayPause(false, rtmpSession.CurrentPositionSec);
-                else
-                    await Clients.Caller.rtmpFileSharePosition(rtmpSession.CurrentPositionSec);
-            }
+            var status = rtmpShare.Status();
+            var rtmpSharer = room.server.FindByConnection(room.RtmpFileShareInitiator ?? string.Empty);
+            await Clients.Caller.rtmpFileShareStarted(room.RtmpFileShareInitiator ?? string.Empty,
+                rtmpSharer?.username ?? string.Empty, room.uniqueId, rtmpShare.StreamName, status.DurationSec);
+            await Clients.Caller.rtmpFileShareMetadata(status.DurationSec, status.UploadComplete);
+            if (status.State == RtmpFileShareState.Paused)
+                await Clients.Caller.rtmpFileSharePlayPause(false, status.PositionSec);
+            else
+                await Clients.Caller.rtmpFileShareState(status.PositionSec, status.State == RtmpFileShareState.Buffering);
+            if (status.PublisherLive) await Clients.Caller.rtmpFileShareStreamReady(status.PositionSec);
         }
 
         if (mainServer.playlist.Count > 0) await Clients.Caller.playlistupdate(mainServer.playlist);

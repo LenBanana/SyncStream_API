@@ -88,22 +88,13 @@ public class Room
 
     // ── RTMP file-share state ──────────────────────────────────────────────────
 
-    /// <summary>True while an RTMP file-share is active in this room.</summary>
+    /// <summary>
+    /// True while an RTMP file-share holds the room's stage. Claimed under <see cref="StageGate" />; the
+    /// share itself is RtmpFileShareManager's session for the room.
+    /// </summary>
     [NotMapped] public bool IsRtmpFileShareActive { get; set; }
     /// <summary>ConnectionId of the member who initiated the RTMP file-share (null when none).</summary>
     [NotMapped] public string? RtmpFileShareInitiator { get; set; }
-    /// <summary>uploadId that is still being chunked; null once the upload is finalised.</summary>
-    [NotMapped] public string? RtmpFileShareUploadId { get; set; }
-    /// <summary>Stable asset key for the active RTMP share, used for HLS handoff and cleanup.</summary>
-    [NotMapped] public string? RtmpFileShareAssetKey { get; set; }
-    /// <summary>HLS/FLV stream URL broadcast to late-joining viewers.</summary>
-    [NotMapped] public string? RtmpStreamUrl { get; set; }
-    /// <summary>True once the room has switched from RTMP transport to VOD playback.</summary>
-    [NotMapped] public bool RtmpFileShareUsesVodPlayback { get; set; }
-    /// <summary>Best-known duration for the active RTMP/VOD share.</summary>
-    [NotMapped] public double? RtmpFileShareDurationSec { get; set; }
-    /// <summary>MIME type for the current RTMP/VOD playback URL when known.</summary>
-    [NotMapped] public string? RtmpFileSharePlaybackContentType { get; set; }
 
     /// <summary>
     /// Connections currently live in the member list (Discord-style opt-in). Several can be live at once;

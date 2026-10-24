@@ -35,21 +35,27 @@ public partial interface IServerHub
 
     // ── RTMP file-share events ─────────────────────────────────────────────────
 
-    /// <summary>Sent to all room members when the host starts an RTMP file-share.</summary>
+    /// <summary>
+    /// Sent to all room members when a member starts an RTMP file share. Players ask GetLivePlayUrl for the
+    /// stream's URL once it is live.
+    /// </summary>
     Task rtmpFileShareStarted(string streamerId, string username, string roomId,
-                              string streamUrl, double? durationSec);
+                              string streamName, double? durationSec);
     /// <summary>Sent to all room members when the RTMP file-share ends.</summary>
     Task rtmpFileShareStopped();
-    /// <summary>Sent to viewers when the host pauses or resumes the RTMP stream.</summary>
+    /// <summary>Sent to the room when the sharer pauses or resumes.</summary>
     Task rtmpFileSharePlayPause(bool isPlaying, double positionSec);
-    /// <summary>Sent to viewers when the host seeks; clients should reconnect their player.</summary>
+    /// <summary>Sent to the room when the sharer seeks; players reconnect once the stream is live again.</summary>
     Task rtmpFileShareSeek(double positionSec);
-    /// <summary>Periodic position broadcast so viewers can sync their seek bar.</summary>
-    Task rtmpFileSharePosition(double positionSec);
-    /// <summary>Sent when RTMP file-share metadata changes, e.g. duration probe or seek availability.</summary>
+    /// <summary>
+    /// Periodic state of the share: where it is, and whether it is waiting for more of the upload.
+    /// </summary>
+    Task rtmpFileShareState(double positionSec, bool buffering);
+    /// <summary>Sent when the share's duration is known or it becomes seekable.</summary>
     Task rtmpFileShareMetadata(double? durationSec, bool canSeek);
-    /// <summary>Sent when a restarted RTMP publisher is live again and clients may reconnect.</summary>
+    /// <summary>
+    /// Sent when a run of the share starts publishing. Every run is a new stream with its own timestamps, so
+    /// players connect afresh.
+    /// </summary>
     Task rtmpFileShareStreamReady(double positionSec);
-    /// <summary>Sent when the finished upload is ready for normal VOD playback.</summary>
-    Task rtmpFileShareVodReady(string playbackUrl, double? durationSec, string? contentType);
 }

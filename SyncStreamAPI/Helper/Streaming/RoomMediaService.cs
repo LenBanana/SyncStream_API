@@ -13,8 +13,8 @@ using SyncStreamAPI.ServerData.Helper;
 namespace SyncStreamAPI.Helper.Streaming;
 
 /// <summary>
-///     How a room's media ends: a broadcast, a file share, a member's live stream, a seat in the voice call, and
-///     the SFU resources behind each.
+///     How a room's media ends: a broadcast, a file share (through the SFU or through RTMP), a member's live
+///     stream, a seat in the voice call, and the SFU resources behind each.
 /// </summary>
 /// <remarks>
 ///     Each of these used to be torn down in several places (an explicit stop, the disconnect handler, leaving
@@ -30,14 +30,16 @@ public class RoomMediaService
     private readonly WebRtcSfuManager _sfu;
     private readonly SfuPeerRegistry _peers;
     private readonly VoipRoster _voip;
+    private readonly RtmpFileShareManager _rtmp;
 
     public RoomMediaService(IHubContext<ServerHub, IServerHub> hub, WebRtcSfuManager sfu, SfuPeerRegistry peers,
-        VoipRoster voip)
+        VoipRoster voip, RtmpFileShareManager rtmp)
     {
         _hub = hub;
         _sfu = sfu;
         _peers = peers;
         _voip = voip;
+        _rtmp = rtmp;
     }
 
     public static string SfuGroupName(string sfuRoomId) => $"SFURoom-{sfuRoomId}";
@@ -47,6 +49,9 @@ public class RoomMediaService
     {
         if (room.IsFileSharingActive && room.FileShareInitiator == connectionId)
             await StopFileShareAsync(room);
+
+        if (room.IsRtmpFileShareActive && room.RtmpFileShareInitiator == connectionId)
+            await StopRtmpFileShareAsync(room);
 
         if (room.CurrentStreamer == connectionId && room.IsBroadcastOnStage)
             await EndBroadcastAsync(room);
@@ -144,24 +149,47 @@ public class RoomMediaService
             }, $"stopping the server file stream in room {room.uniqueId}");
         }
 
-        // Clean up the upload staging directory left by an early-stream upload. Tested for shape rather than
-        // just for emptiness, because building the path throws on a malformed id and this runs while a room is
-        // being torn down.
-        if (RoomUploadIds.IsWellFormed(uploadId))
-        {
-            var uploadDir = RoomUploadPaths.DirectoryFor(uploadId!);
-            try
-            {
-                if (Directory.Exists(uploadDir)) Directory.Delete(uploadDir, recursive: true);
-            }
-            catch (IOException ex)
-            {
-                Console.WriteLine($"[FileShare] could not delete upload dir {uploadDir}: {ex.Message}");
-            }
-        }
+        DeleteUpload(uploadId);
 
         await _hub.Clients.Group(room.uniqueId).fileShareStopped();
         await RoomManager.SendPlayerType(room);
+    }
+
+    /// <summary>Ends the room's RTMP file share, deletes its upload and puts everyone's player back.</summary>
+    public async Task StopRtmpFileShareAsync(Room room)
+    {
+        lock (room.StageGate)
+        {
+            if (!room.IsRtmpFileShareActive) return;
+            room.IsRtmpFileShareActive = false;
+            room.RtmpFileShareInitiator = null;
+        }
+
+        var session = _rtmp.Stop(room.uniqueId);
+        DeleteUpload(session?.UploadId);
+
+        await _hub.Clients.Group(room.uniqueId).rtmpFileShareStopped();
+    }
+
+    /// <summary>
+    ///     Deletes the staging directory of an upload a share was streaming from. Tested for shape rather than
+    ///     just for emptiness, because building the path throws on a malformed id and this runs while a room is
+    ///     being torn down.
+    /// </summary>
+    private static void DeleteUpload(string? uploadId)
+    {
+        if (!RoomUploadIds.IsWellFormed(uploadId)) return;
+
+        var uploadDir = RoomUploadPaths.DirectoryFor(uploadId!);
+        try
+        {
+            if (Directory.Exists(uploadDir)) Directory.Delete(uploadDir, recursive: true);
+        }
+        catch (IOException ex)
+        {
+            // Leaving a directory behind does not stop the share from ending; it is reported so it can be removed.
+            Console.WriteLine($"[FileShare] could not delete upload dir {uploadDir}: {ex.Message}");
+        }
     }
 
     /// <summary>Takes the connection out of its voice call and tells the others.</summary>

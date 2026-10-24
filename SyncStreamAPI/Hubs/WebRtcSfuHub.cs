@@ -83,13 +83,8 @@ public partial class ServerHub
     ///     Ends everything this connection was doing with media in this room. Used when it leaves the room and
     ///     when its connection drops.
     /// </summary>
-    private async Task ReleaseMediaAsync(Room room, string connectionId)
-    {
-        if (room.IsRtmpFileShareActive && room.RtmpFileShareInitiator == connectionId)
-            await StopRtmpFileShareInternalAsync(room);
-
-        await _media.ReleaseConnectionInRoomAsync(room, connectionId);
-    }
+    private Task ReleaseMediaAsync(Room room, string connectionId)
+        => _media.ReleaseConnectionInRoomAsync(room, connectionId);
 
     private static string SfuGroupName(string sfuRoomId) => RoomMediaService.SfuGroupName(sfuRoomId);
 

@@ -1,31 +1,59 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using SyncStreamAPI.Helper;
-using SyncStreamAPI.Hubs;
-using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models.RTMP;
-using SyncStreamAPI.ServerData;
 
 namespace SyncStreamAPI.Helper.Streaming;
 
+/// <summary>A share that cannot start, in words the sharer can be shown.</summary>
+public class RtmpFileShareException(string message) : Exception(message);
+
 /// <summary>
-/// Manages the lifecycle of RTMP file-share sessions: spawning/killing ffmpeg processes,
-/// tracking playback position, and broadcasting position ticks to rooms via SignalR.
-/// Registered as a singleton in DI.
+///     Runs the ffmpeg behind each RTMP file share: starting, pausing, seeking, waiting for an upload that
+///     playback caught up with, and retrying a run that failed. Rooms and clients are not its business; the hub
+///     and <see cref="SyncStreamAPI.ServerData.Background.ServerFileShareMonitor" /> read its sessions' status.
 /// </summary>
+/// <remarks>
+///     Every ffmpeg exit used to be treated as a crash and restarted at the position of the last pause or seek,
+///     up to eight times. So a file that played to its end started over from the beginning, and a run that
+///     caught up with a still-uploading file did the same.
+/// </remarks>
 public class RtmpFileShareManager : IDisposable
 {
     private const string SubtitleBurnMethodText = "text";
     private const string SubtitleBurnMethodBitmap = "bitmap";
+    private const string StreamNamePrefix = "share-";
+
+    /// <summary>Failed runs in a row, once the whole file is there, before the share is given up.</summary>
+    private const int MaxConsecutiveFailures = 3;
+
+    /// <summary>A run that streamed this long is not part of a series of failures, whatever ended it.</summary>
+    private const double SuccessfulRunSec = 10;
+
+    /// <summary>
+    ///     How much more of the upload to wait for after playback caught up with it: at least this many bytes, and
+    ///     at least <see cref="RebufferContentSec" /> of playback when the file's bitrate is known. Starting again
+    ///     on every few bytes would restart ffmpeg, and every viewer's player with it, every few seconds.
+    /// </summary>
+    private const long MinimumRebufferBytes = 8L * 1024 * 1024;
+
+    private const double RebufferContentSec = 15;
+    private static readonly TimeSpan UploadStallLimit = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan DurationProbeTimeout = TimeSpan.FromSeconds(15);
 
     private static readonly string[] DefaultAudioLanguagePriority =
     {
@@ -66,9 +94,7 @@ public class RtmpFileShareManager : IDisposable
     };
 
     private readonly string _rtmpBaseUrl;
-    private readonly IHubContext<ServerHub, IServerHub> _hub;
     private readonly ConcurrentDictionary<string, RtmpFileShareSession> _sessions = new();
-    private readonly Timer _positionTimer;
     private readonly int _maxVideoWidth;
     private readonly int _videoBitrateKbps;
     private readonly int _maxVideoBitrateKbps;
@@ -76,9 +102,8 @@ public class RtmpFileShareManager : IDisposable
     private readonly int _audioBitrateKbps;
     private readonly string _videoPreset;
 
-    public RtmpFileShareManager(IConfiguration configuration, IHubContext<ServerHub, IServerHub> hub)
+    public RtmpFileShareManager(IConfiguration configuration)
     {
-        _hub = hub;
         // e.g. "rtmp://rtmp-server:1935/live"
         _rtmpBaseUrl = configuration["RtmpUrl"]?.TrimEnd('/') ?? "rtmp://rtmp-server:1935/live";
         _maxVideoWidth = ParsePositiveInt(configuration["RtmpFileShare:MaxWidth"], 1280);
@@ -89,320 +114,527 @@ public class RtmpFileShareManager : IDisposable
         _videoPreset = string.IsNullOrWhiteSpace(configuration["RtmpFileShare:VideoPreset"])
             ? "superfast"
             : configuration["RtmpFileShare:VideoPreset"]!.Trim();
-        // Broadcast position to all rooms every 5 seconds.
-        _positionTimer = new Timer(OnPositionTick, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
     }
+
+    /// <summary>Whether a stream name on the streaming server belongs to a file share rather than to OBS.</summary>
+    public static bool IsShareStream(string? streamName)
+        => streamName?.StartsWith(StreamNamePrefix, StringComparison.Ordinal) == true;
 
     public RtmpFileShareSession? Get(string roomId)
-        => _sessions.TryGetValue(roomId, out var s) ? s : null;
+        => _sessions.TryGetValue(roomId, out var session) ? session : null;
 
-    public bool TryConsumeExpectedPublishDone(string streamToken, string streamName)
-    {
-        foreach (var session in _sessions.Values)
-        {
-            if (session.StreamToken != streamToken ||
-                !string.Equals(session.OwnerUsername, streamName, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            lock (session)
-            {
-                if (session.PendingPublisherDisconnects < 1)
-                    return false;
-
-                session.PendingPublisherDisconnects--;
-                return true;
-            }
-        }
-
-        return false;
-    }
+    public RtmpFileShareSession? FindByStream(string streamName)
+        => _sessions.Values.FirstOrDefault(session => session.StreamName == streamName);
 
     /// <summary>
-    /// Creates a session, probes file duration, and spawns ffmpeg.
+    ///     Probes the file, picks its tracks and sets up the room's share, ready for <see cref="Begin" />. The two
+    ///     are separate so the room can be told about the share before its first run can announce itself.
     /// </summary>
-    public async Task<RtmpFileShareSession> StartAsync(
-        string roomId, string ownerConnectionId, int userId, string username,
-        string streamToken, string filePath, string? uploadId, RtmpPlaybackPreferences? playbackPreferences)
+    /// <exception cref="RtmpFileShareException">The file cannot be shared, or the room already shares one.</exception>
+    public async Task<RtmpFileShareSession> PrepareAsync(string roomId, string filePath, string uploadId,
+        long totalBytes, bool uploadComplete, RtmpPlaybackPreferences? playbackPreferences)
     {
-        var normalizedPreferences = NormalizePlaybackPreferences(playbackPreferences);
-        var fileInfo = new FileInfo(filePath);
+        var preferences = NormalizePlaybackPreferences(playbackPreferences);
         Console.WriteLine(
-            $"{GetLogPrefix(roomId)} start requested file=\"{fileInfo.Name}\" sizeBytes={fileInfo.Length} " +
-            $"subtitleMode={normalizedPreferences.SubtitleMode} " +
-            $"audioPriority=[{string.Join(",", normalizedPreferences.AudioLanguagePriority)}]");
-        var playbackSelection = await ProbePlaybackSelectionAsync(filePath, normalizedPreferences);
+            $"{GetLogPrefix(roomId)} start requested file=\"{Path.GetFileName(filePath)}\" totalBytes={totalBytes} " +
+            $"uploadComplete={uploadComplete} subtitleMode={preferences.SubtitleMode} " +
+            $"audioPriority=[{string.Join(",", preferences.AudioLanguagePriority)}]");
+
+        var selectionProbe = ProbePlaybackSelectionAsync(filePath, preferences);
+        var durationProbe = ProbeFileDurationAsync(filePath);
+        var selection = await selectionProbe;
+        var duration = await durationProbe;
+        if (selection.ProbeSucceeded && !selection.HasVideo)
+            throw new RtmpFileShareException("This file has no video to stream.");
 
         var session = new RtmpFileShareSession
         {
-            RoomId            = roomId,
-            OwnerConnectionId = ownerConnectionId,
-            OwnerUserId       = userId,
-            OwnerUsername     = username.ToLower(),
-            StreamToken       = streamToken,
-            FilePath          = filePath,
-            UploadId          = uploadId,
-            PositionSec       = 0,
-            Paused            = false,
-            PlaybackPreferences = normalizedPreferences,
+            RoomId = roomId,
+            StreamName = StreamNamePrefix + Guid.NewGuid().ToString("N"),
+            PublishKey = Convert.ToHexString(RandomNumberGenerator.GetBytes(24)),
+            FilePath = filePath,
+            UploadId = uploadId,
+            TotalBytes = totalBytes,
+            UploadComplete = uploadComplete,
+            DurationSec = duration,
+            PlaybackPreferences = preferences,
+            State = RtmpFileShareState.Playing,
         };
+        ApplyPlaybackSelection(session, selection);
 
-        ApplyPlaybackSelection(session, playbackSelection);
+        if (!_sessions.TryAdd(roomId, session))
+            throw new RtmpFileShareException("A file is already being shared to this room.");
 
-        _sessions[roomId] = session;
-
-        // Probe duration in the background — does not block stream start.
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                session.DurationSec = await ProbeFileDurationAsync(filePath);
-                var room = MainManager.GetRoom(roomId);
-                if (room != null)
-                    room.RtmpFileShareDurationSec = session.DurationSec;
-                Console.WriteLine($"{GetLogPrefix(roomId)} durationProbe durationSec={(session.DurationSec?.ToString("F3", System.Globalization.CultureInfo.InvariantCulture) ?? "unknown")}");
-                await _hub.Clients.Group(roomId).rtmpFileShareMetadata(session.DurationSec, string.IsNullOrWhiteSpace(session.UploadId));
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"{GetLogPrefix(roomId)} durationProbe failed: {ex.Message}");
-            }
-        });
-
-        SpawnFfmpeg(session, 0);
         return session;
     }
 
-    /// <summary>Toggles play/pause for the session.</summary>
-    public Task PausePlayAsync(string roomId, bool isPlaying)
+    /// <summary>Starts streaming a prepared share from the beginning.</summary>
+    public void Begin(RtmpFileShareSession session) => Launch(session);
+
+    /// <summary>Pauses a share that is playing or waiting for its upload. False when there was nothing to pause.</summary>
+    public bool Pause(string roomId)
     {
-        if (!_sessions.TryGetValue(roomId, out var session)) return Task.CompletedTask;
+        var session = Get(roomId);
+        if (session == null) return false;
 
-        Console.WriteLine($"{GetLogPrefix(roomId)} {(isPlaying ? "resume" : "pause")} requested currentPositionSec={session.CurrentPositionSec:F3}");
-
-        if (isPlaying && session.Paused)
+        lock (session.Gate)
         {
-            session.Paused = false;
-            session.RetryCount = 0; // explicit resume = fresh attempt
-            SpawnFfmpeg(session, session.PositionSec);
-        }
-        else if (!isPlaying && !session.Paused)
-        {
-            RegisterExpectedPublisherDisconnect(session);
-            KillFfmpeg(session);
-            session.Paused = true;
-        }
-        return Task.CompletedTask;
-    }
-
-    /// <summary>Kills the current ffmpeg process and restarts from the new position.</summary>
-    public Task SeekAsync(string roomId, double positionSec)
-    {
-        if (!_sessions.TryGetValue(roomId, out var session)) return Task.CompletedTask;
-        Console.WriteLine($"{GetLogPrefix(roomId)} seek requested targetPositionSec={positionSec:F3} currentPositionSec={session.CurrentPositionSec:F3}");
-        RegisterExpectedPublisherDisconnect(session);
-        KillFfmpeg(session);
-        session.PositionSec = positionSec;
-        session.Paused = false;
-        session.RetryCount = 0; // new position = fresh attempt
-        SpawnFfmpeg(session, positionSec);
-        return Task.CompletedTask;
-    }
-
-    /// <summary>Stops the session, kills ffmpeg, cleans up the upload directory.</summary>
-    /// <returns>True if a session was actually stopped.</returns>
-    public bool Stop(string roomId)
-    {
-        if (!_sessions.TryRemove(roomId, out var session)) return false;
-        Console.WriteLine($"{GetLogPrefix(roomId)} stop requested finalPositionSec={session.CurrentPositionSec:F3} retries={session.RetryCount}");
-        KillFfmpeg(session);
-        if (!session.PreserveUploadArtifacts)
-            CleanUpUploadDir(session);
-        return true;
-    }
-
-    /// <summary>Clears the upload-guard so seeking becomes available.</summary>
-    public void MarkUploadComplete(string roomId, string uploadId)
-    {
-        if (_sessions.TryGetValue(roomId, out var session) && session.UploadId == uploadId)
-        {
-            session.UploadId = null;
-            var room = MainManager.GetRoom(roomId);
-            if (room != null)
-                room.RtmpFileShareDurationSec = session.DurationSec;
-            Console.WriteLine($"{GetLogPrefix(roomId)} upload completed uploadId={uploadId}");
-            _ = _hub.Clients.Group(roomId).rtmpFileShareMetadata(session.DurationSec, canSeek: true);
-        }
-    }
-
-    public bool TransitionToVodPlayback(string roomId)
-    {
-        if (!_sessions.TryGetValue(roomId, out var session))
-            return false;
-
-        session.PreserveUploadArtifacts = true;
-        RegisterExpectedPublisherDisconnect(session);
-        KillFfmpeg(session);
-        session.Paused = true;
-        return true;
-    }
-
-    public bool TryMarkPublisherLive(string streamToken, string streamName, out string roomId, out double positionSec)
-    {
-        foreach (var session in _sessions.Values)
-        {
-            if (session.StreamToken != streamToken ||
-                !string.Equals(session.OwnerUsername, streamName, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            session.IsPublisherLive = true;
-            roomId = session.RoomId;
-            positionSec = session.CurrentPositionSec;
+            if (session.State is not (RtmpFileShareState.Playing or RtmpFileShareState.Buffering)) return false;
+            CancelWaiting(session);
+            KillRun(session);
+            session.State = RtmpFileShareState.Paused;
+            Console.WriteLine($"{GetLogPrefix(roomId)} paused positionSec={session.PositionSec:F3}");
             return true;
         }
-
-        roomId = string.Empty;
-        positionSec = 0;
-        return false;
     }
 
-    // ── ffmpeg process management ─────────────────────────────────────────────
-
-    private void SpawnFfmpeg(RtmpFileShareSession session, double fromPositionSec)
+    /// <summary>Resumes a paused share where it stopped. False when it was not paused.</summary>
+    public bool Resume(string roomId)
     {
-        RefreshPlaybackSelectionIfNeeded(session);
+        var session = Get(roomId);
+        if (session == null) return false;
 
-        var seekArg = fromPositionSec > 0.5
-            ? $"-ss {fromPositionSec.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)} "
-            : string.Empty;
-        var videoMapAndFilterArg = BuildVideoMapAndFilterArg(session);
-
-        var rtmpUrl = $"{_rtmpBaseUrl}/{session.OwnerUsername}?token={Uri.EscapeDataString(session.StreamToken)}";
-
-        var args = string.Concat(
-            "-nostats -progress pipe:1 -stats_period 1 -threads 0 ",
-            $"-re {seekArg}",
-            $"-i \"{session.FilePath}\" ",
-            videoMapAndFilterArg,
-            $"-map {session.AudioMapSpecifier} ",
-            $"-c:v libx264 -preset {_videoPreset} -tune zerolatency ",
-            "-profile:v main -level:v 4.1 -pix_fmt yuv420p ",
-            $"-b:v {_videoBitrateKbps}k -maxrate {_maxVideoBitrateKbps}k -bufsize {_videoBufferSizeKbps}k ",
-            "-g 48 -keyint_min 48 ",
-            "-x264-params scenecut=0:repeat-headers=1 ",
-            $"-c:a aac -b:a {_audioBitrateKbps}k -ar 48000 -ac 2 ",
-            $"-f flv \"{rtmpUrl}\""
-        );
-
-        Console.WriteLine(
-            $"{GetLogPrefix(session.RoomId)} spawn ffmpeg seek={fromPositionSec:F3}s widthCap={_maxVideoWidth} preset={_videoPreset} " +
-            $"video={_videoBitrateKbps}/{_maxVideoBitrateKbps}k audio={_audioBitrateKbps}k " +
-            $"audioTrack=\"{session.AudioSelectionLabel}\" subtitleTrack=\"{session.SubtitleSelectionLabel ?? "none"}\" " +
-            $"subtitleBurn={session.SubtitleBurnMethod ?? "none"}");
-
-        session.IsPublisherLive = false;
-        session.LastEncoderOutTimeSec = 0;
-        session.LastEncoderProgressAtUtc = null;
-
-        var progressFields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-        var process = new Process
+        lock (session.Gate)
         {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName               = General.GetFFmpegPath(),
-                Arguments              = args,
-                UseShellExecute        = false,
-                CreateNoWindow         = true,
-                RedirectStandardInput  = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError  = true,
-            },
-            EnableRaisingEvents = true
-        };
+            if (session.State != RtmpFileShareState.Paused) return false;
+            session.State = RtmpFileShareState.Playing;
+            session.ConsecutiveFailures = 0;
+            Console.WriteLine($"{GetLogPrefix(roomId)} resumed positionSec={session.PositionSec:F3}");
+        }
 
-        process.OutputDataReceived += (_, e) =>
-        {
-            if (string.IsNullOrWhiteSpace(e.Data))
-                return;
-
-            var separatorIndex = e.Data.IndexOf('=');
-            if (separatorIndex <= 0 || separatorIndex == e.Data.Length - 1)
-            {
-                Console.WriteLine($"{GetLogPrefix(session.RoomId)} ffmpeg progress(raw) {e.Data}");
-                return;
-            }
-
-            var key = e.Data[..separatorIndex];
-            var value = e.Data[(separatorIndex + 1)..];
-            progressFields[key] = value;
-
-            if (string.Equals(key, "progress", StringComparison.OrdinalIgnoreCase))
-            {
-                LogFfmpegProgress(session, progressFields);
-                progressFields.Clear();
-            }
-        };
-
-        process.ErrorDataReceived += (_, e) =>
-        {
-            if (!string.IsNullOrEmpty(e.Data))
-                Console.WriteLine($"{GetLogPrefix(session.RoomId)} ffmpeg stderr {e.Data}");
-        };
-
-        process.Exited += (_, _) =>
-        {
-            // KillFfmpeg sets session.Process = null before killing.
-            // If this process is no longer session.Process, it was an intentional kill — ignore.
-            if (!ReferenceEquals(session.Process, process)) return;
-
-            var elapsed = (DateTime.UtcNow - session.StartedAtUtc).TotalSeconds;
-            session.Process = null;
-
-            if (!_sessions.ContainsKey(session.RoomId) || session.Paused) return;
-
-            const int maxRetries = 8;
-            if (session.RetryCount < maxRetries)
-            {
-                session.RetryCount++;
-                // Back-off: 3s, 6s, 9s, 12s, … so later retries give the background
-                // upload more time to flush the moov atom / file tail to disk.
-                var delaySec = session.RetryCount * 3;
-                Console.WriteLine($"{GetLogPrefix(session.RoomId)} ffmpeg exited exitCode={process.ExitCode} elapsedSec={elapsed:F1} " +
-                                  $"(retry {session.RetryCount}/{maxRetries}, next in {delaySec}s)");
-                Task.Run(async () =>
-                {
-                    await Task.Delay(delaySec * 1000);
-                    if (_sessions.ContainsKey(session.RoomId) && !session.Paused && session.Process == null)
-                        SpawnFfmpeg(session, session.PositionSec);
-                });
-            }
-            else
-            {
-                Console.WriteLine($"{GetLogPrefix(session.RoomId)} ffmpeg exited exitCode={process.ExitCode} elapsedSec={elapsed:F1} " +
-                                  $"and exhausted {maxRetries} retries; giving up");
-            }
-        };
-
-        process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-
-        session.Process      = process;
-        session.StartedAtUtc = DateTime.UtcNow;
+        Launch(session);
+        return true;
     }
 
-    private static void RegisterExpectedPublisherDisconnect(RtmpFileShareSession session)
+    /// <summary>
+    ///     Moves the share to a position. A paused share stays paused there, as a player's would. False when the
+    ///     share is over or unknown.
+    /// </summary>
+    public bool Seek(string roomId, double positionSec)
     {
-        lock (session)
+        var session = Get(roomId);
+        if (session == null) return false;
+
+        bool relaunch;
+        lock (session.Gate)
         {
-            session.PendingPublisherDisconnects++;
-            Console.WriteLine($"{GetLogPrefix(session.RoomId)} expected publisher disconnect count={session.PendingPublisherDisconnects}");
+            if (session.State is RtmpFileShareState.Ended or RtmpFileShareState.Failed) return false;
+            CancelWaiting(session);
+            KillRun(session);
+            session.PositionSec = Math.Clamp(positionSec, 0, session.DurationSec ?? double.MaxValue);
+            session.ConsecutiveFailures = 0;
+            relaunch = session.State != RtmpFileShareState.Paused;
+            if (relaunch) session.State = RtmpFileShareState.Playing;
+            Console.WriteLine($"{GetLogPrefix(roomId)} seek positionSec={session.PositionSec:F3}");
+        }
+
+        if (relaunch) Launch(session);
+        return true;
+    }
+
+    /// <summary>Records that the whole file is there; a share waiting for it plays on straight away.</summary>
+    public void MarkUploadComplete(string roomId)
+    {
+        var session = Get(roomId);
+        if (session == null) return;
+
+        bool resume;
+        lock (session.Gate)
+        {
+            if (session.UploadComplete) return;
+            session.UploadComplete = true;
+            resume = session.State == RtmpFileShareState.Buffering;
+            if (resume)
+            {
+                CancelWaiting(session);
+                session.State = RtmpFileShareState.Playing;
+            }
+            Console.WriteLine($"{GetLogPrefix(roomId)} upload complete");
+        }
+
+        if (resume) Launch(session);
+    }
+
+    /// <summary>Ends the share and its ffmpeg. Returns the session that was stopped, or null when there was none.</summary>
+    public RtmpFileShareSession? Stop(string roomId)
+    {
+        if (!_sessions.TryRemove(roomId, out var session)) return null;
+
+        lock (session.Gate)
+        {
+            CancelWaiting(session);
+            KillRun(session);
+            Console.WriteLine($"{GetLogPrefix(roomId)} stopped state={session.State} positionSec={session.PositionSec:F3}");
+        }
+
+        return session;
+    }
+
+    /// <summary>
+    ///     Checks a publish the streaming server asks about. Returns the share whose run is publishing, or null
+    ///     when the stream or its key is not one of ours.
+    /// </summary>
+    public RtmpFileShareSession? AcceptPublisher(string streamName, string? key)
+    {
+        var session = FindPublisher(streamName, key);
+        if (session == null) return null;
+
+        lock (session.Gate)
+        {
+            // A run that was stopped while the streaming server was still asking about it is not live.
+            session.IsPublisherLive = session.Process != null;
+            return session.IsPublisherLive ? session : null;
         }
     }
+
+    /// <summary>The streaming server reports that a share's run stopped publishing.</summary>
+    public void PublisherGone(string streamName, string? key)
+    {
+        var session = FindPublisher(streamName, key);
+        if (session == null) return;
+        lock (session.Gate) session.IsPublisherLive = false;
+    }
+
+    private RtmpFileShareSession? FindPublisher(string streamName, string? key)
+    {
+        var session = FindByStream(streamName);
+        return session != null && key != null &&
+               CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(key), Encoding.UTF8.GetBytes(session.PublishKey))
+            ? session
+            : null;
+    }
+
+    // ── ffmpeg runs ───────────────────────────────────────────────────────────
+
+    private bool IsCurrent(RtmpFileShareSession session)
+        => _sessions.TryGetValue(session.RoomId, out var current) && ReferenceEquals(current, session);
+
+    /// <summary>Starts a run at the session's position, unless the session has moved on in the meantime.</summary>
+    private void Launch(RtmpFileShareSession session)
+    {
+        if (!session.PlaybackSelectionResolved) RefreshPlaybackSelectionIfNeeded(session);
+
+        string rtmpBaseUrl;
+        try
+        {
+            rtmpBaseUrl = ResolveRtmpBaseUrl();
+        }
+        catch (SocketException ex)
+        {
+            lock (session.Gate)
+            {
+                session.State = RtmpFileShareState.Failed;
+                session.Error = "The streaming server could not be found.";
+            }
+            Console.WriteLine($"{GetLogPrefix(session.RoomId)} could not resolve {_rtmpBaseUrl}: {ex.Message}");
+            return;
+        }
+
+        lock (session.Gate)
+        {
+            if (session.State != RtmpFileShareState.Playing || session.Process != null || !IsCurrent(session)) return;
+
+            var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = General.GetFFmpegPath(),
+                    Arguments = BuildArguments(session, rtmpBaseUrl),
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                },
+                EnableRaisingEvents = true
+            };
+
+            var progressFields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            process.OutputDataReceived += (_, e) => OnProgressLine(session, process, progressFields, e.Data);
+            process.ErrorDataReceived += (_, e) => OnErrorLine(session, process, e.Data);
+            process.Exited += (_, _) => OnExited(session, process);
+
+            try
+            {
+                process.Start();
+            }
+            catch (Win32Exception ex)
+            {
+                process.Dispose();
+                session.State = RtmpFileShareState.Failed;
+                session.Error = "The server could not start ffmpeg.";
+                Console.WriteLine($"{GetLogPrefix(session.RoomId)} ffmpeg could not be started: {ex}");
+                return;
+            }
+
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            session.Process = process;
+            session.RunProgressSec = 0;
+            session.RunProgressAtUtc = null;
+
+            Console.WriteLine(
+                $"{GetLogPrefix(session.RoomId)} ffmpeg started positionSec={session.PositionSec:F3} widthCap={_maxVideoWidth} " +
+                $"preset={_videoPreset} video={_videoBitrateKbps}/{_maxVideoBitrateKbps}k audio={_audioBitrateKbps}k " +
+                $"audioTrack=\"{session.AudioSelectionLabel}\" subtitleTrack=\"{session.SubtitleSelectionLabel ?? "none"}\" " +
+                $"subtitleBurn={session.SubtitleBurnMethod ?? "none"}");
+        }
+    }
+
+    /// <summary>
+    ///     The streaming server's RTMP URL with its host resolved to an address. The ffmpeg in the API image is a
+    ///     static build, and statically linked glibc cannot resolve host names: given one, ffmpeg crashes before
+    ///     it connects. Production names the server by IP for that reason; resolving it here lets a host name,
+    ///     such as a compose service, work too.
+    /// </summary>
+    /// <exception cref="SocketException">The host name does not resolve.</exception>
+    private string ResolveRtmpBaseUrl()
+    {
+        var url = new UriBuilder(_rtmpBaseUrl);
+        if (Uri.CheckHostName(url.Host) != UriHostNameType.Dns) return _rtmpBaseUrl;
+
+        var addresses = Dns.GetHostAddresses(url.Host);
+        var address = addresses.FirstOrDefault(candidate => candidate.AddressFamily == AddressFamily.InterNetwork)
+                      ?? addresses.First();
+        url.Host = address.ToString();
+        return url.Uri.ToString().TrimEnd('/');
+    }
+
+    private string BuildArguments(RtmpFileShareSession session, string rtmpBaseUrl)
+    {
+        var seekArg = session.PositionSec > 0.5
+            ? $"-ss {session.PositionSec.ToString("F3", CultureInfo.InvariantCulture)} "
+            : string.Empty;
+        var rtmpUrl = $"{rtmpBaseUrl}/{session.StreamName}?token={session.PublishKey}";
+
+        // No -tune zerolatency: a shared file gains nothing from shaving a second of latency, and that tuning
+        // gives up B-frames, lookahead and frame threading, which cost quality per bit and encoding speed.
+        // Keyframes every two seconds of content, whatever the frame rate, bound how long a joining viewer waits.
+        return string.Concat(
+            "-hide_banner -loglevel warning -nostdin -nostats -progress pipe:1 -stats_period 1 ",
+            $"-re {seekArg}",
+            $"-i \"{session.FilePath}\" ",
+            BuildVideoMapAndFilterArg(session),
+            $"-map {session.AudioMapSpecifier} ",
+            $"-c:v libx264 -preset {_videoPreset} -profile:v high -pix_fmt yuv420p ",
+            $"-b:v {_videoBitrateKbps}k -maxrate {_maxVideoBitrateKbps}k -bufsize {_videoBufferSizeKbps}k ",
+            "-force_key_frames \"expr:gte(t,n_forced*2)\" -x264-params repeat-headers=1 ",
+            $"-c:a aac -b:a {_audioBitrateKbps}k -ar 48000 -ac 2 ",
+            "-max_muxing_queue_size 1024 ",
+            $"-f flv \"{rtmpUrl}\"");
+    }
+
+    private static void OnProgressLine(RtmpFileShareSession session, Process process,
+        Dictionary<string, string> fields, string? line)
+    {
+        if (string.IsNullOrWhiteSpace(line)) return;
+        var separator = line.IndexOf('=');
+        if (separator <= 0) return;
+
+        fields[line[..separator]] = line[(separator + 1)..];
+        if (!line.StartsWith("progress=", StringComparison.OrdinalIgnoreCase)) return;
+
+        var outTimeSec = ParseOutTimeSeconds(fields);
+        fields.Clear();
+        if (outTimeSec is not >= 0) return;
+
+        lock (session.Gate)
+        {
+            if (!ReferenceEquals(session.Process, process)) return;
+            session.RunProgressSec = Math.Max(session.RunProgressSec, outTimeSec.Value);
+            session.RunProgressAtUtc = DateTime.UtcNow;
+        }
+    }
+
+    private static void OnErrorLine(RtmpFileShareSession session, Process process, string? line)
+    {
+        if (string.IsNullOrWhiteSpace(line)) return;
+        Console.WriteLine($"{GetLogPrefix(session.RoomId)} ffmpeg: {line}");
+        lock (session.Gate)
+        {
+            if (ReferenceEquals(session.Process, process)) session.LastFfmpegError = line.Trim();
+        }
+    }
+
+    private void OnExited(RtmpFileShareSession session, Process process)
+    {
+        var exitCode = process.ExitCode;
+        lock (session.Gate)
+        {
+            // A run that was stopped on purpose is no longer the session's run by the time it exits.
+            if (ReferenceEquals(session.Process, process))
+            {
+                // Where ffmpeg itself got to, rather than the estimate between its reports, which can run up to a
+                // second and a half ahead and would skip that much when the next run starts.
+                var ranForSec = session.RunProgressSec;
+                var reached = session.PositionSec + ranForSec;
+                session.PositionSec = session.DurationSec is > 0 ? Math.Min(reached, session.DurationSec.Value) : reached;
+                ClearRun(session);
+                Console.WriteLine($"{GetLogPrefix(session.RoomId)} ffmpeg exited code={exitCode} ranForSec={ranForSec:F1} " +
+                                  $"positionSec={session.PositionSec:F3} uploadComplete={session.UploadComplete}");
+                if (session.State == RtmpFileShareState.Playing) AfterRunEnded(session, exitCode, ranForSec);
+            }
+        }
+
+        process.Dispose();
+    }
+
+    /// <summary>Decides what a run that ended by itself means. Called under the session's lock.</summary>
+    private void AfterRunEnded(RtmpFileShareSession session, int exitCode, double ranForSec)
+    {
+        // ffmpeg reads a growing file to the end of what has arrived and stops there, so with the upload still
+        // going, any end is most likely playback catching up with it.
+        if (!session.UploadComplete)
+        {
+            BeginBuffering(session);
+            return;
+        }
+
+        if (exitCode == 0)
+        {
+            session.State = RtmpFileShareState.Ended;
+            Console.WriteLine($"{GetLogPrefix(session.RoomId)} played to the end");
+            return;
+        }
+
+        session.ConsecutiveFailures = ranForSec >= SuccessfulRunSec ? 1 : session.ConsecutiveFailures + 1;
+        if (session.ConsecutiveFailures > MaxConsecutiveFailures)
+        {
+            session.State = RtmpFileShareState.Failed;
+            session.Error = session.LastFfmpegError ?? $"ffmpeg stopped with exit code {exitCode}.";
+            Console.WriteLine($"{GetLogPrefix(session.RoomId)} giving up after {MaxConsecutiveFailures} failed runs");
+            return;
+        }
+
+        var delay = TimeSpan.FromSeconds(2 * session.ConsecutiveFailures);
+        _ = RelaunchAfterAsync(session, delay, StartWaiting(session).Token);
+    }
+
+    /// <summary>Waits for enough of the upload to be worth starting again. Called under the session's lock.</summary>
+    private void BeginBuffering(RtmpFileShareSession session)
+    {
+        session.State = RtmpFileShareState.Buffering;
+        var bytesPerSec = session.DurationSec is > 0 ? session.TotalBytes / session.DurationSec.Value : 0;
+        var target = FileLength(session.FilePath) + (long)Math.Max(MinimumRebufferBytes, bytesPerSec * RebufferContentSec);
+        Console.WriteLine($"{GetLogPrefix(session.RoomId)} buffering until the upload reaches {target} bytes");
+        _ = WaitForUploadAsync(session, target, StartWaiting(session).Token);
+    }
+
+    private async Task WaitForUploadAsync(RtmpFileShareSession session, long targetLength, CancellationToken token)
+    {
+        var lastLength = -1L;
+        var lastGrowthUtc = DateTime.UtcNow;
+        try
+        {
+            while (true)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1), token);
+                var length = FileLength(session.FilePath);
+
+                lock (session.Gate)
+                {
+                    if (token.IsCancellationRequested || session.State != RtmpFileShareState.Buffering) return;
+
+                    if (!session.UploadComplete && length < targetLength)
+                    {
+                        if (length > lastLength)
+                        {
+                            lastLength = length;
+                            lastGrowthUtc = DateTime.UtcNow;
+                        }
+                        else if (DateTime.UtcNow - lastGrowthUtc > UploadStallLimit)
+                        {
+                            session.Waiting = null;
+                            session.State = RtmpFileShareState.Failed;
+                            session.Error = "The upload stopped arriving, so the file could not be streamed any further.";
+                            Console.WriteLine($"{GetLogPrefix(session.RoomId)} upload stalled at {length} bytes");
+                        }
+
+                        continue;
+                    }
+
+                    session.Waiting = null;
+                    session.State = RtmpFileShareState.Playing;
+                }
+
+                Launch(session);
+                return;
+            }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // Paused, seeked or stopped while waiting; whatever did that has taken over.
+        }
+    }
+
+    private async Task RelaunchAfterAsync(RtmpFileShareSession session, TimeSpan delay, CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(delay, token);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // Paused, seeked or stopped before the retry; whatever did that has taken over.
+            return;
+        }
+
+        lock (session.Gate)
+        {
+            if (token.IsCancellationRequested) return;
+            session.Waiting = null;
+        }
+
+        Launch(session);
+    }
+
+    /// <summary>Replaces whatever the session was waiting on. Called under the session's lock.</summary>
+    private static CancellationTokenSource StartWaiting(RtmpFileShareSession session)
+    {
+        CancelWaiting(session);
+        session.Waiting = new CancellationTokenSource();
+        return session.Waiting;
+    }
+
+    private static void CancelWaiting(RtmpFileShareSession session)
+    {
+        session.Waiting?.Cancel();
+        session.Waiting = null;
+    }
+
+    /// <summary>Stops the current run, keeping its position. Called under the session's lock.</summary>
+    private static void KillRun(RtmpFileShareSession session)
+    {
+        var process = session.Process;
+        if (process == null) return;
+
+        session.PositionSec = session.CurrentPositionSec;
+        ClearRun(session);
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch (InvalidOperationException) when (process.HasExited)
+        {
+            // It ended by itself a moment ago. Its exit handler finds it is no longer the session's run.
+        }
+    }
+
+    private static void ClearRun(RtmpFileShareSession session)
+    {
+        session.Process = null;
+        session.IsPublisherLive = false;
+        session.RunProgressSec = 0;
+        session.RunProgressAtUtc = null;
+    }
+
+    private static long FileLength(string path)
+    {
+        var file = new FileInfo(path);
+        return file.Exists ? file.Length : 0;
+    }
+
+    private static int ParsePositiveInt(string? rawValue, int fallback)
+        => int.TryParse(rawValue, out var value) && value > 0 ? value : fallback;
 
     private string BuildVideoMapAndFilterArg(RtmpFileShareSession session)
     {
@@ -425,7 +657,16 @@ public class RtmpFileShareManager : IDisposable
             string.Equals(session.SubtitleBurnMethod, SubtitleBurnMethodText, StringComparison.OrdinalIgnoreCase) &&
             !string.IsNullOrWhiteSpace(session.SubtitleFilter))
         {
+            // Seeking the input starts the frames' timestamps at zero, while the subtitles filter reads its
+            // events from the file and places them by those timestamps. Without moving the frames back to where
+            // they are in the file for the filter, a resumed or seeked share showed the subtitles of its first
+            // minutes.
+            var startedAt = session.PositionSec > 0.5
+                ? session.PositionSec.ToString("F3", CultureInfo.InvariantCulture)
+                : null;
+            if (startedAt != null) filters.Add($"setpts=PTS+{startedAt}/TB");
             filters.Add(session.SubtitleFilter);
+            if (startedAt != null) filters.Add("setpts=PTS-STARTPTS");
         }
 
         if (!string.IsNullOrWhiteSpace(scaleFilter))
@@ -436,55 +677,24 @@ public class RtmpFileShareManager : IDisposable
             : $"-map 0:v:0 -vf \"{string.Join(",", filters)}\" ";
     }
 
-    private static int ParsePositiveInt(string? rawValue, int fallback)
-        => int.TryParse(rawValue, out var value) && value > 0 ? value : fallback;
-
-    private static void KillFfmpeg(RtmpFileShareSession session)
-    {
-        var p = session.Process;
-        if (p == null) return;
-        // Save position before killing so seek/pause resume from the right offset.
-        session.PositionSec = session.CurrentPositionSec;
-        session.Process = null;
-        session.IsPublisherLive = false;
-        session.LastEncoderOutTimeSec = 0;
-        session.LastEncoderProgressAtUtc = null;
-        Console.WriteLine($"{GetLogPrefix(session.RoomId)} kill ffmpeg savedPositionSec={session.PositionSec:F3}");
-        try
-        {
-            if (!p.HasExited)
-            {
-                p.Kill(entireProcessTree: true);
-                p.WaitForExit(2000);
-            }
-        }
-        catch { /* best-effort */ }
-        finally { p.Dispose(); }
-    }
-
     private void RefreshPlaybackSelectionIfNeeded(RtmpFileShareSession session)
     {
         if (session.PlaybackSelectionResolved)
             return;
 
-        try
-        {
-            var refreshedSelection = ProbePlaybackSelectionAsync(session.FilePath, session.PlaybackPreferences)
-                .GetAwaiter()
-                .GetResult();
+        // Probing failed when the share started, most likely on too little of the file. A failed probe comes
+        // back as the explicit fallback, which the session already has.
+        var refreshedSelection = ProbePlaybackSelectionAsync(session.FilePath, session.PlaybackPreferences)
+            .GetAwaiter()
+            .GetResult();
+        if (!refreshedSelection.ProbeSucceeded)
+            return;
 
-            if (!refreshedSelection.ProbeSucceeded)
-                return;
-
+        lock (session.Gate)
             ApplyPlaybackSelection(session, refreshedSelection);
-            Console.WriteLine(
-                $"{GetLogPrefix(session.RoomId)} playback selection refreshed " +
-                $"audioTrack=\"{session.AudioSelectionLabel}\" subtitleTrack=\"{session.SubtitleSelectionLabel ?? "none"}\"");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"{GetLogPrefix(session.RoomId)} playback selection refresh failed: {ex.Message}");
-        }
+        Console.WriteLine(
+            $"{GetLogPrefix(session.RoomId)} playback selection refreshed " +
+            $"audioTrack=\"{session.AudioSelectionLabel}\" subtitleTrack=\"{session.SubtitleSelectionLabel ?? "none"}\"");
     }
 
     private static void ApplyPlaybackSelection(RtmpFileShareSession session, RtmpPlaybackSelection playbackSelection)
@@ -496,32 +706,6 @@ public class RtmpFileShareManager : IDisposable
         session.SubtitleBurnMethod = playbackSelection.SubtitleBurnMethod;
         session.SubtitleSelectionLabel = playbackSelection.SubtitleSelectionLabel;
         session.PlaybackSelectionResolved = playbackSelection.ProbeSucceeded;
-    }
-
-    private static void CleanUpUploadDir(RtmpFileShareSession session)
-    {
-        var dir = Path.GetDirectoryName(session.FilePath);
-        if (string.IsNullOrWhiteSpace(dir)) return;
-        // Retry a few times — the background upload may still hold the file open
-        // for a brief moment after Stop is called.
-        for (var attempt = 0; attempt < 4; attempt++)
-        {
-            try
-            {
-                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
-                return;
-            }
-            catch (IOException)
-            {
-                if (attempt < 3) Thread.Sleep(500 * (attempt + 1));
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[RtmpShare] Failed to delete upload dir: {ex.Message}");
-                return;
-            }
-        }
-        Console.WriteLine($"[RtmpShare] Upload dir still locked after retries, skipping cleanup: {dir}");
     }
 
     // ── ffprobe duration probe ────────────────────────────────────────────────
@@ -614,6 +798,7 @@ public class RtmpFileShareManager : IDisposable
             return new RtmpPlaybackSelection
             {
                 ProbeSucceeded = true,
+                HasVideo = parsedStreams.Any(s => string.Equals(s.CodecType, "video", StringComparison.OrdinalIgnoreCase)),
                 AudioMapSpecifier = BuildAudioMapSpecifier(audio),
                 AudioSelectionLabel = audio != null ? DescribeStream(audio) : "first audio fallback",
                 SubtitleFilter = string.Equals(subtitleBurnMethod, SubtitleBurnMethodText, StringComparison.OrdinalIgnoreCase)
@@ -679,42 +864,42 @@ public class RtmpFileShareManager : IDisposable
 
     private static async Task<double?> ProbeFileDurationAsync(string filePath)
     {
-        var tcs = new TaskCompletionSource<double?>();
-        using var p = new Process
+        using var process = new Process
         {
             StartInfo = new ProcessStartInfo
             {
-                FileName               = General.GetFFprobePath(),
-                Arguments              = $"-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{filePath}\"",
-                UseShellExecute        = false,
-                CreateNoWindow         = true,
+                FileName = General.GetFFprobePath(),
+                Arguments = $"-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{filePath}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
                 RedirectStandardOutput = true,
-                RedirectStandardError  = true,
+                RedirectStandardError = true,
             }
         };
 
-        p.OutputDataReceived += (_, e) =>
+        process.Start();
+        var output = process.StandardOutput.ReadToEndAsync();
+        var errors = process.StandardError.ReadToEndAsync();
+
+        using var timeout = new CancellationTokenSource(DurationProbeTimeout);
+        try
         {
-            if (!string.IsNullOrWhiteSpace(e.Data) &&
-                double.TryParse(e.Data.Trim(),
-                    System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    out var d))
-            {
-                tcs.TrySetResult(d);
-            }
-        };
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            Console.WriteLine($"[RtmpShare/Probe] duration probe timed out for \"{Path.GetFileName(filePath)}\"");
+            return null;
+        }
 
-        p.Start();
-        p.BeginOutputReadLine();
-        p.BeginErrorReadLine();
+        var text = (await output).Trim();
+        var stderr = await errors;
+        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
+            return seconds;
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        cts.Token.Register(() => tcs.TrySetResult(null));
-
-        await p.WaitForExitAsync(cts.Token).ConfigureAwait(false);
-        tcs.TrySetResult(null);
-        return await tcs.Task;
+        Console.WriteLine($"[RtmpShare/Probe] no duration for \"{Path.GetFileName(filePath)}\": {TrimForLog(stderr, 300)}");
+        return null;
     }
 
     private static RtmpProbeStream? SelectAudioTrack(
@@ -1039,50 +1224,11 @@ public class RtmpFileShareManager : IDisposable
             : trimmed[..maxLength] + "...";
     }
 
-    private static void LogFfmpegProgress(RtmpFileShareSession session, IReadOnlyDictionary<string, string> progressFields)
-    {
-        var progressState = GetProgressValue(progressFields, "progress") ?? "unknown";
-        var frame = ParseInt(progressFields, "frame");
-        var fps = ParseDouble(progressFields, "fps");
-        var speed = GetProgressValue(progressFields, "speed");
-        var bitrate = GetProgressValue(progressFields, "bitrate");
-        var dupFrames = ParseInt(progressFields, "dup_frames");
-        var dropFrames = ParseInt(progressFields, "drop_frames");
-        var outTimeSec = ParseOutTimeSeconds(progressFields);
-        if (outTimeSec.HasValue)
-        {
-            session.LastEncoderOutTimeSec = Math.Max(session.LastEncoderOutTimeSec, outTimeSec.Value);
-            session.LastEncoderProgressAtUtc = DateTime.UtcNow;
-        }
-        var elapsedSec = Math.Max(0, (DateTime.UtcNow - session.StartedAtUtc).TotalSeconds);
-        var wallClockDriftSec = outTimeSec.HasValue ? elapsedSec - outTimeSec.Value : (double?)null;
-
-        Console.WriteLine(
-            $"{GetLogPrefix(session.RoomId)} ffmpeg progress={progressState} " +
-            $"frame={(frame?.ToString() ?? "?")} fps={(fps?.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) ?? "?")} " +
-            $"speed={(speed ?? "?")} bitrate={(bitrate ?? "?")} " +
-            $"outTimeSec={(outTimeSec?.ToString("F3", System.Globalization.CultureInfo.InvariantCulture) ?? "?")} " +
-            $"wallClockDriftSec={(wallClockDriftSec?.ToString("F3", System.Globalization.CultureInfo.InvariantCulture) ?? "?")} " +
-            $"dupFrames={(dupFrames?.ToString() ?? "?")} dropFrames={(dropFrames?.ToString() ?? "?")}");
-    }
-
     private static string GetLogPrefix(string roomId)
         => $"[RtmpShare/{roomId[..Math.Min(8, roomId.Length)]}]";
 
     private static string? GetProgressValue(IReadOnlyDictionary<string, string> progressFields, string key)
         => progressFields.TryGetValue(key, out var value) ? value : null;
-
-    private static int? ParseInt(IReadOnlyDictionary<string, string> progressFields, string key)
-        => int.TryParse(GetProgressValue(progressFields, key), out var value) ? value : null;
-
-    private static double? ParseDouble(IReadOnlyDictionary<string, string> progressFields, string key)
-        => double.TryParse(
-            GetProgressValue(progressFields, key),
-            System.Globalization.NumberStyles.Float,
-            System.Globalization.CultureInfo.InvariantCulture,
-            out var value)
-            ? value
-            : null;
 
     private static double? ParseOutTimeSeconds(IReadOnlyDictionary<string, string> progressFields)
     {
@@ -1104,6 +1250,8 @@ public class RtmpFileShareManager : IDisposable
     private sealed class RtmpPlaybackSelection
     {
         public bool ProbeSucceeded { get; init; }
+        /// <summary>Whether the file has a video stream. Assumed when the probe failed and nothing is known.</summary>
+        public bool HasVideo { get; init; } = true;
         public string AudioMapSpecifier { get; init; } = "0:a:0?";
         public string AudioSelectionLabel { get; init; } = "first audio fallback";
         public string? SubtitleFilter { get; init; }
@@ -1125,23 +1273,16 @@ public class RtmpFileShareManager : IDisposable
         public bool IsForced { get; init; }
     }
 
-    // ── Position broadcast timer ──────────────────────────────────────────────
-
-    private void OnPositionTick(object? _)
-    {
-        foreach (var (roomId, session) in _sessions)
-        {
-            if (session.Paused) continue;
-            var pos = session.CurrentPositionSec;
-            _ = _hub.Clients.Group(roomId).rtmpFileSharePosition(pos);
-        }
-    }
-
     public void Dispose()
     {
-        _positionTimer.Dispose();
         foreach (var session in _sessions.Values)
-            KillFfmpeg(session);
+        {
+            lock (session.Gate)
+            {
+                CancelWaiting(session);
+                KillRun(session);
+            }
+        }
         _sessions.Clear();
     }
 }

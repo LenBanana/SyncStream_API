@@ -40,15 +40,13 @@ public partial class ServerHub : Hub<IServerHub>
     private readonly SfuPeerRegistry _sfuPeers;
     private readonly VoipRoster _voip;
     private readonly RoomMediaService _media;
-    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly PostgresContext _postgres;
     private readonly IRoomStreamService _roomStreamService;
 
     public ServerHub(IConfiguration configuration, MainManager manager, PostgresContext postgres,
         GallowGameManager gallowGameManager, BlackjackManager blackjackManager,
         WebRtcSfuManager webRtcSfuManager, SfuPeerRegistry sfuPeers, VoipRoster voip, RoomMediaService media,
-        RtmpFileShareManager rtmpFileShareManager, IRoomStreamService roomStreamService,
-        IHttpContextAccessor httpContextAccessor)
+        RtmpFileShareManager rtmpFileShareManager, IRoomStreamService roomStreamService, LivePlayTickets liveTickets)
     {
         Configuration = configuration;
         _manager = manager;
@@ -56,8 +54,8 @@ public partial class ServerHub : Hub<IServerHub>
         _sfuPeers = sfuPeers;
         _voip = voip;
         _media = media;
-        _httpContextAccessor = httpContextAccessor;
         _rtmpFileShareManager = rtmpFileShareManager;
+        _liveTickets = liveTickets;
         _roomStreamService = roomStreamService;
         _postgres = postgres;
         _gallowGameManager = gallowGameManager;
@@ -297,6 +295,8 @@ public partial class ServerHub : Hub<IServerHub>
         // Skipping while a file share is active stops the share first, then proceeds.
         if (room.IsFileSharingActive)
             await _media.StopFileShareAsync(room);
+        if (room.IsRtmpFileShareActive)
+            await _media.StopRtmpFileShareAsync(room);
 
         var mainServer = room.server;
         switch (room.server.playlist.Count)

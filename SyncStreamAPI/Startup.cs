@@ -140,6 +140,7 @@ public class Startup
         services.AddSingleton<RoomMediaService>();
         services.AddHostedService<ServerFileShareMonitor>();
         services.AddSingleton<RtmpFileShareManager>();
+        services.AddSingleton<LivePlayTickets>();
         services.AddControllers();
         services.AddSwaggerGen(c =>
         {
