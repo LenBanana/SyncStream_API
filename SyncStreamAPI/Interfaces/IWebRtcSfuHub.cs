@@ -6,20 +6,17 @@ namespace SyncStreamAPI.Interfaces;
 public partial interface IServerHub
 {
     /// <summary>
-    /// Pushed to all peers in the SFU room when a new producer becomes available.
-    /// The viewer should immediately call <c>Consume</c> for this producer.
+    /// Pushed to everyone else in an SFU room when a new producer becomes available.
+    /// The receiver should call <c>Consume</c> for this producer.
     /// </summary>
     Task sfuNewProducer(SfuNewProducerNotification notification);
 
-    /// <summary>
-    /// Pushed to all peers in the SFU room when a producer is closed
-    /// (e.g. streamer disconnected or muted a track).
-    /// </summary>
-    Task sfuProducerClosed(string producerId);
+    /// <summary>Pushed to everyone else in an SFU room when a producer is closed.</summary>
+    Task sfuProducerClosed(string sfuRoomId, string producerId);
 
-    /// <summary>Pushed to the SFU room when a recording has started.</summary>
+    /// <summary>Pushed to the stage's SFU room when a recording has started.</summary>
     Task sfuRecordingStarted(SfuRecordingInfo info);
 
-    /// <summary>Pushed to the SFU room when the recording has stopped.</summary>
-    Task sfuRecordingStopped(string roomId);
+    /// <summary>Pushed to the stage's SFU room when the recording has stopped, with the finished file.</summary>
+    Task sfuRecordingStopped(string roomId, string filename);
 }

@@ -5,10 +5,7 @@ namespace SyncStreamAPI.Interfaces;
 
 public partial interface IServerHub
 {
-    Task receiveOfferFromParticipant(string senderId, VoipOffer offer);
-    Task receiveAnswerFromParticipant(string senderId, VoipOffer answer);
-    Task receiveIceCandidateFromParticipant(string senderId, object candidate);
-    Task participantJoined(VoipParticipantDto participantId);
-    Task participantLeft(VoipParticipantDto participantId);
-    Task receiveStatusFromParticipant(VoipParticipantDto participantId);
+    Task participantJoined(VoipParticipantDto participant);
+    Task participantLeft(VoipParticipantDto participant);
+    Task receiveStatusFromParticipant(VoipParticipantDto participant);
 }

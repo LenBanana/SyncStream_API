@@ -1,38 +1,68 @@
 using System;
 using System.Diagnostics;
-using System.Collections.Generic;
+using System.Threading;
 
 namespace SyncStreamAPI.Models.RTMP;
 
+public enum RtmpFileShareState
+{
+    /// <summary>ffmpeg is streaming, or about to be started again after a failed run.</summary>
+    Playing,
+
+    /// <summary>The sharer paused; nothing is running.</summary>
+    Paused,
+
+    /// <summary>Playback caught up with the upload; waiting for more of the file to arrive.</summary>
+    Buffering,
+
+    /// <summary>The file has played out.</summary>
+    Ended,
+
+    /// <summary>ffmpeg kept failing, or the upload stopped arriving.</summary>
+    Failed,
+}
+
+/// <summary>Where a share stands, read in one go so the parts agree with each other.</summary>
+public sealed record RtmpFileShareStatus(
+    RtmpFileShareState State,
+    double PositionSec,
+    double? DurationSec,
+    bool UploadComplete,
+    bool PublisherLive,
+    string? Error)
+{
+    public bool IsOver => State is RtmpFileShareState.Ended or RtmpFileShareState.Failed;
+}
+
 /// <summary>
-/// In-memory record of one active RTMP file-share session.
-/// Lifecycle: created by RtmpFileShareManager.StartAsync, destroyed by StopAsync or disconnect cleanup.
+///     One file being streamed to a room through nginx-rtmp. Created by RtmpFileShareManager.PrepareAsync and
+///     removed by its Stop.
 /// </summary>
+/// <remarks>Everything that changes after creation is read and written under <see cref="Gate" />.</remarks>
 public class RtmpFileShareSession
 {
-    public string RoomId { get; set; } = string.Empty;
-    public string OwnerConnectionId { get; set; } = string.Empty;
-    public int OwnerUserId { get; set; }
-    /// <summary>Lowercase username — used as the stream name in the RTMP URL.</summary>
-    public string OwnerUsername { get; set; } = string.Empty;
-    /// <summary>Absolute path to the upload.bin file being streamed.</summary>
-    public string FilePath { get; set; } = string.Empty;
-    /// <summary>Non-null while the chunk upload is still in progress; null once finalised. Blocks seeking.</summary>
-    public string? UploadId { get; set; }
-    /// <summary>The running ffmpeg process; null while paused.</summary>
-    public Process? Process { get; set; }
+    public object Gate { get; } = new();
+
+    public required string RoomId { get; init; }
+
     /// <summary>
-    /// Saved playback position (seconds) at the last pause or seek.
-    /// When ffmpeg is running, add wall-clock elapsed to this to get the live position.
+    ///     The share's own stream name on the streaming server. It is not the sharer's OBS stream: a share used
+    ///     to publish under the sharer's username, which listed a room's file as the sharer going live for every
+    ///     signed-in user, and needed the sharer's stream token, which not every account has.
     /// </summary>
-    public double PositionSec { get; set; }
-    /// <summary>UTC time when the current ffmpeg process was started (wall-clock anchor).</summary>
-    public DateTime StartedAtUtc { get; set; }
-    public bool Paused { get; set; }
-    /// <summary>Total duration in seconds probed via ffprobe; null if unavailable.</summary>
-    public double? DurationSec { get; set; }
-    /// <summary>The stream token used as RTMP auth query param.</summary>
-    public string StreamToken { get; set; } = string.Empty;
+    public required string StreamName { get; init; }
+
+    /// <summary>What ffmpeg presents as its token when it publishes the stream.</summary>
+    public required string PublishKey { get; init; }
+
+    /// <summary>The upload.bin being streamed, which may still be growing.</summary>
+    public required string FilePath { get; init; }
+
+    public required string UploadId { get; init; }
+    public required long TotalBytes { get; init; }
+    public bool UploadComplete { get; set; }
+    public double? DurationSec { get; init; }
+
     /// <summary>ffmpeg map specifier for the selected audio track.</summary>
     public string AudioMapSpecifier { get; set; } = "0:a:0?";
     /// <summary>Human-readable description of the selected audio track for logs.</summary>
@@ -46,51 +76,56 @@ public class RtmpFileShareSession
     /// <summary>Human-readable description of the selected subtitle track for logs.</summary>
     public string? SubtitleSelectionLabel { get; set; }
     /// <summary>Normalized playback preferences requested by the host for audio/subtitle selection.</summary>
-    public RtmpPlaybackPreferences PlaybackPreferences { get; set; } = new();
+    public RtmpPlaybackPreferences PlaybackPreferences { get; init; } = new();
     /// <summary>True once ffprobe successfully read stream metadata and selection no longer relies on a fallback.</summary>
     public bool PlaybackSelectionResolved { get; set; }
-    /// <summary>Number of consecutive unexpected ffmpeg exits since the last explicit start/seek/resume.</summary>
-    public int RetryCount { get; set; }
-    /// <summary>
-    /// Counts intentional ffmpeg shutdowns (pause/seek) so nginx-rtmp callbacks can
-    /// distinguish a managed restart from a real stream end.
-    /// </summary>
-    public int PendingPublisherDisconnects { get; set; }
-    /// <summary>Skip upload-dir cleanup once the share has handed off to VOD playback.</summary>
-    public bool PreserveUploadArtifacts { get; set; }
-    /// <summary>Latest ffmpeg out_time value in seconds for the current process lifetime.</summary>
-    public double LastEncoderOutTimeSec { get; set; }
-    /// <summary>UTC time when <see cref="LastEncoderOutTimeSec"/> was last refreshed.</summary>
-    public DateTime? LastEncoderProgressAtUtc { get; set; }
-    /// <summary>True once nginx-rtmp has accepted the current publisher instance.</summary>
+
+    public RtmpFileShareState State { get; set; }
+    public string? Error { get; set; }
+
+    /// <summary>The running ffmpeg; null while nothing runs.</summary>
+    public Process? Process { get; set; }
+
+    /// <summary>True while the streaming server has the current run's stream.</summary>
     public bool IsPublisherLive { get; set; }
-    /// <summary>
-    /// True for MP4/MOV files: ffmpeg cannot open them until the moov atom is present,
-    /// so we defer spawning until a qt-faststart remux completes after upload finishes.
-    /// </summary>
-    public bool NeedsRemux { get; set; }
-    /// <summary>Viewer HLS URL — stored so the manager can fire rtmpFileShareStarted after the deferred remux.</summary>
-    public string StreamUrl { get; set; } = string.Empty;
+
+    /// <summary>Where the current run started, or where the next one starts while nothing runs.</summary>
+    public double PositionSec { get; set; }
+
+    /// <summary>How far the current run has got, from ffmpeg's own progress report.</summary>
+    public double RunProgressSec { get; set; }
+
+    /// <summary>When <see cref="RunProgressSec" /> was last reported; null until the run has sent anything.</summary>
+    public DateTime? RunProgressAtUtc { get; set; }
+
+    /// <summary>Failed runs in a row, counted once the upload is complete.</summary>
+    public int ConsecutiveFailures { get; set; }
+
+    /// <summary>The last thing ffmpeg complained about, to tell the sharer when the share has to stop.</summary>
+    public string? LastFfmpegError { get; set; }
+
+    /// <summary>Cancels whatever the share is waiting on: more of the upload, or a retry.</summary>
+    public CancellationTokenSource? Waiting { get; set; }
 
     /// <summary>
-    /// Computes the current playback position based on the saved offset and
-    /// how long the current ffmpeg process has been running — mirrors the
-    /// currentPositionSec getter in sfu/server-file-streamer.js.
+    ///     The playback position. A run's progress arrives once a second, so the time since the last report is
+    ///     added, up to a little more than that second, and nothing is added before a run has reported at all:
+    ///     ffmpeg spends that time opening the file and connecting, not streaming.
     /// </summary>
     public double CurrentPositionSec
     {
         get
         {
-            if (Paused || Process == null)
-                return PositionSec;
-
-            if (LastEncoderProgressAtUtc.HasValue)
-            {
-                var encoderWallClockAdvance = Math.Max(0, (DateTime.UtcNow - LastEncoderProgressAtUtc.Value).TotalSeconds);
-                return PositionSec + LastEncoderOutTimeSec + Math.Min(encoderWallClockAdvance, 1.5d);
-            }
-
-            return PositionSec + (DateTime.UtcNow - StartedAtUtc).TotalSeconds;
+            var position = PositionSec;
+            if (Process != null && RunProgressAtUtc is { } reportedAt)
+                position += RunProgressSec + Math.Clamp((DateTime.UtcNow - reportedAt).TotalSeconds, 0, 1.5);
+            return DurationSec is > 0 ? Math.Min(position, DurationSec.Value) : position;
         }
+    }
+
+    public RtmpFileShareStatus Status()
+    {
+        lock (Gate)
+            return new RtmpFileShareStatus(State, CurrentPositionSec, DurationSec, UploadComplete, IsPublisherLive, Error);
     }
 }

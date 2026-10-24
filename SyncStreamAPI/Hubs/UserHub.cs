@@ -7,6 +7,7 @@ using SyncStreamAPI.Enums;
 using SyncStreamAPI.Enums.Games;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.GameModels.Chess;
+using SyncStreamAPI.Models.RTMP;
 using SyncStreamAPI.ServerData;
 using SyncStreamAPI.ServerData.Helper;
 using SyncStreamAPI.Wire;
@@ -78,6 +79,11 @@ public partial class ServerHub
                 // connection is already gone, or about to be, and the old entry would otherwise linger as a
                 // ghost in everyone's member list.
                 var existing = admission.Existing!;
+                // Whatever the old connection was broadcasting, sharing or saying in the call ended with it;
+                // the account does not carry it over to the new connection.
+                if (existing.ConnectionId != null && existing.ConnectionId != ip)
+                    await ReleaseMediaAsync(room, existing.ConnectionId);
+                existing.IsStreaming = false;
                 existing.ConnectionId = ip;
                 await Groups.AddToGroupAsync(ip, UniqueId);
                 await Clients.Group(UniqueId).userupdate(mainServer.members.Select(x => x?.ToDTO()).ToList());
@@ -165,46 +171,33 @@ public partial class ServerHub
         await Clients.Caller.timeupdate(mainServer.ToTimeSync());
         await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
         await Clients.Caller.adduserupdate((int)UserUpdate.Success);
-        if (room.CurrentStreamer != null)
+        // The stage, as what it is: a file share has its own player and pause state, which a plain broadcast
+        // announcement used to replace with the broadcast viewer.
+        if (room.IsFileSharingActive && room.FileShareInitiator != null)
         {
-            if (room.IsStreamingSfu)
-                // SFU: viewer joins the SFU room directly — streamer is not involved.
-                await Clients.Caller.startSfuStream(room.uniqueId, room.CurrentStreamer);
-            // P2P (Discord-style): do NOT auto-join — the user list shows who is streaming
-            // and the viewer can choose to watch by clicking the user's streaming indicator.
+            var sharer = room.server.FindByConnection(room.FileShareInitiator);
+            await Clients.Caller.fileShareStarted(room.FileShareInitiator, sharer?.username ?? string.Empty,
+                room.uniqueId);
+            if (room.IsFileSharePaused) await Clients.Caller.fileSharePlayPause(false);
+        }
+        else if (room.IsBroadcastOnStage)
+        {
+            await Clients.Caller.startSfuStream(room.uniqueId, room.CurrentStreamer!);
+            if (room.ActiveRecording != null) await Clients.Caller.sfuRecordingStarted(room.ActiveRecording);
         }
 
-        if (room.IsRtmpFileShareActive && !string.IsNullOrWhiteSpace(room.RtmpStreamUrl))
+        if (room.IsRtmpFileShareActive && _rtmpFileShareManager.Get(room.uniqueId) is { } rtmpShare)
         {
-            var rtmpSession = _rtmpFileShareManager.Get(room.uniqueId);
-            var rtmpSharer = room.server.members.FirstOrDefault(member => member?.ConnectionId == room.RtmpFileShareInitiator);
-
-            await Clients.Caller.rtmpFileShareStarted(
-                room.RtmpFileShareInitiator ?? string.Empty,
-                rtmpSharer?.username ?? string.Empty,
-                room.uniqueId,
-                room.RtmpStreamUrl,
-                room.RtmpFileShareDurationSec ?? rtmpSession?.DurationSec);
-
-            await Clients.Caller.rtmpFileShareMetadata(
-                room.RtmpFileShareDurationSec ?? rtmpSession?.DurationSec,
-                room.RtmpFileShareUsesVodPlayback || string.IsNullOrWhiteSpace(room.RtmpFileShareUploadId));
-
-            if (room.RtmpFileShareUsesVodPlayback)
-            {
-                await Clients.Caller.rtmpFileShareVodReady(
-                    room.RtmpStreamUrl,
-                    room.RtmpFileShareDurationSec ?? rtmpSession?.DurationSec,
-                    room.RtmpFileSharePlaybackContentType);
-            }
-
-            if (rtmpSession != null)
-            {
-                if (rtmpSession.Paused)
-                    await Clients.Caller.rtmpFileSharePlayPause(false, rtmpSession.CurrentPositionSec);
-                else
-                    await Clients.Caller.rtmpFileSharePosition(rtmpSession.CurrentPositionSec);
-            }
+            var status = rtmpShare.Status();
+            var rtmpSharer = room.server.FindByConnection(room.RtmpFileShareInitiator ?? string.Empty);
+            await Clients.Caller.rtmpFileShareStarted(room.RtmpFileShareInitiator ?? string.Empty,
+                rtmpSharer?.username ?? string.Empty, room.uniqueId, rtmpShare.StreamName, status.DurationSec);
+            await Clients.Caller.rtmpFileShareMetadata(status.DurationSec, status.UploadComplete);
+            if (status.State == RtmpFileShareState.Paused)
+                await Clients.Caller.rtmpFileSharePlayPause(false, status.PositionSec);
+            else
+                await Clients.Caller.rtmpFileShareState(status.PositionSec, status.State == RtmpFileShareState.Buffering);
+            if (status.PublisherLive) await Clients.Caller.rtmpFileShareStreamReady(status.PositionSec);
         }
 
         if (mainServer.playlist.Count > 0) await Clients.Caller.playlistupdate(mainServer.playlist);
@@ -273,6 +266,10 @@ public partial class ServerHub
         var mainServer = room.server;
         var member = mainServer.FindByConnection(Context.ConnectionId);
         if (member == null) return;
+
+        // Leaving ends the leaver's broadcast, file share, live stream and seat in the call, exactly as losing
+        // the connection does. It used to end none of them.
+        await ReleaseMediaAsync(room, Context.ConnectionId);
 
         var wasHost = member.ishost;
         var promoted = mainServer.Leave(member);

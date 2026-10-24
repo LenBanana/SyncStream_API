@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using SyncStreamAPI.Models.RTMP;
 using SyncStreamAPI.Wire.Users;
 
@@ -23,7 +24,8 @@ public class LiveUserDto
     public LiveUserDto(LiveUser user)
     {
         userName = user.userName;
-        watchMember = user.watchMember;
+        lock (user.watchMember)
+            watchMember = user.watchMember.ToList();
         created = user.created;
     }
 

@@ -110,7 +110,11 @@ public class Startup
         services.AddAuthorization(options => options.AddSyncStreamPolicies());
         services.AddSingleton<IUserIdProvider, DbUserIdProvider>();
 
-        services.AddSignalR(options => { options.EnableDetailedErrors = false; }).AddNewtonsoftJsonProtocol();
+        services.AddSignalR(options =>
+        {
+            options.EnableDetailedErrors = false;
+            options.AddFilter<SfuErrorHubFilter>();
+        }).AddNewtonsoftJsonProtocol();
         services.AddSingleton(provider =>
         {
             var browser = new BrowserAutomation(provider);
@@ -129,8 +133,14 @@ public class Startup
             var manager = new BlackjackManager(hubContext);
             return manager;
         });
-        services.AddSingleton<WebRtcSfuManager>();
+        services.AddSingleton(_ => new WebRtcSfuManager(
+            new System.Net.Http.HttpClient { Timeout = System.TimeSpan.FromSeconds(10) }, Configuration));
+        services.AddSingleton<SfuPeerRegistry>();
+        services.AddSingleton<VoipRoster>();
+        services.AddSingleton<RoomMediaService>();
+        services.AddHostedService<ServerFileShareMonitor>();
         services.AddSingleton<RtmpFileShareManager>();
+        services.AddSingleton<LivePlayTickets>();
         services.AddControllers();
         services.AddSwaggerGen(c =>
         {
@@ -163,7 +173,9 @@ public class Startup
         app.UseEndpoints(endpoints =>
         {
             endpoints.MapControllers();
-            endpoints.MapHub<ServerHub>("/server");
+            // A dropped socket that comes straight back keeps its connection id, so a brief network blip does not
+            // end the person's broadcast, call or seat the way a new connection does.
+            endpoints.MapHub<ServerHub>("/server", options => options.AllowStatefulReconnects = true);
         });
     }
 }

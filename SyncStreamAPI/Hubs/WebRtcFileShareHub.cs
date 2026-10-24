@@ -1,259 +1,128 @@
 ﻿using System;
-using System.IO;
-using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-using SyncStreamAPI.Annotations;
-using SyncStreamAPI.Enums;
-using SyncStreamAPI.Helper;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.SignalR;
+using SyncStreamAPI.Auth;
 using SyncStreamAPI.Helper.Streaming;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.WebRTC;
-using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
 using SyncStreamAPI.ServerData.Helper;
-using Microsoft.AspNetCore.Authorization;
-using SyncStreamAPI.Auth;
 
 namespace SyncStreamAPI.Hubs;
 
 public partial class ServerHub
 {
     // ---------------------------------------------------------------
-    // File Share — anyone with Approved privileges may share a file.
-    // Only one file share may be active per room at a time.
+    // File Share: anyone with Approved privileges may share a file to the room's stage.
+    // Only one share or broadcast may hold the stage at a time.
     // ---------------------------------------------------------------
 
     /// <summary>
-    /// Called by the initiating client just after their SFU send-transport produces
-    /// the first track.  Sets the room's file-sharing flag and announces the share
-    /// to all room members so they switch their player to the FileShare type and
-    /// join the SFU room as viewers.
+    /// Takes the stage for a file played in the caller's browser. Everyone's player switches to the file share
+    /// and joins the stage's SFU room; the caller then produces the captured file into it.
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Approved)]
     public async Task StartFileShare(string roomId)
     {
-        var room = MainManager.GetRoom(roomId);
-        if (room == null) return;
+        var room = RequireMember(roomId);
+        var member = room.server.FindByConnection(Context.ConnectionId)!;
 
-        if (room.IsFileSharingActive)
+        lock (room.StageGate)
         {
-            await Clients.Caller.dialog(new Dialog(AlertType.Warning)
-            {
-                Header = "File Share Unavailable",
-                Question = "Someone is already sharing a file in this room. Please wait until they finish.",
-                Answer1 = "Ok"
-            });
-            return;
-        }
-
-        var member = room.server.members.FirstOrDefault(m => m?.ConnectionId == Context.ConnectionId);
-        if (member == null) return;
-
-        room.IsFileSharingActive = true;
-        room.FileShareInitiator = Context.ConnectionId;
-        room.CurrentStreamer = Context.ConnectionId;
-        room.IsStreamingSfu = true;
-
-        // Send FileShare player type to all room members (SendPlayerType checks IsFileSharingActive first).
-        await RoomManager.SendPlayerType(room);
-
-        // Notify the room so viewers know who is sharing and can join the SFU room.
-        await Clients.Group(roomId).fileShareStarted(Context.ConnectionId, member.username, roomId);
-    }
-
-    /// <summary>
-    /// Called when the file's codecs are not natively playable in a browser.
-    /// The server transcodes via ffmpeg and injects audio+video as mediasoup
-    /// producers; all room members — including the host — consume via the SFU.
-    /// </summary>
-    [Authorize(Policy = AuthorizationPolicies.Approved)]
-    public async Task StartServerFileShare(string roomId, string fileKey)
-    {
-        var room = MainManager.GetRoom(roomId);
-        if (room == null) return;
-
-        if (room.IsFileSharingActive)
-        {
-            await Clients.Caller.dialog(new Dialog(AlertType.Warning)
-            {
-                Header = "File Share Unavailable",
-                Question = "Someone is already sharing a file in this room. Please wait until they finish.",
-                Answer1 = "Ok"
-            });
-            return;
-        }
-
-        var member = room.server.members.FirstOrDefault(m => m?.ConnectionId == Context.ConnectionId);
-        if (member == null) return;
-
-        // Resolve the caller and verify they own the file (or it's public).
-        // Without this check any Approved user could share another user's file by guessing the key.
-        var dbUser = _postgres.Users?
-            .Include(x => x.RememberTokens)
-            .FirstOrDefault(x => x.ID == CallerUserId);
-        if (dbUser == null) return;
-
-        var dbFile = _postgres.Files?.FirstOrDefault(x => x.FileKey == fileKey);
-        if (dbFile == null)
-        {
-            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
-                { Header = "File Not Found", Question = "The selected file could not be found.", Answer1 = "Ok" });
-            return;
-        }
-
-        if (!dbFile.Public && dbFile.DbUserID != dbUser.ID)
-        {
-            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
-                { Header = "Permission Denied", Question = "You do not have permission to share this file.", Answer1 = "Ok" });
-            return;
-        }
-
-        var basePath = dbFile.Temporary ? General.TemporaryFilePath : General.FilePath;
-        var filePath = Path.Combine(basePath, $"{dbFile.FileKey}{dbFile.FileEnding}");
-
-        if (!File.Exists(filePath))
-        {
-            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
-                { Header = "File Not Found", Question = "The file could not be found on disk.", Answer1 = "Ok" });
-            return;
-        }
-
-        room.IsFileSharingActive = true;
-        room.FileShareInitiator = Context.ConnectionId;
-        room.CurrentStreamer = Context.ConnectionId;
-        room.IsStreamingSfu = true;
-        room.IsServerFileShare = true;
-
-        await SfuManager.EnsureRoomAsync(roomId);
-
-        try
-        {
-            var (videoProducerId, audioProducerId) = await SfuManager.StartServerFileStreamAsync(roomId, filePath);
-
-            // Notify peers already in the SFU room (e.g. previous viewers) about the new producers.
-            var serverPeerId = $"server-file:{roomId}";
-            await Clients.Group(SfuGroupName(roomId))
-                .sfuNewProducer(new SfuNewProducerNotification
-                    { ProducerId = videoProducerId, PeerId = serverPeerId, Kind = "video", RoomId = roomId });
-            await Clients.Group(SfuGroupName(roomId))
-                .sfuNewProducer(new SfuNewProducerNotification
-                    { ProducerId = audioProducerId, PeerId = serverPeerId, Kind = "audio", RoomId = roomId });
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[FileShare] StartServerFileShare failed: {ex.Message}");
-            room.IsFileSharingActive = false;
-            room.FileShareInitiator = null;
-            room.CurrentStreamer = null;
-            room.IsStreamingSfu = false;
-            room.IsServerFileShare = false;
-            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
-                { Header = "Error", Question = "Failed to start the server-side file stream.", Answer1 = "Ok" });
-            return;
+            if (StageRefusal(room, Context.ConnectionId) is { } refusal)
+                throw new HubException(refusal);
+            ClaimStageForFileShare(room, Context.ConnectionId, uploadId: null);
         }
 
         await RoomManager.SendPlayerType(room);
-        await Clients.Group(roomId).fileShareStarted(Context.ConnectionId, member.username, roomId);
+        await Clients.Group(roomId).fileShareStarted(Context.ConnectionId, member.username ?? string.Empty, roomId);
     }
 
     /// <summary>
-    /// Variant of <see cref="StartServerFileShare"/> for the early-stream path: the client
-    /// has uploaded the first chunk and wants to start ffmpeg immediately, continuing to
-    /// upload the remaining chunks in the background while viewers already watch.
-    /// The upload temp file at <c>{uploads}/{uploadId}/data</c> is used directly by ffmpeg;
-    /// no DB record is created until <c>CompleteRoomUpload</c> is later called.
+    /// Starts sharing a file while it is still being uploaded: the server streams what has arrived and waits
+    /// whenever playback catches up with the upload. The upload is the caller's own and must already hold the
+    /// beginning of the file.
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Approved)]
     public async Task StartServerFileShareFromUpload(string roomId, string uploadId)
     {
-        var room = MainManager.GetRoom(roomId);
-        if (room == null) return;
+        var room = RequireMember(roomId);
 
-        if (room.IsFileSharingActive)
+        // Answers 404 for a malformed id, an unknown one, or someone else's, so all three read the same.
+        var upload = await _roomStreamService.GetRoomUploadStatusAsync(CallerUserId, uploadId);
+        if (upload.StatusCode != StatusCodes.Status200OK || upload.NextOffset <= 0)
+            throw new HubException("The upload session could not be found. Please try again.");
+
+        await StartServerStreamOnStageAsync(room, RoomUploadPaths.DataFileFor(uploadId), uploadId);
+    }
+
+    private async Task StartServerStreamOnStageAsync(Room room, string filePath, string? uploadId)
+    {
+        var member = room.server.FindByConnection(Context.ConnectionId)!;
+        var stage = SfuRoomId.Stage(room.uniqueId);
+
+        lock (room.StageGate)
         {
-            await Clients.Caller.dialog(new Dialog(AlertType.Warning)
-            {
-                Header = "File Share Unavailable",
-                Question = "Someone is already sharing a file in this room. Please wait until they finish.",
-                Answer1 = "Ok"
-            });
-            return;
+            if (StageRefusal(room, Context.ConnectionId) is { } refusal)
+                throw new HubException(refusal);
+            ClaimStageForFileShare(room, Context.ConnectionId, uploadId);
         }
-
-        var member = room.server.members.FirstOrDefault(m => m?.ConnectionId == Context.ConnectionId);
-        if (member == null) return;
-
-        // The unguessable-id argument for skipping an ownership query only holds if the id is actually of
-        // that shape, and it arrives from the caller. Unchecked, ../../.. is not unguessable and not a GUID: it
-        // reads an upload.bin from elsewhere on the disk and shares it with the room.
-        if (!RoomUploadIds.IsWellFormed(uploadId))
-        {
-            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
-                { Header = "Upload Not Found", Question = "The upload session could not be found. Please try again.", Answer1 = "Ok" });
-            return;
-        }
-
-        var filePath = RoomUploadPaths.DataFileFor(uploadId);
-        if (!File.Exists(filePath))
-        {
-            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
-                { Header = "Upload Not Found", Question = "The upload session could not be found. Please try again.", Answer1 = "Ok" });
-            return;
-        }
-
-        room.IsFileSharingActive = true;
-        room.FileShareInitiator  = Context.ConnectionId;
-        room.CurrentStreamer      = Context.ConnectionId;
-        room.IsStreamingSfu      = true;
-        room.IsServerFileShare   = true;
-        room.FileShareUploadId   = uploadId;
-
-        await SfuManager.EnsureRoomAsync(roomId);
 
         try
         {
-            var (videoProducerId, audioProducerId) = await SfuManager.StartServerFileStreamAsync(roomId, filePath);
-
-            var serverPeerId = $"server-file:{roomId}";
-            await Clients.Group(SfuGroupName(roomId))
-                .sfuNewProducer(new SfuNewProducerNotification
-                    { ProducerId = videoProducerId, PeerId = serverPeerId, Kind = "video", RoomId = roomId });
-            await Clients.Group(SfuGroupName(roomId))
-                .sfuNewProducer(new SfuNewProducerNotification
-                    { ProducerId = audioProducerId, PeerId = serverPeerId, Kind = "audio", RoomId = roomId });
+            await SfuManager.EnsureRoomAsync(stage);
+            await SfuManager.StartServerFileStreamAsync(stage, filePath, growing: uploadId != null);
         }
-        catch (Exception ex)
+        catch (SfuRequestException ex)
         {
-            Console.WriteLine($"[FileShare] StartServerFileShareFromUpload failed: {ex.Message}");
-            room.IsFileSharingActive = false;
-            room.FileShareInitiator  = null;
-            room.CurrentStreamer     = null;
-            room.IsStreamingSfu     = false;
-            room.IsServerFileShare  = false;
-            room.FileShareUploadId  = null;
-            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
-                { Header = "Error", Question = "Failed to start the server-side file stream.", Answer1 = "Ok" });
-            return;
+            lock (room.StageGate)
+            {
+                room.IsFileSharingActive = false;
+                room.FileShareInitiator = null;
+                room.FileShareUploadId = null;
+                room.FileShareUploadInProgress = false;
+                room.CurrentStreamer = null;
+                room.IsStreamingSfu = false;
+            }
+
+            Console.WriteLine($"[FileShare] server stream for room {room.uniqueId} failed to start: {ex.Message}");
+            throw new HubException(ex.StatusCode is HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout
+                ? ex.Message
+                : $"The server could not stream this file: {ex.Message}");
         }
+
+        // Set only once the stream exists, because the monitor ends a server share it cannot find.
+        room.IsServerFileShare = true;
 
         await RoomManager.SendPlayerType(room);
-        await Clients.Group(roomId).fileShareStarted(Context.ConnectionId, member.username, roomId);
+        await Clients.Group(room.uniqueId)
+            .fileShareStarted(Context.ConnectionId, member.username ?? string.Empty, room.uniqueId);
     }
 
-    /// <summary>
-    /// Called by the file-share initiator to cleanly stop the active share.
-    /// The initiator should call <c>stopStreamingSfu</c> on the client side after
-    /// this returns to tear down their SFU send-transport and producers.
-    /// </summary>
+    private static void ClaimStageForFileShare(Room room, string connectionId, string? uploadId)
+    {
+        room.IsFileSharingActive = true;
+        room.IsFileSharePaused = false;
+        room.IsServerFileShare = false;
+        room.FileShareInitiator = connectionId;
+        room.FileShareUploadId = uploadId;
+        room.FileShareUploadInProgress = uploadId != null;
+        room.CurrentStreamer = connectionId;
+        room.IsStreamingSfu = true;
+    }
+
+    /// <summary>Ends the caller's file share; everyone's player goes back to what it was showing.</summary>
     [Authorize(Policy = AuthorizationPolicies.Approved)]
     public async Task StopFileShare(string roomId)
     {
-        var room = MainManager.GetRoom(roomId);
-        if (room == null || !room.IsFileSharingActive) return;
-        if (room.FileShareInitiator != Context.ConnectionId) return;
+        var room = RequireMember(roomId);
+        if (!room.IsFileSharingActive || room.FileShareInitiator != Context.ConnectionId) return;
 
-        await StopFileShareInternalAsync(room);
+        await _media.StopFileShareAsync(room);
+        await _media.ReleaseSfuAsync(Context.ConnectionId, candidate => candidate == SfuRoomId.Stage(roomId));
     }
 
     /// <summary>
@@ -263,18 +132,14 @@ public partial class ServerHub
     [Authorize(Policy = AuthorizationPolicies.Approved)]
     public async Task FileSharePlayPause(string roomId, bool isPlaying)
     {
-        var room = MainManager.GetRoom(roomId);
-        if (room == null || !room.IsFileSharingActive) return;
-        if (room.FileShareInitiator != Context.ConnectionId) return;
+        var room = RequireMember(roomId);
+        if (!room.IsFileSharingActive || room.FileShareInitiator != Context.ConnectionId) return;
 
         if (room.IsServerFileShare)
-        {
-            try { await SfuManager.ControlServerFileStreamAsync(roomId, isPlaying ? "play" : "pause"); }
-            catch (Exception ex) { Console.WriteLine($"[FileShare] PlayPause control failed: {ex.Message}"); }
-        }
+            await SfuManager.ControlServerFileStreamAsync(SfuRoomId.Stage(roomId), isPlaying ? "play" : "pause");
 
-        await Clients.GroupExcept(roomId, new[] { Context.ConnectionId })
-            .fileSharePlayPause(isPlaying);
+        room.IsFileSharePaused = !isPlaying;
+        await Clients.GroupExcept(roomId, new[] { Context.ConnectionId }).fileSharePlayPause(isPlaying);
     }
 
     /// <summary>
@@ -284,83 +149,35 @@ public partial class ServerHub
     [Authorize(Policy = AuthorizationPolicies.Approved)]
     public async Task FileShareSeek(string roomId, double positionSec)
     {
-        var room = MainManager.GetRoom(roomId);
-        if (room == null || !room.IsFileSharingActive) return;
-        if (room.FileShareInitiator != Context.ConnectionId) return;
+        var room = RequireMember(roomId);
+        if (!room.IsFileSharingActive || room.FileShareInitiator != Context.ConnectionId) return;
         if (!room.IsServerFileShare) return;
 
-        // Seek guard: if the background upload is still in progress the file is
-        // incomplete on disk.  FFmpeg would hit EOF at the current write head and
-        // die silently, freezing all viewers.  Reject the seek and tell the host.
-        if (!string.IsNullOrWhiteSpace(room.FileShareUploadId))
-        {
-            await Clients.Caller.dialog(new Dialog(AlertType.Warning)
-            {
-                Header = "Upload In Progress",
-                Question = "The file is still uploading. Seeking will be available once the full upload completes.",
-                Answer1 = "Ok"
-            });
-            return;
-        }
+        // While the upload is still arriving, a position past what has been uploaded cannot be played. Seeking
+        // waits for the whole file.
+        if (room.FileShareUploadInProgress)
+            throw new HubException("The file is still uploading. Seeking will be available once the upload completes.");
 
-        try { await SfuManager.ControlServerFileStreamAsync(roomId, "seek", positionSec); }
-        catch (Exception ex) { Console.WriteLine($"[FileShare] Seek failed: {ex.Message}"); }
+        await SfuManager.ControlServerFileStreamAsync(SfuRoomId.Stage(roomId), "seek", positionSec);
+        room.IsFileSharePaused = false;
+        await Clients.GroupExcept(roomId, new[] { Context.ConnectionId }).fileSharePlayPause(true);
     }
 
     /// <summary>
-    /// Called by the file-share initiator after the background chunk upload has
-    /// finished (i.e. after POST /api/video/roomUpload/complete returns 200/202).
-    /// Clears the upload-in-progress guard so seeking becomes available.
+    /// The sharer's upload has finished. From now on the end of the file is the end of the share, and seeking
+    /// becomes possible.
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Approved)]
-    public Task MarkFileShareUploadComplete(string roomId, string uploadId)
+    public async Task MarkFileShareUploadComplete(string roomId, string uploadId)
     {
-        var room = MainManager.GetRoom(roomId);
-        if (room == null) return Task.CompletedTask;
-        if (room.FileShareInitiator != Context.ConnectionId) return Task.CompletedTask;
-        if (room.FileShareUploadId == uploadId)
-            room.FileShareUploadId = null;
-        return Task.CompletedTask;
-    }
+        var room = RequireMember(roomId);
+        if (room.FileShareInitiator != Context.ConnectionId || room.FileShareUploadId != uploadId) return;
 
-    // ---------------------------------------------------------------
-    // Shared internal teardown — also called from OnDisconnectedAsync
-    // and NextVideo so the room state is always consistent.
-    // ---------------------------------------------------------------
+        var upload = await _roomStreamService.GetRoomUploadStatusAsync(CallerUserId, uploadId);
+        if (upload.StatusCode != StatusCodes.Status200OK || upload.NextOffset != upload.TotalSize)
+            throw new HubException("The upload is not complete yet.");
 
-    /// <summary>
-    /// Clears all file-share flags, notifies the room, and re-evaluates the
-    /// player type so clients switch back to whatever was playing before.
-    /// </summary>
-    internal async Task StopFileShareInternalAsync(Room room)
-    {
-        if (room.IsServerFileShare)
-        {
-            try { await SfuManager.StopServerFileStreamAsync(room.uniqueId); }
-            catch (Exception ex) { Console.WriteLine($"[FileShare] StopServerFileStream failed: {ex.Message}"); }
-            room.IsServerFileShare = false;
-        }
-
-        // Clean up the upload staging directory left by an early-stream upload. Tested for shape rather than
-        // just for emptiness, because building the path throws on a malformed id and this runs while a room is
-        // being torn down, where an exception would leave the rest of the teardown undone.
-        if (RoomUploadIds.IsWellFormed(room.FileShareUploadId))
-        {
-            var uploadDir = RoomUploadPaths.DirectoryFor(room.FileShareUploadId);
-            try { if (Directory.Exists(uploadDir)) Directory.Delete(uploadDir, recursive: true); }
-            catch (Exception ex) { Console.WriteLine($"[FileShare] Failed to delete upload dir: {ex.Message}"); }
-            room.FileShareUploadId = null;
-        }
-
-        room.IsFileSharingActive = false;
-        room.FileShareInitiator = null;
-        room.CurrentStreamer = null;
-        room.IsStreamingSfu = false;
-
-        // Notify all room members so they can tear down their viewer state.
-        await Clients.Group(room.uniqueId).fileShareStopped();
-
-        // Re-evaluate and broadcast the correct player type (e.g. Nothing, YouTube, …).
-        await RoomManager.SendPlayerType(room);
+        await SfuManager.ControlServerFileStreamAsync(SfuRoomId.Stage(roomId), "upload-complete");
+        room.FileShareUploadInProgress = false;
     }
 }

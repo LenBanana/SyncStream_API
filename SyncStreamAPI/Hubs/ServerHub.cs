@@ -37,20 +37,25 @@ public partial class ServerHub : Hub<IServerHub>
     private readonly MainManager _manager;
 
     private readonly WebRtcSfuManager _webRtcSfuManager;
-    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly SfuPeerRegistry _sfuPeers;
+    private readonly VoipRoster _voip;
+    private readonly RoomMediaService _media;
     private readonly PostgresContext _postgres;
     private readonly IRoomStreamService _roomStreamService;
 
     public ServerHub(IConfiguration configuration, MainManager manager, PostgresContext postgres,
         GallowGameManager gallowGameManager, BlackjackManager blackjackManager,
-        WebRtcSfuManager webRtcSfuManager, RtmpFileShareManager rtmpFileShareManager,
-        IRoomStreamService roomStreamService, IHttpContextAccessor httpContextAccessor)
+        WebRtcSfuManager webRtcSfuManager, SfuPeerRegistry sfuPeers, VoipRoster voip, RoomMediaService media,
+        RtmpFileShareManager rtmpFileShareManager, IRoomStreamService roomStreamService, LivePlayTickets liveTickets)
     {
         Configuration = configuration;
         _manager = manager;
         _webRtcSfuManager = webRtcSfuManager;
-        _httpContextAccessor = httpContextAccessor;
+        _sfuPeers = sfuPeers;
+        _voip = voip;
+        _media = media;
         _rtmpFileShareManager = rtmpFileShareManager;
+        _liveTickets = liveTickets;
         _roomStreamService = roomStreamService;
         _postgres = postgres;
         _gallowGameManager = gallowGameManager;
@@ -85,7 +90,14 @@ public partial class ServerHub : Hub<IServerHub>
 
     public override async Task OnDisconnectedAsync(Exception? ex)
     {
-        var rooms = MainManager.GetRooms();
+        var rooms = MainManager.GetRooms().ToList();
+
+        // Media first, while the member is still listed, and in every room rather than only the one this
+        // connection is a member of: an account that reconnected has already moved its seat to the new
+        // connection, and whatever the old connection was streaming still has to end.
+        foreach (var mediaRoom in rooms)
+            await ReleaseMediaAsync(mediaRoom, Context.ConnectionId);
+
         var room = rooms.FirstOrDefault(x => x.server.FindByConnection(Context.ConnectionId) != null);
         if (room != null)
         {
@@ -97,20 +109,6 @@ public partial class ServerHub : Hub<IServerHub>
             {
                 promotedHost = room.server.Leave(e);
                 e.InvokeKick();
-            }
-
-            // If this connection owned an active WebRTC file share, stop it cleanly.
-            if (room.IsFileSharingActive && room.FileShareInitiator == Context.ConnectionId)
-                await StopFileShareInternalAsync(room);
-
-            // If this connection owned an active RTMP file share, stop it cleanly.
-            if (room.IsRtmpFileShareActive && room.RtmpFileShareInitiator == Context.ConnectionId)
-                await StopRtmpFileShareInternalAsync(room);
-
-            if (room.CurrentStreamer == Context.ConnectionId)
-            {
-                room.CurrentStreamer = null;
-                // stopWebRtcStream sent below via StopWebRtcStreamOnDisconnect
             }
 
             var gameMode = room.GameMode;
@@ -179,15 +177,9 @@ public partial class ServerHub : Hub<IServerHub>
             await Clients.All.getrooms(MainManager.GetRooms().ToSummaries());
         }
 
-        // Clean up VoIP room membership if the connection was in an audio room.
-        if (_voipRoomByConnection.TryRemove(Context.ConnectionId, out var voipRoomId))
-            await LeaveAudioRoomInternal(Context.ConnectionId, voipRoomId);
-
-        // Clean up active P2P streaming (Discord-style; handles member list update + stopWebRtcStream).
-        await StopWebRtcStreamOnDisconnect(Context.ConnectionId);
-
-        // Clean up SFU room membership and release server-side resources.
-        await OnSfuDisconnectedAsync(Context.ConnectionId);
+        // Anything not tied to a room that still exists: a call or SFU room of a room that was removed.
+        await _media.LeaveVoiceAsync(Context.ConnectionId);
+        await _media.ReleaseSfuAsync(Context.ConnectionId, _ => true);
 
         await base.OnDisconnectedAsync(ex);
     }
@@ -302,7 +294,9 @@ public partial class ServerHub : Hub<IServerHub>
 
         // Skipping while a file share is active stops the share first, then proceeds.
         if (room.IsFileSharingActive)
-            await StopFileShareInternalAsync(room);
+            await _media.StopFileShareAsync(room);
+        if (room.IsRtmpFileShareActive)
+            await _media.StopRtmpFileShareAsync(room);
 
         var mainServer = room.server;
         switch (room.server.playlist.Count)

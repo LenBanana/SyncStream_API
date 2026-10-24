@@ -1,251 +1,148 @@
-﻿using System;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-using SyncStreamAPI.Annotations;
-using SyncStreamAPI.Enums;
-using SyncStreamAPI.Helper;
+﻿using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.SignalR;
+using SyncStreamAPI.Auth;
 using SyncStreamAPI.Helper.Streaming;
 using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.RTMP;
-using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
-using Microsoft.AspNetCore.Authorization;
-using SyncStreamAPI.Auth;
-using SyncStreamAPI.Wire;
 
 namespace SyncStreamAPI.Hubs;
 
 public partial class ServerHub
 {
-    // Field resolved via the injected RtmpFileShareManager; set in the ServerHub constructor.
+    // Set in the ServerHub constructor.
     private RtmpFileShareManager _rtmpFileShareManager;
 
-    // ── RTMP file-share — mirroring WebRtcFileShareHub pattern ────────────────
+    // ---------------------------------------------------------------
+    // RTMP file share: the server transcodes the sharer's upload and pushes it to the streaming server, and the
+    // room plays it from there. It holds the room's stage like a broadcast or an SFU file share does.
+    // ---------------------------------------------------------------
 
     /// <summary>
-    /// Starts an RTMP file-share from a chunked upload already in progress.
-    /// The upload.bin file is fed directly to ffmpeg which pushes RTMP to nginx-rtmp.
-    /// Viewers and the room's Live modal immediately reflect the stream via the existing
-    /// OBS/RTMP infrastructure (ON_PUBLISH fires automatically from nginx-rtmp).
+    ///     Starts streaming the caller's upload to the room, as soon as its beginning has arrived. The rest keeps
+    ///     uploading; playback waits whenever it catches up.
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Approved)]
-    public async Task StartRtmpFileShareFromUpload(
-        string roomId,
-        string uploadId,
+    public async Task StartRtmpFileShareFromUpload(string roomId, string uploadId,
         RtmpPlaybackPreferences? playbackPreferences = null)
     {
-        var room = MainManager.GetRoom(roomId);
-        if (room == null) return;
+        var room = RequireMember(roomId);
+        var member = room.server.FindByConnection(Context.ConnectionId)!;
 
-        var member = room.server.members.FirstOrDefault(m => m?.ConnectionId == Context.ConnectionId);
-        if (member == null) return;
+        // Answers 404 for a malformed id, an unknown one, or someone else's, so all three read the same.
+        var upload = await _roomStreamService.GetRoomUploadStatusAsync(CallerUserId, uploadId);
+        if (upload.StatusCode != StatusCodes.Status200OK || upload.NextOffset <= 0)
+            throw new HubException("The upload session could not be found. Please try again.");
 
-        var dbUser = _postgres.Users?
-            .Include(x => x.RememberTokens)
-            .FirstOrDefault(x => x.ID == CallerUserId);
-        if (dbUser == null) return;
-
-        // Mutual exclusion: reject if user is already live via OBS.
-        if (_manager.LiveUsers.Any(u => u.id == dbUser.StreamToken))
+        lock (room.StageGate)
         {
-            await Clients.Caller.dialog(new Dialog(AlertType.Warning)
-            {
-                Header   = "Already streaming",
-                Question = "You are currently live-streaming via OBS. Stop the OBS stream first.",
-                Answer1  = "Ok"
-            });
-            return;
+            var refusal = StageRefusal(room, Context.ConnectionId)
+                          ?? (room.CurrentStreamer != null ? "Stop your broadcast before sharing a file." : null);
+            if (refusal != null) throw new HubException(refusal);
+            room.IsRtmpFileShareActive = true;
+            room.RtmpFileShareInitiator = Context.ConnectionId;
         }
 
-        if (room.IsFileSharingActive || room.IsRtmpFileShareActive)
-        {
-            await Clients.Caller.dialog(new Dialog(AlertType.Warning)
-            {
-                Header   = "File Share Unavailable",
-                Question = "Someone is already sharing a file in this room. Please wait until they finish.",
-                Answer1  = "Ok"
-            });
-            return;
-        }
-
-        // The id becomes a path segment, and it arrived from the caller. Without this, an id of ../../.. reads
-        // an upload.bin from somewhere else on the disk and streams it to the room.
-        if (!RoomUploadIds.IsWellFormed(uploadId))
-        {
-            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
-            {
-                Header   = "Upload Not Found",
-                Question = "The upload session could not be found. Please try again.",
-                Answer1  = "Ok"
-            });
-            return;
-        }
-
-        var filePath = RoomUploadPaths.DataFileFor(uploadId);
-        if (!File.Exists(filePath))
-        {
-            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
-            {
-                Header   = "Upload Not Found",
-                Question = "The upload session could not be found. Please try again.",
-                Answer1  = "Ok"
-            });
-            return;
-        }
-
-        room.IsRtmpFileShareActive  = true;
-        room.RtmpFileShareInitiator = Context.ConnectionId;
-        room.RtmpFileShareUploadId  = uploadId;
-        room.RtmpFileShareAssetKey  = uploadId;
-        room.RtmpFileShareUsesVodPlayback = false;
-        room.RtmpFileShareDurationSec = null;
-        room.RtmpFileSharePlaybackContentType = null;
-
+        RtmpFileShareSession session;
         try
         {
-            var session = await _rtmpFileShareManager.StartAsync(
-                roomId, Context.ConnectionId, dbUser.ID, dbUser.username,
-                dbUser.StreamToken, filePath, uploadId, playbackPreferences);
-
-            var httpContext = _httpContextAccessor.HttpContext;
-            var publicBaseUrl = General.GetPublicBaseUrl(httpContext?.Request, Configuration);
-            var streamUrl = !string.IsNullOrWhiteSpace(publicBaseUrl)
-                ? $"{publicBaseUrl}/api/rtmp/liveProxy?stream={Uri.EscapeDataString(dbUser.username.ToLower())}"
-                : $"{(Configuration["LiveStreamBaseUrl"]?.TrimEnd('/') ?? "https://live.drecktu.be/live")}?stream={Uri.EscapeDataString(dbUser.username.ToLower())}";
-            room.RtmpStreamUrl = streamUrl;
-            room.RtmpFileShareDurationSec = session.DurationSec;
-
-            await Clients.Group(roomId).rtmpFileShareStarted(
-                Context.ConnectionId, dbUser.username, roomId, streamUrl, session.DurationSec);
+            session = await _rtmpFileShareManager.PrepareAsync(roomId, RoomUploadPaths.DataFileFor(uploadId), uploadId,
+                upload.TotalSize, upload.NextOffset >= upload.TotalSize, playbackPreferences);
         }
-        catch (Exception ex)
+        catch (RtmpFileShareException ex)
         {
-            Console.WriteLine($"[RtmpFileShare] StartRtmpFileShareFromUpload failed: {ex.Message}");
-            room.IsRtmpFileShareActive  = false;
+            ReleaseRtmpStageClaim(room);
+            throw new HubException(ex.Message);
+        }
+        catch
+        {
+            ReleaseRtmpStageClaim(room);
+            throw;
+        }
+
+        // Announced before the first run starts: its "stream ready" must reach players that already know the share.
+        await Clients.Group(roomId).rtmpFileShareStarted(Context.ConnectionId, member.username ?? string.Empty,
+            roomId, session.StreamName, session.DurationSec);
+        await Clients.Group(roomId).rtmpFileShareMetadata(session.DurationSec, session.UploadComplete);
+        _rtmpFileShareManager.Begin(session);
+    }
+
+    private static void ReleaseRtmpStageClaim(Room room)
+    {
+        lock (room.StageGate)
+        {
+            room.IsRtmpFileShareActive = false;
             room.RtmpFileShareInitiator = null;
-            room.RtmpFileShareUploadId  = null;
-            room.RtmpFileShareAssetKey  = null;
-            room.RtmpFileShareUsesVodPlayback = false;
-            room.RtmpFileShareDurationSec = null;
-            room.RtmpFileSharePlaybackContentType = null;
-            room.RtmpStreamUrl          = null;
-            await Clients.Caller.dialog(new Dialog(AlertType.Danger)
-            {
-                Header   = "Error",
-                Question = "Failed to start the RTMP file stream. Please try again.",
-                Answer1  = "Ok"
-            });
         }
     }
 
-    /// <summary>Stops the active RTMP file-share and notifies all room members.</summary>
+    /// <summary>Ends the caller's RTMP file share; everyone's player goes back to what it was showing.</summary>
     [Authorize(Policy = AuthorizationPolicies.Approved)]
     public async Task StopRtmpFileShare(string roomId)
     {
-        var room = MainManager.GetRoom(roomId);
-        if (room == null || !room.IsRtmpFileShareActive) return;
-        if (room.RtmpFileShareInitiator != Context.ConnectionId) return;
+        var room = RequireMember(roomId);
+        if (!IsRtmpSharer(room)) return;
 
-        await StopRtmpFileShareInternalAsync(room);
+        await _media.StopRtmpFileShareAsync(room);
     }
 
-    /// <summary>Toggles play/pause of the active RTMP stream and broadcasts the state to viewers.</summary>
+    /// <summary>Pauses or resumes the caller's share for everyone.</summary>
     [Authorize(Policy = AuthorizationPolicies.Approved)]
     public async Task RtmpFileSharePlayPause(string roomId, bool isPlaying)
     {
-        var room = MainManager.GetRoom(roomId);
-        if (room == null || !room.IsRtmpFileShareActive) return;
-        if (room.RtmpFileShareInitiator != Context.ConnectionId) return;
+        var room = RequireMember(roomId);
+        if (!IsRtmpSharer(room)) return;
 
+        var changed = isPlaying ? _rtmpFileShareManager.Resume(roomId) : _rtmpFileShareManager.Pause(roomId);
         var session = _rtmpFileShareManager.Get(roomId);
-        if (session == null) return;
+        if (!changed || session == null) return;
 
-        await _rtmpFileShareManager.PausePlayAsync(roomId, isPlaying);
-
-        var pos = _rtmpFileShareManager.Get(roomId)?.CurrentPositionSec ?? 0;
-        var viewers = Clients.GroupExcept(roomId, new[] { Context.ConnectionId });
-        await viewers.rtmpFileSharePlayPause(isPlaying, pos);
+        await Clients.Group(roomId).rtmpFileSharePlayPause(isPlaying, session.Status().PositionSec);
     }
 
-    /// <summary>
-    /// Seeks the RTMP stream to the given position by killing and restarting ffmpeg.
-    /// Blocked while the background upload is still in progress.
-    /// </summary>
+    /// <summary>Moves the caller's share to a position, once the whole file has been uploaded.</summary>
     [Authorize(Policy = AuthorizationPolicies.Approved)]
     public async Task RtmpFileShareSeek(string roomId, double positionSec)
     {
-        var room = MainManager.GetRoom(roomId);
-        if (room == null || !room.IsRtmpFileShareActive) return;
-        if (room.RtmpFileShareInitiator != Context.ConnectionId) return;
+        var room = RequireMember(roomId);
+        if (!IsRtmpSharer(room)) return;
 
-        if (!string.IsNullOrWhiteSpace(room.RtmpFileShareUploadId))
-        {
-            await Clients.Caller.dialog(new Dialog(AlertType.Warning)
-            {
-                Header   = "Upload In Progress",
-                Question = "The file is still uploading. Seeking will be available once the full upload completes.",
-                Answer1  = "Ok"
-            });
-            return;
-        }
+        var session = _rtmpFileShareManager.Get(roomId);
+        if (session == null) return;
+        if (!double.IsFinite(positionSec))
+            throw new HubException("That is not a position in the file.");
 
-        await _rtmpFileShareManager.SeekAsync(roomId, positionSec);
-        await Clients.Group(roomId).rtmpFileShareSeek(positionSec);
+        // A position past what has been uploaded cannot be played, so seeking waits for the whole file.
+        if (!session.Status().UploadComplete)
+            throw new HubException("The file is still uploading. Seeking will be available once the upload completes.");
+
+        if (!_rtmpFileShareManager.Seek(roomId, positionSec)) return;
+        await Clients.Group(roomId).rtmpFileShareSeek(session.Status().PositionSec);
     }
 
     /// <summary>
-    /// Called by the host after the background chunk upload finishes.
-    /// Clears the upload guard so seeking becomes available.
+    ///     The sharer's upload has finished. From now on the end of the file is the end of the share, and seeking
+    ///     becomes possible.
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Approved)]
-    public Task MarkRtmpFileShareUploadComplete(string roomId, string uploadId)
+    public async Task MarkRtmpFileShareUploadComplete(string roomId, string uploadId)
     {
-        var room = MainManager.GetRoom(roomId);
-        if (room == null) return Task.CompletedTask;
-        if (room.RtmpFileShareInitiator != Context.ConnectionId) return Task.CompletedTask;
+        var room = RequireMember(roomId);
+        if (!IsRtmpSharer(room)) return;
 
-        if (room.RtmpFileShareUploadId == uploadId)
-            room.RtmpFileShareUploadId = null;
+        var session = _rtmpFileShareManager.Get(roomId);
+        if (session == null || session.UploadId != uploadId) return;
 
-        _rtmpFileShareManager.MarkUploadComplete(roomId, uploadId);
-        return Task.CompletedTask;
+        var upload = await _roomStreamService.GetRoomUploadStatusAsync(CallerUserId, uploadId);
+        if (upload.StatusCode != StatusCodes.Status200OK || upload.NextOffset != upload.TotalSize)
+            throw new HubException("The upload is not complete yet.");
+
+        _rtmpFileShareManager.MarkUploadComplete(roomId);
+        await Clients.Group(roomId).rtmpFileShareMetadata(session.DurationSec, true);
     }
 
-    // ── Shared internal teardown ───────────────────────────────────────────────
-
-    internal async Task StopRtmpFileShareInternalAsync(Room room)
-    {
-        var session = _rtmpFileShareManager.Get(room.uniqueId);
-        _rtmpFileShareManager.Stop(room.uniqueId);
-
-        if (!string.IsNullOrWhiteSpace(room.RtmpFileShareAssetKey))
-            _roomStreamService.CleanupRoomUploadArtifacts(room.RtmpFileShareAssetKey);
-
-        if (session != null)
-        {
-            var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.id == session.StreamToken);
-            if (liveUser != null)
-            {
-                _manager.LiveUsers.TryTake(out liveUser);
-                var liveUsers = _manager.LiveUsers;
-                await Clients.Group(General.LoggedInGroupName)
-                    .getliveusers(liveUsers.ToDtos());
-                await Clients.Group(General.BottedInGroupName)
-                    .getliveusers(liveUsers.ToDtos());
-            }
-        }
-
-        room.IsRtmpFileShareActive  = false;
-        room.RtmpFileShareInitiator = null;
-        room.RtmpFileShareUploadId  = null;
-        room.RtmpFileShareAssetKey  = null;
-        room.RtmpFileShareUsesVodPlayback = false;
-        room.RtmpFileShareDurationSec = null;
-        room.RtmpFileSharePlaybackContentType = null;
-        room.RtmpStreamUrl          = null;
-
-        await Clients.Group(room.uniqueId).rtmpFileShareStopped();
-    }
+    private bool IsRtmpSharer(Room room)
+        => room.IsRtmpFileShareActive && room.RtmpFileShareInitiator == Context.ConnectionId;
 }

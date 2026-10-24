@@ -65,7 +65,25 @@ public class MainManager
     public static ConcurrentDictionary<string, Room> Rooms { get; set; } = new();
     public static GeneralManager GeneralManager { get; set; }
     public static RoomManager RoomManager { get; set; }
-    public BlockingCollection<LiveUser> LiveUsers { get; set; } = new();
+    /// <summary>
+    ///     Who is streaming from OBS, keyed by their stream token.
+    /// </summary>
+    /// <remarks>
+    ///     Was a BlockingCollection, which is a queue: TryTake removes whichever entry comes first, not the one
+    ///     asked for, so one streamer stopping took someone else off the live list.
+    /// </remarks>
+    public ConcurrentDictionary<string, LiveUser> LiveUsers { get; } = new();
+
+    /// <summary>The live list as clients show it, longest-running first.</summary>
+    public IEnumerable<LiveUser> LiveUsersInOrder() => LiveUsers.Values.OrderBy(user => user.created);
+
+    /// <summary>The OBS stream with this name or owner, matched ignoring case; null when nobody streams it.</summary>
+    public LiveUser? FindLiveUser(string? streamName)
+        => string.IsNullOrWhiteSpace(streamName)
+            ? null
+            : LiveUsers.Values.FirstOrDefault(user =>
+                string.Equals(user.StreamName, streamName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(user.userName, streamName, StringComparison.OrdinalIgnoreCase));
 
     public Dictionary<WebClient, DownloadClientValue> userWebDownloads { get; set; } = new();
 

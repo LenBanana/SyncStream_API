@@ -311,6 +311,6 @@ public class ClientContractTests
         "open", "statechange", "enterfullscreen", "exitfullscreen", "captionsenabled", "captionsdisabled",
         "languagechange", "qualitychange", "controlshidden", "controlsshown", "fullscreenchange",
         // mediasoup transport and producer events.
-        "connect", "produce", "transportclose", "trackended", "icegatheringstatechange"
+        "connect", "produce", "transportclose", "trackended", "icegatheringstatechange", "connectionstatechange"
     };
 }

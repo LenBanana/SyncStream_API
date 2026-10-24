@@ -1,16 +1,9 @@
 ﻿using System;
-using System.Net.Http;
-using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Cors;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Net.Http.Headers;
-using SyncStreamAPI.Auth;
 using SyncStreamAPI.DataContext;
 using SyncStreamAPI.Helper;
 using SyncStreamAPI.Helper.Streaming;
@@ -23,223 +16,127 @@ using SyncStreamAPI.Wire;
 
 namespace SyncStreamAPI.Controllers;
 
+/// <summary>
+///     The streaming server's callbacks. nginx-rtmp asks here before letting anyone publish or play, and reports
+///     when they stop.
+/// </summary>
+/// <remarks>
+///     These answer anyone who calls them, so each one checks a credential the publisher or player put in its
+///     URL and nginx passed on: an account's stream token for OBS, a share's own key for the server's ffmpeg, and
+///     a play ticket from GetLivePlayUrl for players.
+/// </remarks>
 [EnableCors("CORSPolicy")]
 [Route("api/rtmp")]
 public class RtmpController : Controller
 {
-    private static readonly HttpClient LiveProxyClient = new(new SocketsHttpHandler
-    {
-        AllowAutoRedirect = false,
-        AutomaticDecompression = System.Net.DecompressionMethods.None,
-        UseProxy = false,
-    })
-    {
-        Timeout = System.Threading.Timeout.InfiniteTimeSpan,
-    };
-
-    private readonly IConfiguration _configuration;
     private readonly IHubContext<ServerHub, IServerHub> _hub;
     private readonly MainManager _manager;
     private readonly PostgresContext _postgres;
     private readonly RtmpFileShareManager _rtmpFileShareManager;
+    private readonly LivePlayTickets _tickets;
 
     public RtmpController(
-        IConfiguration configuration,
         IHubContext<ServerHub, IServerHub> hub,
         PostgresContext postgres,
         MainManager manager,
-        RtmpFileShareManager rtmpFileShareManager)
+        RtmpFileShareManager rtmpFileShareManager,
+        LivePlayTickets tickets)
     {
-        _configuration = configuration;
         _hub = hub;
         _postgres = postgres;
         _manager = manager;
         _rtmpFileShareManager = rtmpFileShareManager;
-    }
-
-    [HttpGet("[action]")]
-    public async Task<IActionResult> liveProxy([FromQuery] string stream, [FromQuery] string token)
-    {
-        if (string.IsNullOrWhiteSpace(stream) || string.IsNullOrWhiteSpace(token))
-            return BadRequest("Missing required stream parameters");
-
-        try
-        {
-            var liveBase = _configuration["LiveStreamBaseUrl"]?.TrimEnd('/') ?? "https://live.drecktu.be/live";
-            var targetUrl = liveBase + Request.QueryString;
-
-            using var upstreamRequest = new HttpRequestMessage(HttpMethod.Get, targetUrl);
-            using var upstreamResponse = await LiveProxyClient.SendAsync(
-                upstreamRequest,
-                HttpCompletionOption.ResponseHeadersRead,
-                HttpContext.RequestAborted);
-
-            if (!upstreamResponse.IsSuccessStatusCode)
-                return StatusCode((int)upstreamResponse.StatusCode);
-
-            HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
-            Response.ContentType = upstreamResponse.Content.Headers.ContentType?.ToString() ?? "video/x-flv";
-            Response.Headers[HeaderNames.CacheControl] = "no-store, no-cache, must-revalidate";
-            Response.Headers[HeaderNames.Pragma] = "no-cache";
-            Response.Headers[HeaderNames.Expires] = "0";
-
-            await using var upstreamStream = await upstreamResponse.Content.ReadAsStreamAsync(HttpContext.RequestAborted);
-            await upstreamStream.CopyToAsync(Response.Body, HttpContext.RequestAborted);
-            return new EmptyResult();
-        }
-        catch (OperationCanceledException)
-        {
-            return new EmptyResult();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"RTMP liveProxy failed: {ex}");
-            return StatusCode(StatusCodes.Status502BadGateway);
-        }
+        _tickets = tickets;
     }
 
     [HttpPost("[action]")]
     public async Task<IActionResult> onpublish([FromForm] RtmpData rtmpData)
     {
-        try
+        if (string.IsNullOrWhiteSpace(rtmpData.name) || string.IsNullOrWhiteSpace(rtmpData.token))
+            return Unauthorized();
+
+        if (RtmpFileShareManager.IsShareStream(rtmpData.name))
         {
-            Console.WriteLine($"onpublish: {rtmpData.name}");
-            var dbUser = _postgres.Users?.FirstOrDefault(x =>
-                x.StreamToken != null && x.StreamToken == rtmpData.token &&
-                x.username.ToLower() == rtmpData.name.ToLower());
-            var token = dbUser?.StreamToken;
-            if (string.IsNullOrEmpty(token) || dbUser.userprivileges < UserPrivileges.Approved) return Unauthorized();
+            var share = _rtmpFileShareManager.AcceptPublisher(rtmpData.name, rtmpData.token);
+            if (share == null) return Unauthorized();
 
-            var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.id == rtmpData.token);
-            if (liveUser != null) return Ok();
-            {
-                _manager.LiveUsers.Add(new LiveUser { userName = dbUser.username, id = rtmpData.token });
-                var liveUsers = _manager.LiveUsers;
-                await _hub.Clients.Groups(General.LoggedInGroupName)
-                    .getliveusers(liveUsers.ToDtos());
-                await _hub.Clients.Groups(General.BottedInGroupName)
-                    .getliveusers(liveUsers.ToDtos());
-            }
-
-            if (_rtmpFileShareManager.TryMarkPublisherLive(token, rtmpData.name, out var roomId, out var positionSec))
-                await _hub.Clients.Group(roomId).rtmpFileShareStreamReady(positionSec);
-
+            // Every run is a new stream with timestamps starting from zero; players connect afresh.
+            await _hub.Clients.Group(share.RoomId).rtmpFileShareStreamReady(share.Status().PositionSec);
             return Ok();
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.ToString());
-            return StatusCode(StatusCodes.Status500InternalServerError);
-        }
+
+        var name = rtmpData.name.ToLower();
+        var dbUser = await _postgres.Users.FirstOrDefaultAsync(user =>
+            user.StreamToken == rtmpData.token && user.username.ToLower() == name);
+        if (dbUser == null || dbUser.userprivileges < UserPrivileges.Approved) return Unauthorized();
+
+        var added = _manager.LiveUsers.TryAdd(dbUser.StreamToken,
+            new LiveUser { id = dbUser.StreamToken, userName = dbUser.username, StreamName = rtmpData.name });
+        if (added) await SendLiveUsersAsync(toBots: true);
+        return Ok();
     }
 
     [HttpPost("[action]")]
     public async Task<IActionResult> onpublishdone([FromForm] RtmpData rtmpData)
     {
-        try
+        if (RtmpFileShareManager.IsShareStream(rtmpData.name))
         {
-            Console.WriteLine($"onpublishdone: {rtmpData.name}");
-            var dbUser = _postgres.Users?.FirstOrDefault(x => x.StreamToken != null && x.StreamToken == rtmpData.token);
-            var token = dbUser?.StreamToken;
-            if (string.IsNullOrEmpty(token) || dbUser.userprivileges < UserPrivileges.Approved) return Unauthorized();
-
-            if (_rtmpFileShareManager.TryConsumeExpectedPublishDone(token, rtmpData.name))
-            {
-                Console.WriteLine($"[RtmpShare/{rtmpData.name}] suppressing transient onpublishdone during managed pause/seek");
-                return Ok();
-            }
-
-            var liveUser = _manager.LiveUsers.FirstOrDefault(x => x.id == rtmpData.token);
-            if (liveUser == null) return Ok();
-            {
-                _manager.LiveUsers.TryTake(out liveUser);
-                var liveUsers = _manager.LiveUsers;
-                await _hub.Clients.Groups(General.LoggedInGroupName)
-                    .getliveusers(liveUsers.ToDtos());
-                await _hub.Clients.Groups(General.BottedInGroupName)
-                    .getliveusers(liveUsers.ToDtos());
-            }
+            _rtmpFileShareManager.PublisherGone(rtmpData.name, rtmpData.token);
             return Ok();
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.ToString());
-            return StatusCode(StatusCodes.Status500InternalServerError);
-        }
+
+        if (string.IsNullOrEmpty(rtmpData.token) || !_manager.LiveUsers.TryRemove(rtmpData.token, out _))
+            return Ok();
+
+        await SendLiveUsersAsync(toBots: true);
+        return Ok();
     }
 
     [HttpPost("[action]")]
     public async Task<IActionResult> onplay([FromForm] RtmpData rtmpData)
     {
-        try
-        {
-            Console.WriteLine($"onplay: {rtmpData.name}");
-            var liveUser = _manager.LiveUsers?.FirstOrDefault(x =>
-                string.Equals(x.userName, rtmpData.name, StringComparison.CurrentCultureIgnoreCase));
-            if (liveUser == null) return StatusCode(StatusCodes.Status404NotFound);
+        if (!_tickets.TryRead(rtmpData.token, out var ticket) || ticket.Stream != rtmpData.name ||
+            ticket.ExpiresAt < DateTimeOffset.UtcNow)
+            return Unauthorized();
 
-            var dbUser = FindByRememberToken(rtmpData.token);
-            if (dbUser == null || dbUser.userprivileges < UserPrivileges.Approved) return Unauthorized();
+        var liveUser = _manager.FindLiveUser(rtmpData.name);
+        if (liveUser == null || ticket.UserId is not { } viewerId) return Ok();
 
-            liveUser.watchMember.Add(dbUser.ToSummary());
-            var liveUsers = _manager.LiveUsers;
-            await _hub.Clients.Groups(General.LoggedInGroupName)
-                .getliveusers(liveUsers.ToDtos());
-            return Ok();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.ToString());
-            return StatusCode(StatusCodes.Status500InternalServerError);
-        }
+        var viewer = await _postgres.Users.FirstOrDefaultAsync(user => user.ID == viewerId);
+        if (viewer == null) return Ok();
+
+        lock (liveUser.watchMember)
+            liveUser.watchMember.Add(viewer.ToSummary());
+        await SendLiveUsersAsync(toBots: false);
+        return Ok();
     }
 
     [HttpPost("[action]")]
     public async Task<IActionResult> onplaydone([FromForm] RtmpData rtmpData)
     {
-        try
+        // The ticket a play started with, which has usually expired by the time the play ends.
+        if (!_tickets.TryRead(rtmpData.token, out var ticket) || ticket.Stream != rtmpData.name)
+            return Unauthorized();
+
+        var liveUser = _manager.FindLiveUser(rtmpData.name);
+        if (liveUser == null || ticket.UserId is not { } viewerId) return Ok();
+
+        bool removed;
+        lock (liveUser.watchMember)
         {
-            Console.WriteLine($"onplaydone: {rtmpData.name}");
-            var liveUser = _manager.LiveUsers?.FirstOrDefault(x =>
-                string.Equals(x.userName, rtmpData.name, StringComparison.CurrentCultureIgnoreCase));
-            if (liveUser == null) return StatusCode(StatusCodes.Status404NotFound);
-
-            var dbUser = FindByRememberToken(rtmpData.token);
-            if (dbUser == null || dbUser.userprivileges < UserPrivileges.Approved) return Unauthorized();
-
-            var watchMemberIdx = liveUser.watchMember.FindIndex(x => x.ID == dbUser.ID);
-            if (watchMemberIdx != -1) liveUser.watchMember.RemoveAt(watchMemberIdx);
-
-            var liveUsers = _manager.LiveUsers;
-            await _hub.Clients.Groups(General.LoggedInGroupName)
-                .getliveusers(liveUsers.ToDtos());
-            return Ok();
+            var index = liveUser.watchMember.FindIndex(member => member.ID == viewerId);
+            removed = index >= 0;
+            if (removed) liveUser.watchMember.RemoveAt(index);
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.ToString());
-            return StatusCode(StatusCodes.Status500InternalServerError);
-        }
+
+        if (removed) await SendLiveUsersAsync(toBots: false);
+        return Ok();
     }
 
-    /// <summary>
-    ///     Finds the account behind a remember token presented by the streaming server.
-    /// </summary>
-    /// <remarks>
-    ///     Looked up by digest, because that is all that is stored now. This also checks that the session is
-    ///     live, which the two inline lookups it replaces did not: a revoked or long-expired token authenticated
-    ///     a viewer here for as long as the row existed.
-    /// </remarks>
-    private DbUser? FindByRememberToken(string? token)
+    private async Task SendLiveUsersAsync(bool toBots)
     {
-        if (string.IsNullOrWhiteSpace(token)) return null;
-
-        var digest = RememberTokens.Digest(token);
-        var now = DateTime.UtcNow;
-
-        return _postgres.Users?
-            .Include(candidate => candidate.RememberTokens)
-            .FirstOrDefault(candidate => candidate.RememberTokens.Any(remembered =>
-                remembered.TokenHash == digest && remembered.RevokedUtc == null && now < remembered.ExpiresUtc));
+        var liveUsers = _manager.LiveUsersInOrder().ToDtos();
+        await _hub.Clients.Group(General.LoggedInGroupName).getliveusers(liveUsers);
+        if (toBots) await _hub.Clients.Group(General.BottedInGroupName).getliveusers(liveUsers);
     }
 }

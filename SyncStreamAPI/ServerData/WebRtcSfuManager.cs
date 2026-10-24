@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
@@ -15,52 +16,52 @@ namespace SyncStreamAPI.ServerData;
 /// All communication is JSON over HTTP; the actual WebRTC media flows directly
 /// between browser clients and the mediasoup server (never through this .NET process).
 /// </summary>
+/// <remarks>
+/// Every failure, whether the SFU refused the request or could not be reached, surfaces as
+/// <see cref="SfuRequestException"/>, which the hub turns into a message the person can read.
+/// </remarks>
 public class WebRtcSfuManager
 {
     private readonly HttpClient _http;
     private readonly string _sfuBaseUrl;
+    private JObject? _rtpCapabilities;
 
-    public WebRtcSfuManager(IConfiguration configuration)
+    public WebRtcSfuManager(HttpClient http, IConfiguration configuration)
     {
+        _http = http;
         _sfuBaseUrl = configuration["SfuUrl"]?.TrimEnd('/') ?? "http://localhost:3000";
-        _http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
     }
+
+    private string RoomUrl(string sfuRoomId) => $"{_sfuBaseUrl}/rooms/{Uri.EscapeDataString(sfuRoomId)}";
 
     // ---------------------------------------------------------------
     // Router capabilities
     // ---------------------------------------------------------------
 
-    /// <summary>Returns the mediasoup router's RTP capabilities so clients can load their Device.</summary>
+    /// <summary>
+    /// Returns the mediasoup router's RTP capabilities so clients can load their Device.
+    /// They are fixed by the SFU's codec list, so the first answer is kept.
+    /// </summary>
     public async Task<JObject> GetRtpCapabilitiesAsync()
     {
-        var response = await _http.GetAsync($"{_sfuBaseUrl}/rtp-capabilities");
-        response.EnsureSuccessStatusCode();
-        return JObject.Parse(await response.Content.ReadAsStringAsync());
+        _rtpCapabilities ??= await Request(HttpMethod.Get, $"{_sfuBaseUrl}/rtp-capabilities");
+        return _rtpCapabilities;
     }
 
     // ---------------------------------------------------------------
     // Room management
     // ---------------------------------------------------------------
 
-    /// <summary>Creates the room on the SFU if it does not already exist.</summary>
-    public async Task EnsureRoomAsync(string roomId)
+    /// <summary>Creates the room on the SFU if it does not already exist. The SFU closes it once it is idle.</summary>
+    public async Task EnsureRoomAsync(string sfuRoomId)
     {
-        var response = await _http.PostAsync($"{_sfuBaseUrl}/rooms/{Uri.EscapeDataString(roomId)}", null);
-        response.EnsureSuccessStatusCode();
+        await Request(HttpMethod.Post, RoomUrl(sfuRoomId));
     }
 
-    /// <summary>Closes the room and all its transports/producers/consumers.</summary>
-    public async Task CloseRoomAsync(string roomId)
+    /// <summary>Returns all active producers in the room; none for a room that does not exist.</summary>
+    public async Task<List<SfuProducerEntry>> GetProducersAsync(string sfuRoomId)
     {
-        await _http.DeleteAsync($"{_sfuBaseUrl}/rooms/{Uri.EscapeDataString(roomId)}");
-    }
-
-    /// <summary>Returns all active producers in the room.</summary>
-    public async Task<List<SfuProducerEntry>> GetProducersAsync(string roomId)
-    {
-        var response = await _http.GetAsync($"{_sfuBaseUrl}/rooms/{Uri.EscapeDataString(roomId)}/producers");
-        response.EnsureSuccessStatusCode();
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await RequestText(HttpMethod.Get, $"{RoomUrl(sfuRoomId)}/producers");
         return JsonConvert.DeserializeObject<List<SfuProducerEntry>>(json) ?? new List<SfuProducerEntry>();
     }
 
@@ -69,36 +70,43 @@ public class WebRtcSfuManager
     // ---------------------------------------------------------------
 
     /// <summary>
-    /// Creates a WebRTC transport in the specified room.
-    /// <paramref name="producing"/> and <paramref name="consuming"/> signal the
-    /// mediasoup server the intended direction so it can configure the transport.
+    /// Creates a WebRTC transport in the specified room and returns what the client needs to
+    /// create its end of it.
     /// </summary>
-    public async Task<SfuTransportInfo> CreateTransportAsync(string roomId, bool producing, bool consuming)
+    public async Task<SfuTransportInfo> CreateTransportAsync(string sfuRoomId)
     {
-        var body = new JObject
+        var response = await Request(HttpMethod.Post, $"{RoomUrl(sfuRoomId)}/transports");
+        return new SfuTransportInfo
         {
-            ["producing"] = producing,
-            ["consuming"] = consuming
+            Id = response["id"]?.Value<string>() ?? throw new InvalidOperationException("SFU created a transport with no id"),
+            IceParameters = response["iceParameters"] as JObject ?? new JObject(),
+            IceCandidates = response["iceCandidates"] as JArray ?? new JArray(),
+            DtlsParameters = response["dtlsParameters"] as JObject ?? new JObject()
         };
-        var response = await Post($"{_sfuBaseUrl}/rooms/{Uri.EscapeDataString(roomId)}/transports", body);
-        return MapTransport(response);
     }
 
     /// <summary>Finalises the DTLS handshake for an existing transport.</summary>
-    public async Task ConnectTransportAsync(string roomId, string transportId, JObject dtlsParameters)
+    public async Task ConnectTransportAsync(string sfuRoomId, string transportId, JObject dtlsParameters)
     {
-        var body = new JObject { ["dtlsParameters"] = dtlsParameters };
-        var response = await Post(
-            $"{_sfuBaseUrl}/rooms/{Uri.EscapeDataString(roomId)}/transports/{Uri.EscapeDataString(transportId)}/connect",
-            body);
-        EnsureOk(response);
+        await Request(HttpMethod.Post,
+            $"{RoomUrl(sfuRoomId)}/transports/{Uri.EscapeDataString(transportId)}/connect",
+            new JObject { ["dtlsParameters"] = dtlsParameters });
+    }
+
+    /// <summary>New ICE credentials for a transport whose connection failed.</summary>
+    public async Task<JObject> RestartIceAsync(string sfuRoomId, string transportId)
+    {
+        var response = await Request(HttpMethod.Post,
+            $"{RoomUrl(sfuRoomId)}/transports/{Uri.EscapeDataString(transportId)}/restart-ice");
+        return response["iceParameters"] as JObject
+               ?? throw new InvalidOperationException("SFU restarted ICE but returned no parameters");
     }
 
     /// <summary>Closes a transport and all of its producers/consumers.</summary>
-    public async Task CloseTransportAsync(string roomId, string transportId)
+    /// <returns>False when the SFU no longer had it.</returns>
+    public Task<bool> CloseTransportAsync(string sfuRoomId, string transportId)
     {
-        await _http.DeleteAsync(
-            $"{_sfuBaseUrl}/rooms/{Uri.EscapeDataString(roomId)}/transports/{Uri.EscapeDataString(transportId)}");
+        return Delete($"{RoomUrl(sfuRoomId)}/transports/{Uri.EscapeDataString(transportId)}");
     }
 
     // ---------------------------------------------------------------
@@ -110,7 +118,7 @@ public class WebRtcSfuManager
     /// Returns the mediasoup producer ID that viewers will use to consume the track.
     /// </summary>
     public async Task<string> ProduceAsync(
-        string roomId, string transportId, string kind, JObject rtpParameters, string peerId)
+        string sfuRoomId, string transportId, string kind, JObject rtpParameters, string peerId)
     {
         var body = new JObject
         {
@@ -118,17 +126,16 @@ public class WebRtcSfuManager
             ["rtpParameters"] = rtpParameters,
             ["peerId"] = peerId
         };
-        var response = await Post(
-            $"{_sfuBaseUrl}/rooms/{Uri.EscapeDataString(roomId)}/transports/{Uri.EscapeDataString(transportId)}/produce",
-            body);
+        var response = await Request(HttpMethod.Post,
+            $"{RoomUrl(sfuRoomId)}/transports/{Uri.EscapeDataString(transportId)}/produce", body);
         return response["id"]?.Value<string>() ?? throw new InvalidOperationException("SFU produce returned no id");
     }
 
-    /// <summary>Closes an existing producer (e.g. when the streamer mutes a track or disconnects).</summary>
-    public async Task CloseProducerAsync(string roomId, string producerId)
+    /// <summary>Closes an existing producer.</summary>
+    /// <returns>False when the SFU no longer had it.</returns>
+    public Task<bool> CloseProducerAsync(string sfuRoomId, string producerId)
     {
-        await _http.DeleteAsync(
-            $"{_sfuBaseUrl}/rooms/{Uri.EscapeDataString(roomId)}/producers/{Uri.EscapeDataString(producerId)}");
+        return Delete($"{RoomUrl(sfuRoomId)}/producers/{Uri.EscapeDataString(producerId)}");
     }
 
     // ---------------------------------------------------------------
@@ -140,7 +147,7 @@ public class WebRtcSfuManager
     /// The returned <see cref="SfuConsumerInfo"/> is forwarded to the viewer's mediasoup-client.
     /// </summary>
     public async Task<SfuConsumerInfo> ConsumeAsync(
-        string roomId, string transportId, string producerId, JObject rtpCapabilities, string peerId)
+        string sfuRoomId, string transportId, string producerId, JObject rtpCapabilities, string peerId)
     {
         var body = new JObject
         {
@@ -148,9 +155,8 @@ public class WebRtcSfuManager
             ["rtpCapabilities"] = rtpCapabilities,
             ["peerId"] = peerId
         };
-        var response = await Post(
-            $"{_sfuBaseUrl}/rooms/{Uri.EscapeDataString(roomId)}/transports/{Uri.EscapeDataString(transportId)}/consume",
-            body);
+        var response = await Request(HttpMethod.Post,
+            $"{RoomUrl(sfuRoomId)}/transports/{Uri.EscapeDataString(transportId)}/consume", body);
         return new SfuConsumerInfo
         {
             Id = response["id"]?.Value<string>() ?? string.Empty,
@@ -161,67 +167,48 @@ public class WebRtcSfuManager
     }
 
     // ---------------------------------------------------------------
-    // Consumer preferred layers (simulcast / SVC)
-    // ---------------------------------------------------------------
-
-    /// <summary>
-    /// Sets the preferred simulcast/SVC spatial and temporal layers for a consumer,
-    /// enabling adaptive bitrate from the viewer side.
-    /// </summary>
-    public async Task SetPreferredLayersAsync(string roomId, string consumerId, int spatialLayer, int temporalLayer)
-    {
-        var body = new JObject
-        {
-            ["spatialLayer"] = spatialLayer,
-            ["temporalLayer"] = temporalLayer
-        };
-        var response = await Post(
-            $"{_sfuBaseUrl}/rooms/{Uri.EscapeDataString(roomId)}/consumers/{Uri.EscapeDataString(consumerId)}/preferred-layers",
-            body);
-        EnsureOk(response);
-    }
-
-    // ---------------------------------------------------------------
     // Server-side file streaming
     // ---------------------------------------------------------------
 
     /// <summary>
     /// Starts an ffmpeg-based server-side file stream into the SFU room.
     /// The SFU transcodes the file to H.264+Opus and injects it as producers
-    /// that all room consumers can subscribe to — no client changes needed.
-    /// Returns the video and audio producer IDs.
+    /// that all room consumers can subscribe to.
     /// </summary>
-    public async Task<(string VideoProducerId, string AudioProducerId)> StartServerFileStreamAsync(
-        string roomId, string filePath, long targetBitrate = 3_000_000)
+    /// <param name="growing">The file is still being uploaded; running out of data is not the end.</param>
+    public async Task<ServerFileStreamStatus> StartServerFileStreamAsync(
+        string sfuRoomId, string filePath, bool growing, long targetBitrate = 3_000_000)
     {
         var body = new JObject
         {
-            ["filePath"]       = filePath,
-            ["targetBitrate"]  = targetBitrate
+            ["filePath"] = filePath,
+            ["targetBitrate"] = targetBitrate,
+            ["growing"] = growing
         };
-        var response = await Post(
-            $"{_sfuBaseUrl}/rooms/{Uri.EscapeDataString(roomId)}/server-stream", body);
-        return (
-            response["videoProducerId"]?.Value<string>() ?? string.Empty,
-            response["audioProducerId"]?.Value<string>() ?? string.Empty
-        );
+        return ParseStreamStatus(await Request(HttpMethod.Post, $"{RoomUrl(sfuRoomId)}/server-stream", body));
     }
 
-    /// <summary>Controls an active server file stream (play / pause / seek).</summary>
-    public async Task ControlServerFileStreamAsync(string roomId, string action, double? positionSec = null)
+    /// <returns>The stream's state, or null when the room has no server stream.</returns>
+    public async Task<ServerFileStreamStatus?> GetServerFileStreamAsync(string sfuRoomId)
     {
-        var body = new JObject {["action"] = action};
+        var response = await Send(HttpMethod.Get, $"{RoomUrl(sfuRoomId)}/server-stream", null);
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        return ParseStreamStatus(JObject.Parse(await ReadSuccess(response)));
+    }
+
+    /// <summary>Controls an active server file stream (play / pause / seek / upload-complete).</summary>
+    public async Task ControlServerFileStreamAsync(string sfuRoomId, string action, double? positionSec = null)
+    {
+        var body = new JObject { ["action"] = action };
         if (positionSec.HasValue) body["position"] = positionSec.Value;
-        var response = await Post(
-            $"{_sfuBaseUrl}/rooms/{Uri.EscapeDataString(roomId)}/server-stream/control", body);
-        EnsureOk(response);
+        await Request(HttpMethod.Post, $"{RoomUrl(sfuRoomId)}/server-stream/control", body);
     }
 
     /// <summary>Stops the active server file stream and releases SFU resources.</summary>
-    public async Task StopServerFileStreamAsync(string roomId)
+    /// <returns>False when the SFU had no stream to stop.</returns>
+    public Task<bool> StopServerFileStreamAsync(string sfuRoomId)
     {
-        await _http.DeleteAsync(
-            $"{_sfuBaseUrl}/rooms/{Uri.EscapeDataString(roomId)}/server-stream");
+        return Delete($"{RoomUrl(sfuRoomId)}/server-stream");
     }
 
     // ---------------------------------------------------------------
@@ -232,9 +219,9 @@ public class WebRtcSfuManager
     /// Tells the SFU server to start recording all producers in the room to a local file.
     /// Returns the recording info (filename, start timestamp).
     /// </summary>
-    public async Task<SfuRecordingInfo> StartRecordingAsync(string roomId)
+    public async Task<SfuRecordingInfo> StartRecordingAsync(string roomId, string sfuRoomId)
     {
-        var response = await Post($"{_sfuBaseUrl}/rooms/{Uri.EscapeDataString(roomId)}/recording/start", null);
+        var response = await Request(HttpMethod.Post, $"{RoomUrl(sfuRoomId)}/recording/start");
         return new SfuRecordingInfo
         {
             RoomId = roomId,
@@ -244,9 +231,9 @@ public class WebRtcSfuManager
     }
 
     /// <summary>Stops an active recording and returns the filename of the finished file.</summary>
-    public async Task<string> StopRecordingAsync(string roomId)
+    public async Task<string> StopRecordingAsync(string sfuRoomId)
     {
-        var response = await Post($"{_sfuBaseUrl}/rooms/{Uri.EscapeDataString(roomId)}/recording/stop", null);
+        var response = await Request(HttpMethod.Post, $"{RoomUrl(sfuRoomId)}/recording/stop");
         return response["filename"]?.Value<string>() ?? string.Empty;
     }
 
@@ -259,11 +246,12 @@ public class WebRtcSfuManager
     {
         try
         {
-            var response = await _http.GetAsync($"{_sfuBaseUrl}/health");
+            var response = await Send(HttpMethod.Get, $"{_sfuBaseUrl}/health", null);
             return response.IsSuccessStatusCode;
         }
-        catch
+        catch (SfuRequestException ex)
         {
+            Console.WriteLine($"[SFU] health check failed: {ex.Message}");
             return false;
         }
     }
@@ -272,28 +260,99 @@ public class WebRtcSfuManager
     // Helpers
     // ---------------------------------------------------------------
 
-    private async Task<JObject> Post(string url, JObject? body)
+    /// <summary>Sends a request, turning "could not reach the SFU" into the same exception as a refusal.</summary>
+    private async Task<HttpResponseMessage> Send(HttpMethod method, string url, JObject? body)
     {
-        var content = new StringContent(
-            body?.ToString(Formatting.None) ?? "{}",
-            Encoding.UTF8,
-            "application/json");
-        var response = await _http.PostAsync(url, content);
-        response.EnsureSuccessStatusCode();
-        return JObject.Parse(await response.Content.ReadAsStringAsync());
+        using var request = new HttpRequestMessage(method, url);
+        if (body != null || method == HttpMethod.Post)
+            request.Content = new StringContent(body?.ToString(Formatting.None) ?? "{}", Encoding.UTF8, "application/json");
+        try
+        {
+            return await _http.SendAsync(request);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new SfuRequestException(HttpStatusCode.ServiceUnavailable,
+                "The media server is not reachable right now.", ex);
+        }
+        catch (TaskCanceledException ex)
+        {
+            throw new SfuRequestException(HttpStatusCode.GatewayTimeout,
+                "The media server did not answer in time.", ex);
+        }
     }
 
-    private static SfuTransportInfo MapTransport(JObject j) => new()
+    private static async Task<string> ReadSuccess(HttpResponseMessage response)
     {
-        Id = j["id"]?.Value<string>() ?? string.Empty,
-        IceParameters = j["iceParameters"] as JObject ?? new JObject(),
-        IceCandidates = j["iceCandidates"] as JArray ?? new JArray(),
-        DtlsParameters = j["dtlsParameters"] as JObject ?? new JObject()
-    };
-
-    private static void EnsureOk(JObject j)
-    {
-        if (j["ok"]?.Value<bool>() == false)
-            throw new InvalidOperationException($"SFU returned error: {j}");
+        var text = await response.Content.ReadAsStringAsync();
+        if (!response.IsSuccessStatusCode)
+            throw new SfuRequestException(response.StatusCode, ReadError(text));
+        return text;
     }
+
+    private async Task<string> RequestText(HttpMethod method, string url, JObject? body = null)
+    {
+        return await ReadSuccess(await Send(method, url, body));
+    }
+
+    private async Task<JObject> Request(HttpMethod method, string url, JObject? body = null)
+    {
+        return JObject.Parse(await RequestText(method, url, body));
+    }
+
+    /// <returns>True when deleted, false when the SFU no longer had it.</returns>
+    private async Task<bool> Delete(string url)
+    {
+        var response = await Send(HttpMethod.Delete, url, null);
+        if (response.StatusCode == HttpStatusCode.NotFound) return false;
+        await ReadSuccess(response);
+        return true;
+    }
+
+    private static string ReadError(string json)
+    {
+        try
+        {
+            return JObject.Parse(json)["error"]?.Value<string>() ?? json;
+        }
+        catch (JsonReaderException)
+        {
+            return json;
+        }
+    }
+
+    private static ServerFileStreamStatus ParseStreamStatus(JObject json)
+    {
+        return new ServerFileStreamStatus(
+            json["state"]?.Value<string>() ?? "failed",
+            json["buffering"]?.Value<bool>() ?? false,
+            json["positionSec"]?.Value<double>() ?? 0,
+            json["error"]?.Value<string>(),
+            json["videoProducerId"]?.Value<string>() ?? string.Empty,
+            json["audioProducerId"]?.Value<string>());
+    }
+}
+
+/// <summary>Where a server-side file stream is: playing, paused, ended or failed, and how far in.</summary>
+public sealed record ServerFileStreamStatus(
+    string State,
+    bool Buffering,
+    double PositionSec,
+    string? Error,
+    string VideoProducerId,
+    string? AudioProducerId)
+{
+    public bool IsOver => State is "ended" or "failed";
+}
+
+/// <summary>The SFU refused a request or could not be reached; the message says which, in plain words.</summary>
+public sealed class SfuRequestException : Exception
+{
+    public SfuRequestException(HttpStatusCode statusCode, string message, Exception? inner = null)
+        : base(message, inner)
+    {
+        StatusCode = statusCode;
+    }
+
+    public HttpStatusCode StatusCode { get; }
 }

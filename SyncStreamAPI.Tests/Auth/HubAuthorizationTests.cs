@@ -78,7 +78,22 @@ public class HubAuthorizationTests
         "WhiteBoardUpdate",
         "WhiteBoardClear",
         "WhiteBoardUndo",
-        "WhiteBoardRedo"
+        "WhiteBoardRedo",
+
+        // Watching a broadcast, file share or live stream through the SFU. Guests may watch, so these are
+        // gated in-method on membership of the room the SFU room belongs to, and on owning the transport.
+        // Sending is refused to a guest in CreateWebRtcTransport; Produce itself carries the policy.
+        "GetRouterRtpCapabilities",
+        "JoinSfuRoom",
+        "LeaveSfuRoom",
+        "CreateWebRtcTransport",
+        "ConnectTransport",
+        "RestartSfuIce",
+        "Consume",
+
+        // A play URL for a live stream. Guests may have one for what the room they are in shows, which is
+        // checked in-method.
+        "GetLivePlayUrl"
     };
 
     [Fact]

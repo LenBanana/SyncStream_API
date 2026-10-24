@@ -1,83 +1,61 @@
-﻿using System.Collections.Concurrent;
+﻿using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
-using SyncStreamAPI.Annotations;
-using SyncStreamAPI.Enums;
-using SyncStreamAPI.Models.WebRTC;
-using SyncStreamAPI.PostgresModels;
-using SyncStreamAPI.ServerData;
 using Microsoft.AspNetCore.Authorization;
 using SyncStreamAPI.Auth;
+using SyncStreamAPI.Models.WebRTC;
 
 namespace SyncStreamAPI.Hubs;
 
+/// <summary>
+///     The room's voice and video call. Media runs through the SFU like every other stream: each participant
+///     sends once and receives everyone else, instead of uploading a copy to every other participant.
+/// </summary>
+/// <remarks>
+///     The call used to be a peer-to-peer mesh whose offers and ICE candidates the hub relayed to any connection
+///     id it was given, and member lists carry every member's connection id. Anyone could send an offer to someone
+///     in a call and be answered with that person's microphone, without appearing in their call. Here there is
+///     nothing to relay: joining the call needs room membership, and sending into it needs a seat in it.
+/// </remarks>
 public partial class ServerHub
 {
-    // Maps connectionId → roomId so OnDisconnectedAsync can notify peers.
-    private static readonly ConcurrentDictionary<string, string> _voipRoomByConnection = new();
-
+    /// <summary>
+    /// Joins the room's call, leaving any other call first. Returns everyone already in it; the caller then
+    /// joins the call's SFU room to send and receive.
+    /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Approved)]
-    public async Task JoinAudioRoom(string roomId)
+    public async Task<List<VoipParticipantDto>> JoinAudioRoom(string roomId)
     {
-        var user = await MainManager.GetUser(CallerUserId);
-        if (user == null) return;
+        var room = RequireMember(roomId);
+        var member = room.server.FindByConnection(Context.ConnectionId)!;
 
-        // If already in another room, leave it first.
-        if (_voipRoomByConnection.TryGetValue(Context.ConnectionId, out var existingRoom) &&
-            existingRoom != roomId)
-            await LeaveAudioRoomInternal(Context.ConnectionId, existingRoom);
+        if (_voip.RoomOf(Context.ConnectionId) is { } current && current != roomId)
+            await _media.LeaveVoiceAsync(Context.ConnectionId);
 
-        _voipRoomByConnection[Context.ConnectionId] = roomId;
-        await Groups.AddToGroupAsync(Context.ConnectionId, $"AudioRoom-{roomId}");
-        await Clients.GroupExcept($"AudioRoom-{roomId}", [Context.ConnectionId])
-            .participantJoined(new VoipParticipantDto
-                { ParticipantId = Context.ConnectionId, ParticipantName = user.username });
+        var (_, others) = _voip.Join(Context.ConnectionId, roomId, member.username ?? string.Empty);
+        var group = SfuGroupName(SfuRoomId.Voice(roomId));
+        await Groups.AddToGroupAsync(Context.ConnectionId, group);
+        await Clients.GroupExcept(group, new[] { Context.ConnectionId })
+            .participantJoined(_voip.Describe(Context.ConnectionId)!);
+        return others.ToList();
     }
 
     [Authorize(Policy = AuthorizationPolicies.Approved)]
     public async Task LeaveAudioRoom(string roomId)
     {
-        _voipRoomByConnection.TryRemove(Context.ConnectionId, out _);
-        await LeaveAudioRoomInternal(Context.ConnectionId, roomId);
+        if (_voip.IsIn(Context.ConnectionId, roomId))
+            await _media.LeaveVoiceAsync(Context.ConnectionId);
     }
 
-    private async Task LeaveAudioRoomInternal(string connectionId, string roomId)
-    {
-        await Groups.RemoveFromGroupAsync(connectionId, $"AudioRoom-{roomId}");
-        await Clients.GroupExcept($"AudioRoom-{roomId}", [connectionId])
-            .participantLeft(new VoipParticipantDto { ParticipantId = connectionId });
-    }
-
+    /// <summary>Tells the rest of the call whether the caller's microphone, camera and screen are on.</summary>
     [Authorize(Policy = AuthorizationPolicies.Approved)]
-    public async Task SendStatusToParticipant(VoipParticipantDto participantDto, string roomId)
+    public async Task SendVoipStatus(string roomId, bool isMuted, bool isVideoMuted, bool isScreenMuted)
     {
-        participantDto.ParticipantId = Context.ConnectionId;
-        await Clients.GroupExcept($"AudioRoom-{roomId}", [Context.ConnectionId])
-            .receiveStatusFromParticipant(participantDto);
-    }
+        if (!_voip.IsIn(Context.ConnectionId, roomId)) return;
 
-    [Authorize(Policy = AuthorizationPolicies.Approved)]
-    public async Task SendOfferToParticipant(string participantId, VoipOffer offer)
-    {
-        var user = await MainManager.GetUser(CallerUserId);
-        if (user == null) return;
-        offer.ParticipantName = user.username;
-        await Clients.Client(participantId).receiveOfferFromParticipant(Context.ConnectionId, offer);
-    }
-
-    [Authorize(Policy = AuthorizationPolicies.Approved)]
-    public async Task SendAnswerToParticipant(string participantId, VoipOffer answer)
-    {
-        var user = await MainManager.GetUser(CallerUserId);
-        if (user == null) return;
-        answer.ParticipantName = user.username;
-        await Clients.Client(participantId).receiveAnswerFromParticipant(Context.ConnectionId, answer);
-    }
-
-    [Authorize(Policy = AuthorizationPolicies.Approved)]
-    public async Task SendIceCandidateToParticipant(string participantId, object candidate)
-    {
-        var user = await MainManager.GetUser(CallerUserId);
-        if (user == null) return;
-        await Clients.Client(participantId).receiveIceCandidateFromParticipant(Context.ConnectionId, candidate);
+        var participant = _voip.UpdateStatus(Context.ConnectionId, isMuted, isVideoMuted, isScreenMuted);
+        if (participant == null) return;
+        await Clients.GroupExcept(SfuGroupName(SfuRoomId.Voice(roomId)), new[] { Context.ConnectionId })
+            .receiveStatusFromParticipant(participant);
     }
 }

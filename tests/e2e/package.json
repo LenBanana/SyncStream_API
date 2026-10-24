@@ -1,0 +1,13 @@
+{
+  "name": "syncstream-e2e",
+  "private": true,
+  "description": "End-to-end checks of room streaming: the SFU stage, calls, file shares, RTMP shares and OBS live streams, in headless Chrome against the API, SFU and nginx-rtmp built from the working trees.",
+  "scripts": {
+    "fixtures": "node make-fixtures.js",
+    "e2e": "node run.js"
+  },
+  "dependencies": {
+    "@microsoft/signalr": "^9.0.19",
+    "puppeteer-core": "^23.11.1"
+  }
+}
