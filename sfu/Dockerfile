@@ -1,7 +1,7 @@
 FROM node:20-bookworm-slim AS base
 
 # mediasoup requires build tools (Python 3, make, g++) for its native module.
-# ffmpeg is required for server-side recording.
+# ffmpeg is required for server-side file streaming and recording.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ pkg-config ffmpeg \
     && rm -rf /var/lib/apt/lists/*
@@ -9,19 +9,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # ── Install dependencies ──────────────────────────────────────────────────────
-COPY package.json ./
-# mediasoup's native build requires network access; use --ignore-scripts=false.
-RUN npm install --ignore-scripts=false --production
+# Installed from the lockfile so every build runs the mediasoup version that was tested.
+# mediasoup's install script fetches or builds its worker binary, so scripts must run.
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
 # ── Copy source ───────────────────────────────────────────────────────────────
 COPY server.js ./
-COPY abr.js ./
 COPY server-file-streamer.js ./
 
 # ── Runtime ───────────────────────────────────────────────────────────────────
 EXPOSE 3000
 
-# The RTC UDP/TCP port range is declared at the docker-compose level.
+# The WebRtcServer ports are declared at the docker-compose level.
 # Environment variables can override any config value at runtime.
 ENV NODE_ENV=production
 
