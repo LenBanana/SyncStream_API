@@ -1,0 +1,15 @@
+{
+  "/api": {
+    "target": "http://127.0.0.1:5001",
+    "secure": false,
+    "changeOrigin": true,
+    "logLevel": "warn"
+  },
+  "/server": {
+    "target": "http://127.0.0.1:5001",
+    "secure": false,
+    "changeOrigin": true,
+    "ws": true,
+    "logLevel": "warn"
+  }
+}

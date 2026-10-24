@@ -1,0 +1,64 @@
+worker_processes auto;
+rtmp_auto_push on;
+events {}
+rtmp {
+    server {
+        listen 1935;
+        listen [::]:1935 ipv6only=on;
+
+        chunk_size 128;
+
+        application live {
+            live on;
+            record off;
+
+            meta copy;
+            hls off;
+            dash off;
+
+            allow publish all;
+            allow play all;
+
+            on_publish ${ON_PUBLISH};
+            on_publish_done ${ON_PUBLISH_DONE};
+            on_play ${ON_PLAY};
+            on_play_done ${ON_PLAY_DONE};
+        }
+    }
+}
+
+
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+
+    sendfile off;
+    tcp_nopush on;
+    aio off;
+    directio 512;
+
+    keepalive_timeout  65;
+
+    server {
+        listen 8088 default_server;
+
+        location /live {
+            flv_live on; #open flv live streaming (subscribe)
+            chunked_transfer_encoding  off; #open 'Transfer-Encoding: chunked' response
+
+            add_header 'Access-Control-Allow-Origin' '*'; #add additional HTTP header
+            add_header 'Access-Control-Allow-Credentials' 'true'; #add additional HTTP header
+        }
+
+        location / {
+            # Allow CORS preflight requests
+            if ($request_method = 'OPTIONS') {
+                add_header 'Access-Control-Allow-Origin' '*';
+                add_header 'Access-Control-Max-Age' 1728000;
+                add_header 'Content-Type' 'text/plain charset=UTF-8';
+                add_header 'Content-Length' 0;
+                return 204;
+            }
+        }
+    }
+}

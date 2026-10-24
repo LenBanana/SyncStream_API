@@ -1,0 +1,74 @@
+# The end-to-end stack: Postgres, the SFU, the API and nginx-rtmp, built from this repository's working tree.
+# Browsers run on the host and reach the SFU's WebRtcServer on 127.0.0.1:10000 and the streaming server's
+# HTTP-FLV side on 127.0.0.1:8088; OBS is stood in for by ffmpeg publishing to 127.0.0.1:1935.
+name: dtest
+
+volumes:
+  videofiles:
+  temp:
+  recordings:
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: e2e
+      POSTGRES_DB: syncstream
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      retries: 30
+
+  sfu:
+    build: ../../sfu
+    environment:
+      SFU_HTTP_BIND: "0.0.0.0"
+      SFU_ANNOUNCED_IP: "127.0.0.1"
+      SFU_NUM_WORKERS: "1"
+      SFU_RTC_MIN_PORT: "10000"
+      SFU_RTC_MAX_PORT: "10099"
+      SFU_RECORDINGS_DIR: /recordings
+      SFU_ROOM_IDLE_MS: "10000"
+    volumes:
+      - recordings:/recordings
+      - videofiles:/app/VideoFiles:ro
+      - temp:/app/Temp:ro
+    ports:
+      - "10000:10000/udp"
+      - "10000:10000/tcp"
+      - "3300:3000"
+
+  api:
+    build: ../..
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_URLS: "http://+:5000"
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ConnectionStrings__SyncStreamDB: "Host=db;Database=syncstream;Username=postgres;Password=e2e"
+      SfuUrl: "http://sfu:3000"
+      RECORDINGS_DIR: /recordings
+      RtmpUrl: "rtmp://rtmp:1935/live"
+      LiveStreamBaseUrl: "http://localhost:8088/live"
+    volumes:
+      - videofiles:/app/VideoFiles
+      - temp:/app/Temp
+      - recordings:/recordings:ro
+    ports:
+      - "5000:5000"
+
+  rtmp:
+    build: ./rtmp
+    # nginx resolves its callback host when it starts, as in production, which also starts it after the API.
+    depends_on:
+      - api
+    restart: on-failure
+    environment:
+      ON_PUBLISH: http://api:5000/api/rtmp/onpublish
+      ON_PUBLISH_DONE: http://api:5000/api/rtmp/onpublishdone
+      ON_PLAY: http://api:5000/api/rtmp/onplay
+      ON_PLAY_DONE: http://api:5000/api/rtmp/onplaydone
+    ports:
+      - "1935:1935"
+      - "8088:8088"
