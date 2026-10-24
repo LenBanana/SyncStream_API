@@ -1,93 +1,165 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR;
 using Newtonsoft.Json.Linq;
-using SyncStreamAPI.Annotations;
-using SyncStreamAPI.Enums;
+using SyncStreamAPI.Auth;
+using SyncStreamAPI.Helper.Streaming;
+using SyncStreamAPI.Models;
 using SyncStreamAPI.Models.WebRTC;
 using SyncStreamAPI.PostgresModels;
 using SyncStreamAPI.ServerData;
 using SyncStreamAPI.ServerData.Helper;
-using Microsoft.AspNetCore.Authorization;
-using SyncStreamAPI.Auth;
 
 namespace SyncStreamAPI.Hubs;
 
+/// <summary>
+///     Signalling for the mediasoup SFU, and the room stage and member-list live streams that run on it.
+/// </summary>
+/// <remarks>
+///     Every SFU room belongs to a chat room, and only that room's members may join it. Watching needs nothing
+///     more, so guests can watch; sending needs an approved account and the right to send in that particular
+///     SFU room: the stage's current holder, the owner of a live stream, or a participant in the call. Transports
+///     and producers can only be used by the connection that created them, which the registry tracks.
+/// </remarks>
 public partial class ServerHub
 {
-    // connectionId → set of SFU roomIds the peer currently participates in.
-    private static readonly ConcurrentDictionary<string, HashSet<string>> _sfuRoomsByConnection = new();
+    // ---------------------------------------------------------------
+    // Access
+    // ---------------------------------------------------------------
 
-    // composite key `${connectionId}::{roomId}` → list of transportIds the peer owns in that SFU room.
-    private static readonly ConcurrentDictionary<string, List<string>> _sfuTransportsByPeerRoom = new();
+    /// <summary>The room, if the caller is a member of it; otherwise the call is refused.</summary>
+    private Room RequireMember(string roomId)
+    {
+        var room = GetRoom(roomId);
+        if (room?.server.FindByConnection(Context.ConnectionId) == null)
+            throw new HubException("You are not in this room.");
+        return room;
+    }
 
-    // composite key `${connectionId}::{roomId}` → list of producerIds the peer owns in that SFU room.
-    private static readonly ConcurrentDictionary<string, List<string>> _sfuProducersByPeerRoom = new();
+    private SfuRoomId ParseSfuRoom(string sfuRoomId)
+    {
+        if (!SfuRoomId.TryParse(sfuRoomId, out var id))
+            throw new HubException("Unknown media room.");
+        return id;
+    }
+
+    /// <summary>Why the caller may not send into this SFU room, or null when they may.</summary>
+    private string? SendRefusal(Room room, SfuRoomId id)
+    {
+        if (!Context.GetCaller().HasAtLeast(UserPrivileges.Approved))
+            return "Sending audio or video needs an approved account.";
+
+        var caller = Context.ConnectionId;
+        switch (id.Kind)
+        {
+            case SfuRoomKind.Stage:
+                // A file the server streams has no sender in the room; a browser share and a broadcast do.
+                return room.CurrentStreamer == caller && room.IsStreamingSfu && !room.IsServerFileShare
+                    ? null
+                    : "You are not on this room's stage.";
+            case SfuRoomKind.Live:
+                bool isLive;
+                lock (room.LiveStreamers)
+                    isLive = room.LiveStreamers.Contains(caller);
+                return id.StreamerId == caller && isLive ? null : "This is not your live stream.";
+            default:
+                return _voip.IsIn(caller, room.uniqueId) ? null : "You are not in this call.";
+        }
+    }
+
+    /// <summary>Why the caller may not take the room's stage, or null when they may.</summary>
+    private static string? StageRefusal(Room room, string connectionId)
+    {
+        if (room.IsRtmpFileShareActive) return "A file is already being shared to this room.";
+        if (room.IsFileSharingActive) return "Someone is already sharing a file in this room.";
+        if (room.CurrentStreamer != null && room.CurrentStreamer != connectionId)
+            return "Someone else is already broadcasting to this room.";
+        return null;
+    }
+
+    /// <summary>
+    ///     Ends everything this connection was doing with media in this room. Used when it leaves the room and
+    ///     when its connection drops.
+    /// </summary>
+    private async Task ReleaseMediaAsync(Room room, string connectionId)
+    {
+        if (room.IsRtmpFileShareActive && room.RtmpFileShareInitiator == connectionId)
+            await StopRtmpFileShareInternalAsync(room);
+
+        await _media.ReleaseConnectionInRoomAsync(room, connectionId);
+    }
+
+    private static string SfuGroupName(string sfuRoomId) => RoomMediaService.SfuGroupName(sfuRoomId);
 
     // ---------------------------------------------------------------
-    // Capabilities
+    // SFU plumbing
     // ---------------------------------------------------------------
 
     /// <summary>
     /// Returns the mediasoup router's RTP capabilities.
     /// Clients must call this first and pass the result to <c>device.load()</c>.
     /// </summary>
-    [Authorize(Policy = AuthorizationPolicies.Approved)]
     public async Task<object> GetRouterRtpCapabilities()
     {
+        if (!MainManager.GetRooms().Any(room => room.server.FindByConnection(Context.ConnectionId) != null))
+            throw new HubException("Join a room first.");
         return await SfuManager.GetRtpCapabilitiesAsync();
     }
 
-    // ---------------------------------------------------------------
-    // Room
-    // ---------------------------------------------------------------
-
     /// <summary>
-    /// Joins the SFU room.  Creates the room on the mediasoup server if needed,
-    /// then returns the list of currently-active producers so the caller can
-    /// immediately start consuming them.
+    /// Joins an SFU room and returns the producers already in it, so the caller can start consuming them.
+    /// Producers that appear later are announced with <c>sfuNewProducer</c>.
     /// </summary>
-    [Authorize(Policy = AuthorizationPolicies.Approved)]
-    public async Task<List<SfuProducerEntry>> JoinSfuRoom(string roomId)
+    public async Task<List<SfuProducerEntry>> JoinSfuRoom(string sfuRoomId)
     {
-        await SfuManager.EnsureRoomAsync(roomId);
+        var id = ParseSfuRoom(sfuRoomId);
+        var room = RequireMember(id.RoomId);
 
-        var joinedRooms = _sfuRoomsByConnection.GetOrAdd(Context.ConnectionId, _ => new HashSet<string>());
-        lock (joinedRooms)
-            joinedRooms.Add(roomId);
+        switch (id.Kind)
+        {
+            case SfuRoomKind.Live:
+                bool isLive;
+                lock (room.LiveStreamers)
+                    isLive = room.LiveStreamers.Contains(id.StreamerId!);
+                if (!isLive) throw new HubException("That stream has ended.");
+                break;
+            case SfuRoomKind.Voice:
+                if (!_voip.IsIn(Context.ConnectionId, room.uniqueId))
+                    throw new HubException("Join the call first.");
+                break;
+        }
 
-        _sfuTransportsByPeerRoom.TryAdd(SfuPeerRoomKey(Context.ConnectionId, roomId), new List<string>());
-        _sfuProducersByPeerRoom.TryAdd(SfuPeerRoomKey(Context.ConnectionId, roomId), new List<string>());
-
-        await Groups.AddToGroupAsync(Context.ConnectionId, SfuGroupName(roomId));
-        return await SfuManager.GetProducersAsync(roomId);
+        await SfuManager.EnsureRoomAsync(sfuRoomId);
+        _sfuPeers.Join(Context.ConnectionId, sfuRoomId);
+        await Groups.AddToGroupAsync(Context.ConnectionId, SfuGroupName(sfuRoomId));
+        return await SfuManager.GetProducersAsync(sfuRoomId);
     }
 
-    /// <summary>Leaves the SFU room and cleans up all server-side resources owned by this peer.</summary>
-    [Authorize(Policy = AuthorizationPolicies.Approved)]
-    public async Task LeaveSfuRoom(string roomId)
+    /// <summary>Leaves the SFU room and closes everything the caller had in it.</summary>
+    public async Task LeaveSfuRoom(string sfuRoomId)
     {
-        await CleanupSfuPeerAsync(Context.ConnectionId, roomId);
+        await _media.ReleaseSfuAsync(Context.ConnectionId, candidate => candidate == sfuRoomId);
     }
-
-    // ---------------------------------------------------------------
-    // Transport
-    // ---------------------------------------------------------------
 
     /// <summary>
-    /// Creates a WebRTC send or receive transport in the specified room.
-    /// Returns the transport parameters that the client passes to
+    /// Creates a WebRTC send or receive transport in a joined SFU room and returns what the client needs for
     /// <c>device.createSendTransport()</c> or <c>device.createRecvTransport()</c>.
     /// </summary>
-    [Authorize(Policy = AuthorizationPolicies.Approved)]
-    public async Task<SfuTransportInfo> CreateWebRtcTransport(
-        string roomId, SfuTransportDirection direction)
+    public async Task<SfuTransportInfo> CreateWebRtcTransport(string sfuRoomId, SfuTransportDirection direction)
     {
-        var producing = direction == SfuTransportDirection.Send;
-        var consuming = direction == SfuTransportDirection.Recv;
-        var info = await SfuManager.CreateTransportAsync(roomId, producing, consuming);
-        _sfuTransportsByPeerRoom.GetOrAdd(SfuPeerRoomKey(Context.ConnectionId, roomId), _ => new List<string>()).Add(info.Id);
+        var id = ParseSfuRoom(sfuRoomId);
+        var room = RequireMember(id.RoomId);
+        if (!_sfuPeers.HasJoined(Context.ConnectionId, sfuRoomId))
+            throw new HubException("Join the media room first.");
+
+        var sending = direction == SfuTransportDirection.Send;
+        if (sending && SendRefusal(room, id) is { } refusal)
+            throw new HubException(refusal);
+
+        var info = await SfuManager.CreateTransportAsync(sfuRoomId);
+        _sfuPeers.AddTransport(Context.ConnectionId, sfuRoomId, info.Id, sending);
         return info;
     }
 
@@ -95,71 +167,75 @@ public partial class ServerHub
     /// Finalises the DTLS handshake so media can flow.
     /// Called by the client after <c>transport.on('connect', …)</c> fires.
     /// </summary>
-    [Authorize(Policy = AuthorizationPolicies.Approved)]
-    public async Task ConnectTransport(string roomId, string transportId, JObject dtlsParameters)
+    public async Task ConnectTransport(string sfuRoomId, string transportId, JObject dtlsParameters)
     {
-        await SfuManager.ConnectTransportAsync(roomId, transportId, dtlsParameters);
+        if (!_sfuPeers.OwnsTransport(Context.ConnectionId, sfuRoomId, transportId))
+            throw new HubException("Unknown transport.");
+        await SfuManager.ConnectTransportAsync(sfuRoomId, transportId, dtlsParameters);
     }
 
-    // ---------------------------------------------------------------
-    // Producer
-    // ---------------------------------------------------------------
+    /// <summary>New ICE credentials for one of the caller's transports whose connection failed.</summary>
+    public async Task<JObject> RestartSfuIce(string sfuRoomId, string transportId)
+    {
+        if (!_sfuPeers.OwnsTransport(Context.ConnectionId, sfuRoomId, transportId))
+            throw new HubException("Unknown transport.");
+        return await SfuManager.RestartIceAsync(sfuRoomId, transportId);
+    }
 
     /// <summary>
-    /// Registers a new media producer on the send transport.
-    /// Notifies all other peers in the room so they can consume this track.
-    /// Returns the producer ID.
+    /// Registers a new media producer on the caller's send transport, announces it to everyone else in the
+    /// SFU room, and returns its id.
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Approved)]
-    public async Task<string> Produce(
-        string roomId, string transportId, string kind, JObject rtpParameters)
+    public async Task<string> Produce(string sfuRoomId, string transportId, string kind, JObject rtpParameters)
     {
-        var producerId = await SfuManager.ProduceAsync(roomId, transportId, kind, rtpParameters, Context.ConnectionId);
-        _sfuProducersByPeerRoom.GetOrAdd(SfuPeerRoomKey(Context.ConnectionId, roomId), _ => new List<string>()).Add(producerId);
+        var id = ParseSfuRoom(sfuRoomId);
+        var room = RequireMember(id.RoomId);
+        if (!_sfuPeers.OwnsSendTransport(Context.ConnectionId, sfuRoomId, transportId))
+            throw new HubException("Unknown transport.");
+        if (SendRefusal(room, id) is { } refusal)
+            throw new HubException(refusal);
+        if (!_sfuPeers.CanAddProducer(Context.ConnectionId, sfuRoomId))
+            throw new HubException("Too many tracks.");
 
-        // Notify every other peer so they can consume the new track.
-        await Clients.GroupExcept(SfuGroupName(roomId), new[] { Context.ConnectionId })
+        var producerId = await SfuManager.ProduceAsync(sfuRoomId, transportId, kind, rtpParameters, Context.ConnectionId);
+        _sfuPeers.AddProducer(Context.ConnectionId, sfuRoomId, producerId);
+
+        await Clients.GroupExcept(SfuGroupName(sfuRoomId), new[] { Context.ConnectionId })
             .sfuNewProducer(new SfuNewProducerNotification
             {
                 ProducerId = producerId,
                 PeerId = Context.ConnectionId,
                 Kind = kind,
-                RoomId = roomId
+                RoomId = sfuRoomId
             });
 
         return producerId;
     }
 
-    /// <summary>Closes a specific producer (e.g. when the streamer pauses a track).</summary>
+    /// <summary>Closes one of the caller's producers (e.g. when the camera is switched off).</summary>
     [Authorize(Policy = AuthorizationPolicies.Approved)]
-    public async Task CloseProducer(string roomId, string producerId)
+    public async Task CloseProducer(string sfuRoomId, string producerId)
     {
-        if (_sfuProducersByPeerRoom.TryGetValue(SfuPeerRoomKey(Context.ConnectionId, roomId), out var list))
-            list.Remove(producerId);
+        if (!_sfuPeers.RemoveProducer(Context.ConnectionId, sfuRoomId, producerId))
+            throw new HubException("Unknown producer.");
 
-        await SfuManager.CloseProducerAsync(roomId, producerId);
-        await Clients.GroupExcept(SfuGroupName(roomId), new[] { Context.ConnectionId })
-            .sfuProducerClosed(producerId);
+        await SfuManager.CloseProducerAsync(sfuRoomId, producerId);
+        await Clients.GroupExcept(SfuGroupName(sfuRoomId), new[] { Context.ConnectionId })
+            .sfuProducerClosed(sfuRoomId, producerId);
     }
-
-    // ---------------------------------------------------------------
-    // Consumer
-    // ---------------------------------------------------------------
 
     /// <summary>
     /// Creates a consumer for <paramref name="producerId"/> on the caller's recv transport.
     /// Returns consumer parameters for use with <c>recvTransport.consume()</c>.
     /// </summary>
-    [Authorize(Policy = AuthorizationPolicies.Approved)]
     public async Task<SfuConsumerInfo> Consume(
-        string roomId, string transportId, string producerId, JObject rtpCapabilities)
+        string sfuRoomId, string transportId, string producerId, JObject rtpCapabilities)
     {
-        return await SfuManager.ConsumeAsync(roomId, transportId, producerId, rtpCapabilities, Context.ConnectionId);
+        if (!_sfuPeers.OwnsRecvTransport(Context.ConnectionId, sfuRoomId, transportId))
+            throw new HubException("Unknown transport.");
+        return await SfuManager.ConsumeAsync(sfuRoomId, transportId, producerId, rtpCapabilities, Context.ConnectionId);
     }
-
-    // ---------------------------------------------------------------
-    // Health
-    // ---------------------------------------------------------------
 
     /// <summary>Returns true when the mediasoup SFU is reachable.</summary>
     [Authorize(Policy = AuthorizationPolicies.Approved)]
@@ -169,286 +245,106 @@ public partial class ServerHub
     }
 
     // ---------------------------------------------------------------
-    // Consumer preferred layers (simulcast / ABR)
+    // Room stage broadcast
     // ---------------------------------------------------------------
 
     /// <summary>
-    /// Sets the preferred simulcast spatial and temporal layers for an existing consumer.
-    /// Call from the viewer to lower/raise quality (e.g. based on available bandwidth).
-    /// </summary>
-    [Authorize(Policy = AuthorizationPolicies.Approved)]
-    public async Task SetPreferredLayers(string roomId, string consumerId, int spatialLayer, int temporalLayer)
-    {
-        await SfuManager.SetPreferredLayersAsync(roomId, consumerId, spatialLayer, temporalLayer);
-    }
-
-    // ---------------------------------------------------------------
-    // Recording
-    // ---------------------------------------------------------------
-
-    /// <summary>
-    /// Starts recording all media producers in the SFU room to a server-side file.
-    /// Notifies every peer in the room so the UI can show a recording indicator.
-    /// Only the room host (or admin) should call this; the hub enforces that the caller is in the room.
-    /// </summary>
-    [Authorize(Policy = AuthorizationPolicies.Approved)]
-    public async Task StartRecording(string roomId)
-    {
-        // Only the active SFU streamer for this room may start a recording.
-        var room = MainManager.GetRoom(roomId);
-        if (room == null || room.CurrentStreamer != Context.ConnectionId) return;
-        var info = await SfuManager.StartRecordingAsync(roomId);
-        await Clients.Group(SfuGroupName(roomId)).sfuRecordingStarted(info);
-    }
-
-    /// <summary>
-    /// Stops the active recording in the SFU room.
-    /// Notifies every peer in the room.
-    /// </summary>
-    [Authorize(Policy = AuthorizationPolicies.Approved)]
-    public async Task StopRecording(string roomId)
-    {
-        // Only the active SFU streamer for this room may stop the recording.
-        var room = MainManager.GetRoom(roomId);
-        if (room == null || room.CurrentStreamer != Context.ConnectionId) return;
-        var filename = await SfuManager.StopRecordingAsync(roomId);
-        await Clients.Group(SfuGroupName(roomId)).sfuRecordingStopped(roomId);
-    }
-
-    // ---------------------------------------------------------------
-    // Screen-share stream (SFU path for the main room player)
-    // ---------------------------------------------------------------
-
-    /// <summary>
-    /// Called by the streamer after they have already joined the SFU room and produced tracks.
-    /// Marks the room as using SFU streaming and notifies viewers to join via SFU.
+    /// Takes the room's stage for the caller's screen or camera. Everyone's player switches to the stage and
+    /// joins its SFU room; the caller then produces into it.
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Approved)]
     public async Task StartSfuStream(string roomId)
     {
-        var room = MainManager.GetRoom(roomId);
-        if (room == null) return;
+        var room = RequireMember(roomId);
+        if (!CheckPrivileges(room))
+            throw new HubException("You don't have permission to broadcast in this room.");
 
-        // Stop any existing P2P stream first.
-        if (!string.IsNullOrEmpty(room.CurrentStreamer) && !room.IsStreamingSfu)
-            await StopWebRtcStream(roomId);
-
-        room.CurrentStreamer = Context.ConnectionId;
-        room.IsStreamingSfu = true;
+        lock (room.StageGate)
+        {
+            if (StageRefusal(room, Context.ConnectionId) is { } refusal)
+                throw new HubException(refusal);
+            room.CurrentStreamer = Context.ConnectionId;
+            room.IsStreamingSfu = true;
+        }
 
         await Clients.GroupExcept(room.uniqueId, new[] { Context.ConnectionId })
             .startSfuStream(roomId, Context.ConnectionId);
         await RoomManager.SendPlayerType(room);
     }
 
-    /// <summary>
-    /// Stops the SFU stream for the room and resets its player type.
-    /// Producers and transports are cleaned up when the streamer calls <c>LeaveSfuRoom</c>.
-    /// </summary>
+    /// <summary>Ends the caller's broadcast and puts the room's player back to what it was showing.</summary>
     [Authorize(Policy = AuthorizationPolicies.Approved)]
     public async Task StopSfuStream(string roomId)
     {
-        var room = MainManager.GetRoom(roomId);
-        if (room == null || room.CurrentStreamer != Context.ConnectionId) return;
+        var room = RequireMember(roomId);
+        if (room.CurrentStreamer != Context.ConnectionId || !room.IsBroadcastOnStage) return;
 
-        room.CurrentStreamer = null;
-        room.IsStreamingSfu = false;
-
-        await Clients.Group(room.uniqueId).stopWebRtcStream(Context.ConnectionId);
-        await RoomManager.SendPlayerType(room);
+        await _media.EndBroadcastAsync(room);
+        await _media.ReleaseSfuAsync(Context.ConnectionId, candidate => candidate == SfuRoomId.Stage(roomId));
     }
 
+    // ---------------------------------------------------------------
+    // Member-list live streams
+    // ---------------------------------------------------------------
+
     /// <summary>
-    /// Starts an opt-in live screen-share routed through the SFU.
-    /// Unlike <see cref="StartSfuStream"/>, this does not affect the room's main
-    /// player or auto-join any viewers; it only marks the member as live in the user list.
+    /// Marks the caller as live in the member list and returns the SFU room to send into. Nobody is switched
+    /// to it; members choose to watch.
     /// </summary>
     [Authorize(Policy = AuthorizationPolicies.Approved)]
     public async Task<string> StartSfuOptInStream(string roomId)
     {
-        var room = MainManager.GetRoom(roomId);
-        if (room == null) return string.Empty;
+        var room = RequireMember(roomId);
 
-        lock (room.ActiveStreamers)
-            room.ActiveStreamers.Add(Context.ConnectionId);
-        lock (room.ActiveSfuStreamers)
-            room.ActiveSfuStreamers.Add(Context.ConnectionId);
+        lock (room.LiveStreamers)
+            room.LiveStreamers.Add(Context.ConnectionId);
 
-        var member = room.server.members.Find(m => m?.ConnectionId == Context.ConnectionId);
+        var member = room.server.FindByConnection(Context.ConnectionId);
         if (member != null) member.IsStreaming = true;
 
         await Clients.Group(room.uniqueId)
-            .userupdate(room.server.members.ConvertAll(x => x?.ToDTO()));
+            .userupdate(room.server.members.Select(x => x?.ToDTO()).ToList());
 
-    return BuildOptInLiveSfuRoomId(roomId, Context.ConnectionId);
+        return SfuRoomId.Live(roomId, Context.ConnectionId);
     }
 
-    /// <summary>
-    /// Stops the caller's opt-in SFU live screen-share and dismisses any viewers
-    /// currently watching via the popout/live-watch path.
-    /// </summary>
+    /// <summary>Ends the caller's live stream and sends its viewers away.</summary>
     [Authorize(Policy = AuthorizationPolicies.Approved)]
     public async Task StopSfuOptInStream(string roomId)
     {
-        var room = MainManager.GetRoom(roomId);
-        if (room == null) return;
-
-        bool wasStreaming;
-        lock (room.ActiveSfuStreamers)
-            wasStreaming = room.ActiveSfuStreamers.Remove(Context.ConnectionId);
-        if (!wasStreaming) return;
-
-        lock (room.ActiveStreamers)
-            room.ActiveStreamers.Remove(Context.ConnectionId);
-
-        var member = room.server.members.Find(m => m?.ConnectionId == Context.ConnectionId);
-        if (member != null) member.IsStreaming = false;
-
-        await Clients.Group(room.uniqueId)
-            .userupdate(room.server.members.ConvertAll(x => x?.ToDTO()));
-        await Clients.Group(room.uniqueId).stopWebRtcStream(Context.ConnectionId);
+        var room = RequireMember(roomId);
+        await _media.EndLiveStreamAsync(room, Context.ConnectionId);
     }
 
-    /// <summary>
-    /// Returns true when the specified streamer is currently sharing an opt-in live
-    /// screen-share through the SFU rather than the legacy P2P watcher path.
-    /// </summary>
+    // ---------------------------------------------------------------
+    // Recording
+    // ---------------------------------------------------------------
+
+    /// <summary>Records the caller's broadcast on the room's stage to a file on the server.</summary>
     [Authorize(Policy = AuthorizationPolicies.Approved)]
-    public Task<bool> IsSfuOptInStreamActive(string roomId, string streamerId)
+    public async Task StartRecording(string roomId)
     {
-        var room = MainManager.GetRoom(roomId);
-        if (room == null) return Task.FromResult(false);
+        var room = RequireMember(roomId);
+        if (room.CurrentStreamer != Context.ConnectionId || !room.IsBroadcastOnStage)
+            throw new HubException("Only the broadcaster can record the stage.");
+        if (room.ActiveRecording != null)
+            throw new HubException("The stage is already being recorded.");
 
-        lock (room.ActiveSfuStreamers)
-            return Task.FromResult(room.ActiveSfuStreamers.Contains(streamerId));
+        var info = await SfuManager.StartRecordingAsync(roomId, SfuRoomId.Stage(roomId));
+        room.ActiveRecording = info;
+        await Clients.Group(SfuGroupName(SfuRoomId.Stage(roomId))).sfuRecordingStarted(info);
     }
 
-    /// <summary>
-    /// Moderator-only: notifies all room members that the caller has an active SFU opt-in
-    /// broadcast so they can auto-join as viewers through the SFU path.
-    /// The caller must already have set up SFU producers via <c>StartSfuOptInStream</c>
-    /// before invoking this — the method verifies that precondition and does nothing if
-    /// the caller is not found in <see cref="Models.Room.ActiveSfuStreamers"/>.
-    /// </summary>
-    [Authorize(Policy = AuthorizationPolicies.Moderator)]
-    public async Task ForceSfuBroadcast(string roomId)
+    /// <summary>Stops recording the stage; everyone watching is told the file it was saved to.</summary>
+    [Authorize(Policy = AuthorizationPolicies.Approved)]
+    public async Task StopRecording(string roomId)
     {
-        var room = MainManager.GetRoom(roomId);
-        if (room == null) return;
+        var room = RequireMember(roomId);
+        if (room.CurrentStreamer != Context.ConnectionId || room.ActiveRecording == null) return;
 
-        // Only proceed if the caller already has active SFU producers in this room.
-        bool isActive;
-        lock (room.ActiveSfuStreamers)
-            isActive = room.ActiveSfuStreamers.Contains(Context.ConnectionId);
-        if (!isActive) return;
-
-        // Push the notification so viewers auto-join via the SFU watcher path
-        // (broadcastStream listener → startWatching → IsSfuOptInStreamActive=true → startWatchingSfu).
-        await Clients.GroupExcept(room.uniqueId, new[] { Context.ConnectionId })
-            .broadcastStream(Context.ConnectionId, roomId);
-    }
-
-    // ---------------------------------------------------------------
-    // Disconnect cleanup (called from ServerHub.OnDisconnectedAsync)
-    // ---------------------------------------------------------------
-
-    internal async Task OnSfuDisconnectedAsync(string connectionId)
-    {
-        if (!_sfuRoomsByConnection.TryGetValue(connectionId, out var roomIds))
-            return;
-
-        List<string> joinedRooms;
-        lock (roomIds)
-            joinedRooms = new List<string>(roomIds);
-
-        foreach (var roomId in joinedRooms)
-            await CleanupSfuPeerAsync(connectionId, roomId);
-
-        _sfuRoomsByConnection.TryRemove(connectionId, out _);
-
-        // If this peer was the active SFU streamer for any room, clean up.
-        var rooms = MainManager.GetRooms();
-        foreach (var room in rooms)
-        {
-            if (room.CurrentStreamer == connectionId && room.IsStreamingSfu)
-            {
-                room.CurrentStreamer = null;
-                room.IsStreamingSfu = false;
-                await Clients.Group(room.uniqueId).stopWebRtcStream(connectionId);
-                await RoomManager.SendPlayerType(room);
-            }
-
-            bool stoppedOptInStream;
-            lock (room.ActiveSfuStreamers)
-                stoppedOptInStream = room.ActiveSfuStreamers.Remove(connectionId);
-
-            if (!stoppedOptInStream) continue;
-
-            lock (room.ActiveStreamers)
-                room.ActiveStreamers.Remove(connectionId);
-
-            var member = room.server.members.Find(m => m?.ConnectionId == connectionId);
-            if (member != null) member.IsStreaming = false;
-
-            await Clients.Group(room.uniqueId)
-                .userupdate(room.server.members.ConvertAll(x => x?.ToDTO()));
-            await Clients.Group(room.uniqueId).stopWebRtcStream(connectionId);
-        }
-    }
-
-    // ---------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------
-
-    private static string SfuGroupName(string roomId) => $"SFURoom-{roomId}";
-    private static string SfuPeerRoomKey(string connectionId, string roomId) => $"{connectionId}::{roomId}";
-    private static string BuildOptInLiveSfuRoomId(string roomId, string streamerId) => $"live-watch:{roomId}:{streamerId}";
-
-    private async Task CleanupSfuPeerAsync(string connectionId, string roomId)
-    {
-        var peerRoomKey = SfuPeerRoomKey(connectionId, roomId);
-
-        // Close all producers owned by this peer and notify the room.
-        if (_sfuProducersByPeerRoom.TryRemove(peerRoomKey, out var producers))
-        {
-            foreach (var pid in producers)
-            {
-                try
-                {
-                    await SfuManager.CloseProducerAsync(roomId, pid);
-                    await Clients.GroupExcept(SfuGroupName(roomId), new[] { connectionId })
-                        .sfuProducerClosed(pid);
-                }
-                catch
-                {
-                    // Best-effort; producer may already be gone.
-                }
-            }
-        }
-
-        // Close all transports owned by this peer.
-        if (_sfuTransportsByPeerRoom.TryRemove(peerRoomKey, out var transports))
-        {
-            foreach (var tid in transports)
-            {
-                try
-                {
-                    await SfuManager.CloseTransportAsync(roomId, tid);
-                }
-                catch
-                {
-                    // Best-effort.
-                }
-            }
-        }
-
-        if (_sfuRoomsByConnection.TryGetValue(connectionId, out var roomIds))
-        {
-            lock (roomIds)
-                roomIds.Remove(roomId);
-        }
-
-        await Groups.RemoveFromGroupAsync(connectionId, SfuGroupName(roomId));
+        room.ActiveRecording = null;
+        var filename = await SfuManager.StopRecordingAsync(SfuRoomId.Stage(roomId));
+        await Clients.Group(SfuGroupName(SfuRoomId.Stage(roomId))).sfuRecordingStopped(roomId, filename);
     }
 
     // Resolved from the injected field on ServerHub.

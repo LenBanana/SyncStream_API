@@ -4,7 +4,6 @@ using System.Linq;
 using System.Net.Http;
 using System.Net;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -15,7 +14,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.GallowGameWords;
-using SyncStreamAPI.Models.WebRTC;
 using SyncStreamAPI.Models.Youtube;
 using YoutubeDLSharp;
 
@@ -289,27 +287,6 @@ public static class General
         }
 
         return apiResult;
-    }
-
-    private static string WebRtcTurnServerPassword(IConfiguration configuration)
-    {
-        return configuration.GetSection("WebRtcPassword").Value;
-    }
-
-    public static WebRtcCredentials GenerateTemporaryCredentials(IConfiguration configuration,
-        int ttlInSeconds = 3600)
-    {
-        var sharedSecret = WebRtcTurnServerPassword(configuration);
-        var unixTimestamp = (int)DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds;
-        var username = (unixTimestamp + ttlInSeconds).ToString();
-
-        using var hmac = new HMACSHA1(Encoding.UTF8.GetBytes(sharedSecret));
-        var password = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(username)));
-
-        var stunServer = configuration.GetSection("WebRtcStunServer").Value ?? string.Empty;
-        var turnServer = configuration.GetSection("WebRtcTurnServer").Value ?? string.Empty;
-        long expiresAtUnixSec = unixTimestamp + ttlInSeconds;
-        return new WebRtcCredentials(username, password, stunServer, turnServer, expiresAtUnixSec);
     }
 
     private static async Task<string> YtApiInfo(string url, IConfiguration configuration)

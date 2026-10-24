@@ -23,14 +23,6 @@ public class SfuTransportInfo
 }
 
 /// <summary>
-/// Sent back to the caller of <c>Produce</c>.
-/// </summary>
-public class SfuProducerInfo
-{
-    public string Id { get; set; } = string.Empty;
-}
-
-/// <summary>
 /// Sent back to the caller of <c>Consume</c>; passed directly to
 /// <c>recvTransport.consume()</c> in mediasoup-client.
 /// </summary>
@@ -49,27 +41,20 @@ public class SfuProducerEntry
 {
     public string Id { get; set; } = string.Empty;
     public string Kind { get; set; } = string.Empty;
-    /// <summary>SignalR connectionId of the peer that created this producer.</summary>
+    /// <summary>SignalR connectionId of the peer that created this producer, or "server-file:…" for a server stream.</summary>
     public string PeerId { get; set; } = string.Empty;
 }
 
 /// <summary>
-/// Pushed to all viewers in the room when a new producer becomes available.
+/// Pushed to everyone in an SFU room when a new producer becomes available.
 /// </summary>
 public class SfuNewProducerNotification
 {
     public string ProducerId { get; set; } = string.Empty;
     public string PeerId { get; set; } = string.Empty;
     public string Kind { get; set; } = string.Empty;
-    /// <summary>The SFU room this producer belongs to (includes prefix, e.g. "voip-roomId").</summary>
+    /// <summary>The SFU room this producer belongs to, e.g. "stage:abc" or "voice:abc".</summary>
     public string RoomId { get; set; } = string.Empty;
-}
-
-/// <summary>Preferred spatial/temporal simulcast layers for a consumer.</summary>
-public class SfuPreferredLayers
-{
-    public int SpatialLayer { get; set; }
-    public int TemporalLayer { get; set; }
 }
 
 /// <summary>Information about an active or completed SFU recording.</summary>

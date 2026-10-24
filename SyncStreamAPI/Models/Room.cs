@@ -8,6 +8,7 @@ using SyncStreamAPI.Games.Gallows;
 using SyncStreamAPI.Models.GameModels.Blackjack;
 using SyncStreamAPI.Models.GameModels.Chess;
 using SyncStreamAPI.Models.GameModels.Gallows;
+using SyncStreamAPI.Models.WebRTC;
 
 namespace SyncStreamAPI.Models;
 
@@ -41,13 +42,29 @@ public class Room
     public bool isPrivileged { get; set; }
     public bool deletable { get; set; } = true;
 
+    /// <summary>
+    ///     Held while the room's stage (broadcast or file share) is being claimed or released, so two members
+    ///     cannot both take it and a release cannot interleave with a claim.
+    /// </summary>
+    [NotMapped] public object StageGate { get; } = new();
+
+    /// <summary>The connection whose broadcast or file share holds the room's stage, or null.</summary>
     [NotMapped] public string? CurrentStreamer { get; set; }
 
-    /// <summary>True when the current stream is routed through the mediasoup SFU (vs P2P).</summary>
+    /// <summary>True while the stage is in use: a broadcast or a file share, both of which run through the SFU.</summary>
     [NotMapped] public bool IsStreamingSfu { get; set; }
+
+    /// <summary>True while a room member's screen or camera broadcast is on the stage (as opposed to a file).</summary>
+    [NotMapped] public bool IsBroadcastOnStage => CurrentStreamer != null && IsStreamingSfu && !IsFileSharingActive;
+
+    /// <summary>The stage recording in progress, or null when nothing is being recorded.</summary>
+    [NotMapped] public SfuRecordingInfo? ActiveRecording { get; set; }
 
     /// <summary>True while a room member is actively sharing a local file to the room via WebRTC/SFU.</summary>
     [NotMapped] public bool IsFileSharingActive { get; set; }
+
+    /// <summary>Whether the file share is paused, so someone joining mid-share sees the right state.</summary>
+    [NotMapped] public bool IsFileSharePaused { get; set; }
 
     /// <summary>ConnectionId of the member who initiated the current file share (null when none).</summary>
     [NotMapped] public string? FileShareInitiator { get; set; }
@@ -60,11 +77,14 @@ public class Room
     [NotMapped] public bool IsServerFileShare { get; set; }
 
     /// <summary>
-    /// The uploadId of the in-progress chunked upload that is feeding the active server-side
-    /// file stream.  Set when the stream is started early (before the full upload completes)
-    /// so the upload temp directory can be cleaned up when the stream stops.
+    /// The uploadId of the chunked upload that is feeding the active server-side file stream.
+    /// Set when the stream is started early (before the full upload completes) so the upload
+    /// directory can be cleaned up when the stream stops.
     /// </summary>
     [NotMapped] public string? FileShareUploadId { get; set; }
+
+    /// <summary>True until the upload feeding the server-side file stream has fully arrived.</summary>
+    [NotMapped] public bool FileShareUploadInProgress { get; set; }
 
     // ── RTMP file-share state ──────────────────────────────────────────────────
 
@@ -86,16 +106,10 @@ public class Room
     [NotMapped] public string? RtmpFileSharePlaybackContentType { get; set; }
 
     /// <summary>
-    /// Set of connectionIds that are currently streaming P2P (Discord-style opt-in).
-    /// Multiple concurrent streamers are supported; each viewer connects on-demand.
+    /// Connections currently live in the member list (Discord-style opt-in). Several can be live at once;
+    /// each viewer chooses whom to watch. Lock the set itself to read or change it.
     /// </summary>
-    [NotMapped] public HashSet<string> ActiveStreamers { get; } = new HashSet<string>();
-
-    /// <summary>
-    /// Subset of <see cref="ActiveStreamers"/> that are routed through the SFU
-    /// rather than the legacy P2P watcher path.
-    /// </summary>
-    [NotMapped] public HashSet<string> ActiveSfuStreamers { get; } = new HashSet<string>();
+    [NotMapped] public HashSet<string> LiveStreamers { get; } = new HashSet<string>();
 
     [NotMapped]
     public Server server

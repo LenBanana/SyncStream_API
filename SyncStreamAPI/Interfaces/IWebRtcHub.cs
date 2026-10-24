@@ -1,41 +1,37 @@
 ﻿using System.Threading.Tasks;
-using SyncStreamAPI.Models.WebRTC;
 
 namespace SyncStreamAPI.Interfaces;
 
 public partial interface IServerHub
 {
-    Task startWebRtcStream(string connectionId, string roomId);
-    /// <summary>Sent to all room members when a moderator forces a broadcast — viewers should auto-join.</summary>
-    Task broadcastStream(string streamerId, string roomId);
-    Task sendOfferToViewer(WebRtcClientOffer offer);
+    /// <summary>
+    /// Sent to the room when a broadcast or a member-list live stream ends. Viewers watching that streamer
+    /// leave its SFU room.
+    /// </summary>
     Task stopWebRtcStream(string connectionId);
-    Task joinWebRtcStream(string connectionId);
-    Task sendClientAnswer(WebRtcClientOffer answer);
-    Task sendIceCandidate(object iceCandidate);
-    /// <summary>Sent to the streamer when a viewer sends an ICE candidate, with the viewer's connectionId included.</summary>
-    Task sendIceCandidateFromViewer(string viewerId, object iceCandidate);
 
     /// <summary>
-    /// Pushed to viewers when the room's active stream is via the SFU.
-    /// The viewer should call JoinSfuRoom(roomId) in response.
+    /// Sent to the room when a member broadcasts to the room's stage. Viewers join the stage's SFU room.
     /// </summary>
     Task startSfuStream(string roomId, string streamerId);
 
     /// <summary>
-    /// Sent to all room members when a user begins sharing a local file via WebRTC/SFU.
-    /// Viewers should call JoinSfuRoom(roomId) in response.
+    /// Sent to all room members when a user begins sharing a file to the stage.
+    /// Viewers join the stage's SFU room in response.
     /// </summary>
     Task fileShareStarted(string streamerId, string username, string roomId);
 
     /// <summary>Sent to all room members when the active file share ends.</summary>
     Task fileShareStopped();
 
-    /// <summary>
-    /// Sent by the server to all non-host room members to sync play/pause state
-    /// while a file share is active.
-    /// </summary>
+    /// <summary>Sent to the other room members when the sharer pauses or resumes the file.</summary>
     Task fileSharePlayPause(bool isPlaying);
+
+    /// <summary>
+    /// Periodic state of a file the server is streaming: where it is, and whether it is waiting for more of
+    /// the upload.
+    /// </summary>
+    Task serverFileShareState(double positionSec, bool buffering);
 
     // ── RTMP file-share events ─────────────────────────────────────────────────
 

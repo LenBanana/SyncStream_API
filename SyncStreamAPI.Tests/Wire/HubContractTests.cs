@@ -92,9 +92,7 @@ public class HubContractTests
         "ServerHealthDto",
         "SfuNewProducerNotification",
         "SfuRecordingInfo",
-        "VoipOffer",
         "VoipParticipantDto",
-        "WebRtcClientOffer",
 
         // Elevated-only storage report. It does expose real server paths, which is the point of the view.
         "FileStorageInfo"

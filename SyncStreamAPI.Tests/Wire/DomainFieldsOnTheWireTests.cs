@@ -64,12 +64,10 @@ public class DomainFieldsOnTheWireTests
         ["ServerHealthDto"] = new[] { "CpuUsage", "DiskUsage", "MemoryUsage", "UpTime" },
         ["SfuNewProducerNotification"] = new[] { "Kind", "PeerId", "ProducerId", "RoomId" },
         ["SfuRecordingInfo"] = new[] { "Filename", "RoomId", "StartedAtUnixMs" },
-        ["VoipOffer"] = new[] { "ParticipantName", "Sdp", "Type" },
         ["VoipParticipantDto"] = new[]
         {
-            "IsMuted", "IsScreenMuted", "IsSpeaking", "IsVideoMuted", "ParticipantId", "ParticipantName"
-        },
-        ["WebRtcClientOffer"] = new[] { "RoomId", "ViewerId", "sdp", "type" }
+            "IsMuted", "IsScreenMuted", "IsVideoMuted", "ParticipantId", "ParticipantName"
+        }
     };
 
     private static IEnumerable<Type> ReachableTypes(Type root)

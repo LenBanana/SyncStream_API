@@ -59,12 +59,14 @@ public partial class ServerHub
             return;
         }
 
-        if (room.IsFileSharingActive || room.IsRtmpFileShareActive)
+        if (room.IsFileSharingActive || room.IsRtmpFileShareActive || room.IsBroadcastOnStage)
         {
             await Clients.Caller.dialog(new Dialog(AlertType.Warning)
             {
                 Header   = "File Share Unavailable",
-                Question = "Someone is already sharing a file in this room. Please wait until they finish.",
+                Question = room.IsBroadcastOnStage
+                    ? "Someone is broadcasting to this room. Please wait until they finish."
+                    : "Someone is already sharing a file in this room. Please wait until they finish.",
                 Answer1  = "Ok"
             });
             return;
