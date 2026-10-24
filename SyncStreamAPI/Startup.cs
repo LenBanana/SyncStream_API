@@ -173,9 +173,11 @@ public class Startup
         app.UseEndpoints(endpoints =>
         {
             endpoints.MapControllers();
-            // A dropped socket that comes straight back keeps its connection id, so a brief network blip does not
-            // end the person's broadcast, call or seat the way a new connection does.
-            endpoints.MapHub<ServerHub>("/server", options => options.AllowStatefulReconnects = true);
+            // No stateful reconnect. Its replay buffer stops writing once 100 KB are unacknowledged and waits for
+            // the client's ack, but a client's messages are read one hub call at a time: with a second call queued
+            // behind one that writes more than that, the ack is never read, and after five seconds the connection
+            // is aborted. Clients pick up again on a new connection instead.
+            endpoints.MapHub<ServerHub>("/server");
         });
     }
 }

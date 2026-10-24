@@ -1,6 +1,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const signalR = require('@microsoft/signalr');
 const L = require('./lib');
 
 const PASSWORD = 'E2e-Long-Password-2026';
@@ -328,21 +329,28 @@ async function reconnects(users) {
   await alice.page.evaluate(startCanvasBroadcast, 'room');
   await L.eventually(bob, () => !!window.__e2e.webrtc().remoteStream.value, 10000);
 
-  // A network blip: every socket is cut, and they come straight back.
+  // A network blip: every socket is cut, and the clients come back on new connections. The server has ended
+  // everything the old ones had; the broadcaster starts it again, and the viewers find it again.
   const aliceIdBefore = (await bob.page.evaluate(() => window.__e2e.members())).find(m => m.name === 'alice').id;
   await fetch('http://127.0.0.1:5002/cut', {method: 'POST'});
-  await L.sleep(5000);
-  const aliceIdAfter = (await bob.page.evaluate(() => window.__e2e.members())).find(m => m.name === 'alice')?.id;
-  L.check('a blip keeps the connection (stateful reconnect)', aliceIdAfter === aliceIdBefore, {before: aliceIdBefore, after: aliceIdAfter});
-  const afterBlip = await bob.page.evaluate(stageReception);
-  L.check('the broadcast plays on through the blip', afterBlip.frames >= 20 && afterBlip.playerType === 9, afterBlip);
+  const aliceIdAfterBlip = await L.waitFor(bob, old => {
+    const id = window.__e2e.members().find(m => m.name === 'alice')?.id;
+    return id && id !== old ? id : null;
+  }, 30000, 'alice back after the blip', aliceIdBefore);
+  const backAfterBlip = await L.eventually(bob, () => !!window.__e2e.webrtc().remoteStream.value && window.__e2e.playerType() === 9, 20000);
+  L.check('after a blip the broadcast comes back by itself', backAfterBlip === true);
+  if (backAfterBlip) {
+    await L.sleep(2000);
+    const afterBlip = await bob.page.evaluate(stageReception);
+    L.check('and plays', afterBlip.frames >= 20, afterBlip);
+  }
 
   // A real reconnect: a brand-new connection. The server ends everything the old one had; the client starts it again.
   await alice.page.evaluate(() => window.__e2e.comp('app-rooms').signalRService.restartConnection());
   const newId = await L.waitFor(bob, old => {
     const id = window.__e2e.members().find(m => m.name === 'alice')?.id;
     return id && id !== old ? id : null;
-  }, 20000, 'alice reconnects with a new connection', aliceIdBefore);
+  }, 20000, 'alice reconnects with a new connection', aliceIdAfterBlip);
   L.check('alice comes back on a new connection', !!newId);
   const resumed = await L.eventually(bob, () => !!window.__e2e.webrtc().remoteStream.value && window.__e2e.playerType() === 9, 20000);
   L.check("alice's broadcast resumes by itself after the new connection", resumed === true);
@@ -694,6 +702,36 @@ async function obsLive({alice, bob, guest}) {
   await watcher.stop();
 }
 
+async function largeReplies() {
+  // A call whose writes to its caller pass 100 KB, with the caller's next calls queued behind it. Under stateful
+  // reconnect the server stopped writing until the caller acknowledged, but read nothing from the caller until the
+  // call had finished, so the acknowledgement was never seen and the connection was dropped. A long playlist, which
+  // the room list carries to everyone, was enough to disconnect whoever joined.
+  const admin = await L.hubClient(await L.login('carol', PASSWORD));
+  await admin.invoke('AddRoom', {uniqueId: 'bulk', name: 'Bulk', password: null, deletable: true});
+  await admin.invoke('AddUser', 'carol', 'bulk', null);
+  for (let i = 0; i < 14; i++) {
+    await admin.invoke('AddVideo', {title: `Bulk ${i} ${'x'.repeat(9000)}`, url: `https://example.invalid/bulk/${i}.mp4`}, 'bulk');
+  }
+
+  // Asks for stateful reconnect the way the app did, so turning it back on in the server fails here.
+  const joiner = new signalR.HubConnectionBuilder().withUrl(`${L.API}/server`).withStatefulReconnect()
+    .configureLogging(signalR.LogLevel.None).build();
+  let playlistChars = 0;
+  let closed = null;
+  joiner.on('playlistupdate', playlist => playlistChars = JSON.stringify(playlist).length);
+  joiner.onclose(err => closed = err?.message ?? 'closed');
+  await joiner.start();
+  const calls = await Promise.allSettled([
+    joiner.invoke('AddUser', 'Joiner', 'bulk', null), joiner.invoke('GetRooms'), joiner.invoke('GetRooms')]);
+  await L.sleep(8000);
+  const outcome = {playlistChars, calls: calls.map(call => call.status), closed, state: joiner.state};
+  L.check('a reply over 100 KB with calls queued behind it keeps the connection',
+    playlistChars > 100000 && calls.every(call => call.status === 'fulfilled') && closed === null && joiner.state === 'Connected', outcome);
+  await joiner.stop();
+  await admin.stop();
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 (async () => {
@@ -729,6 +767,7 @@ async function obsLive({alice, bob, guest}) {
   if (wants('rtmpshare')) await L.scenario('RTMP file share through the UI', () => rtmpShare(users));
   if (wants('rtmpupload')) await L.scenario('RTMP file share outrunning its upload', () => rtmpShareOutrunsUpload(users));
   if (wants('obs')) await L.scenario('OBS live streams', () => obsLive(users));
+  if (wants('large')) await L.scenario('large replies', () => largeReplies());
 
   const failed = L.results.filter(r => !r.ok).length;
   console.log(`\n${L.results.length - failed}/${L.results.length} checks passed`);
