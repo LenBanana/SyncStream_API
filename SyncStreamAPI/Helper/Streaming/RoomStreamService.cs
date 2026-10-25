@@ -257,6 +257,95 @@ public class RoomStreamService : IRoomStreamService
         }
     }
 
+    public async Task<RoomUploadSessionResult> UploadRoomSidecarAsync(HttpRequest request, int? userId, string uploadId,
+        string name)
+    {
+        if (!RoomUploadIds.IsWellFormed(uploadId))
+            return new RoomUploadSessionResult { StatusCode = StatusCodes.Status404NotFound };
+        if (!SubtitleSidecars.IsAllowedName(name))
+        {
+            return new RoomUploadSessionResult
+            {
+                StatusCode = StatusCodes.Status400BadRequest,
+                ErrorMessage = "Only subtitle-<n>.ass/.ssa/.srt and font-<n>.ttf/.otf/.ttc can be sent with an upload"
+            };
+        }
+
+        var uploadLock = GetUploadLock(uploadId);
+        await uploadLock.WaitAsync(request.HttpContext.RequestAborted);
+        string? partial = null;
+        try
+        {
+            var dbUser = await GetUserByIdAsync(userId);
+            if (dbUser == null)
+                return new RoomUploadSessionResult { StatusCode = StatusCodes.Status401Unauthorized };
+
+            var session = await LoadSessionAsync(uploadId);
+            if (session == null || session.UserId != dbUser.ID)
+                return new RoomUploadSessionResult { StatusCode = StatusCodes.Status404NotFound };
+
+            // Only a share reads its subtitles from here; an upload for the playlist is played by the browsers.
+            if (!session.SkipPlaylist)
+            {
+                return new RoomUploadSessionResult
+                {
+                    StatusCode = StatusCodes.Status409Conflict,
+                    ErrorMessage = "Subtitles and fonts can only be sent with a file share's upload"
+                };
+            }
+
+            var directory = Directory.CreateDirectory(RoomUploadPaths.SidecarDirectoryFor(uploadId));
+            var existing = directory.GetFiles().Where(file => file.Name != name && SubtitleSidecars.IsAllowedName(file.Name)).ToList();
+            if (existing.Count >= SubtitleSidecars.MaxFiles)
+            {
+                return new RoomUploadSessionResult
+                {
+                    StatusCode = StatusCodes.Status413PayloadTooLarge,
+                    ErrorMessage = $"At most {SubtitleSidecars.MaxFiles} subtitle and font files can be sent"
+                };
+            }
+
+            var allowed = Math.Min(SubtitleSidecars.MaxFileBytes,
+                SubtitleSidecars.MaxTotalBytes - existing.Sum(file => file.Length));
+            var target = Path.Combine(directory.FullName, name);
+            partial = target + ".partial";
+            long written = 0;
+            await using (var output = new FileStream(partial, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true))
+            {
+                var buffer = new byte[65536];
+                int read;
+                while ((read = await request.Body.ReadAsync(buffer, request.HttpContext.RequestAborted)) > 0)
+                {
+                    written += read;
+                    if (written > allowed) break;
+                    await output.WriteAsync(buffer.AsMemory(0, read), request.HttpContext.RequestAborted);
+                }
+            }
+
+            if (written > allowed || written == 0)
+            {
+                return new RoomUploadSessionResult
+                {
+                    StatusCode = written == 0 ? StatusCodes.Status400BadRequest : StatusCodes.Status413PayloadTooLarge,
+                    ErrorMessage = written == 0 ? "The file is empty" : "Subtitles and fonts are too large"
+                };
+            }
+
+            File.Move(partial, target, overwrite: true);
+            partial = null;
+            return new RoomUploadSessionResult { StatusCode = StatusCodes.Status200OK, UploadId = uploadId };
+        }
+        catch (OperationCanceledException)
+        {
+            return new RoomUploadSessionResult { StatusCode = 499, ErrorMessage = "Client closed the connection" };
+        }
+        finally
+        {
+            if (partial != null && File.Exists(partial)) File.Delete(partial);
+            uploadLock.Release();
+        }
+    }
+
     public async Task<RoomUploadSessionResult> GetRoomUploadStatusAsync(int? userId, string uploadId)
     {
         // Refused here rather than reaching the path builder, so a malformed id answers with a status

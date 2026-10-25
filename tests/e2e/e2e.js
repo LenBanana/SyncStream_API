@@ -543,6 +543,21 @@ async function rtmpShare(users) {
   const elsewhere = await L.flvProbe(url.replace(/stream=[^&]+/, 'stream=alice'));
   L.check('its ticket does not play another stream', !elsewhere.flv, elsewhere);
 
+  // Burned in during the first run, which started from the first part of the upload. ffmpeg's subtitles filter
+  // reads its lines once, at the start, so pointed at the upload it only ever had that part's; the browser now
+  // reads the track out of the file and sends it ahead. The subtitle starts at 0:30, and a viewer's picture
+  // trails the server's position by a few seconds.
+  const pastSubtitleStart = await L.eventually(bob,
+    () => window.__e2e.comp('app-rtmp-file-share-player').position >= 36, 45000);
+  const firstRun = await bob.page.evaluate(liveReception, 'app-rtmp-file-share-player');
+  L.check('text subtitles are burned in from the first run, started mid-upload',
+    pastSubtitleStart === true && firstRun.lit > 300, firstRun);
+  // Locally the rest of the upload lands within a second, so the picture alone cannot tell which file ffmpeg read.
+  const runs = require('child_process').execFileSync('docker', ['logs', 'dtest-api-1'], {encoding: 'utf8'})
+    .split('\n').filter(line => line.includes('ffmpeg started')).map(line => line.match(/subtitles=(\w+)/)?.[1]);
+  L.check('from the subtitles the browser sent, not from the upload',
+    runs.length > 0 && runs.every(source => source === 'sidecar'), runs);
+
   // Pause and resume, for everyone.
   await alice.page.evaluate(() => window.__e2e.comp('app-rtmp-file-share-player').togglePlayPause());
   const paused = await L.eventually(bob, () => {

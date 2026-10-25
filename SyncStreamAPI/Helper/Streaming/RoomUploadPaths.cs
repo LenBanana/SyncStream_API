@@ -47,4 +47,10 @@ public static class RoomUploadPaths
     {
         return Path.Combine(DirectoryFor(uploadId), "session.json");
     }
+
+    /// <summary>Files sent alongside a shared upload: its text subtitles and their fonts.</summary>
+    public static string SidecarDirectoryFor(string uploadId)
+    {
+        return Path.Combine(DirectoryFor(uploadId), "sidecar");
+    }
 }

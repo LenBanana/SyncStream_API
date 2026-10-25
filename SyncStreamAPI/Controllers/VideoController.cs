@@ -18,6 +18,7 @@ using SyncStreamAPI.DataContext;
 using SyncStreamAPI.DTOModel;
 using SyncStreamAPI.Enums;
 using SyncStreamAPI.Helper;
+using SyncStreamAPI.Helper.Streaming;
 using SyncStreamAPI.Hubs;
 using SyncStreamAPI.Interfaces;
 using SyncStreamAPI.Models;
@@ -272,6 +273,15 @@ public class VideoController : Controller
     public async Task<IActionResult> uploadRoomChunk(string uploadId, long startByte)
     {
         var result = await _roomStreamService.UploadRoomChunkAsync(Request, this.CallerUserId(), uploadId, startByte);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    [RequestSizeLimit(SubtitleSidecars.MaxFileBytes)]
+    [HttpPut("roomUpload/sidecar")]
+    [Authorize(Policy = AuthorizationPolicies.Administrator)]
+    public async Task<IActionResult> uploadRoomSidecar(string uploadId, string name)
+    {
+        var result = await _roomStreamService.UploadRoomSidecarAsync(Request, this.CallerUserId(), uploadId, name);
         return StatusCode(result.StatusCode, result);
     }
 

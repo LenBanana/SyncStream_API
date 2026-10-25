@@ -14,6 +14,9 @@ public interface IRoomStreamService
 
     Task<RoomUploadSessionResult> GetRoomUploadStatusAsync(int? userId, string uploadId);
 
+    /// <summary>Stores a text subtitle or font the sharer's browser read out of a shared file.</summary>
+    Task<RoomUploadSessionResult> UploadRoomSidecarAsync(HttpRequest request, int? userId, string uploadId, string name);
+
     Task<RoomUploadSessionResult> CompleteRoomUploadAsync(int? userId, string uploadId, string publicBaseUrl);
 
     Task<RoomUploadSessionResult> CancelRoomUploadAsync(int? userId, string uploadId);

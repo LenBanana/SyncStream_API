@@ -61,14 +61,12 @@ public class RtmpFileShareSession
     public required string UploadId { get; init; }
     public required long TotalBytes { get; init; }
     public bool UploadComplete { get; set; }
-    public double? DurationSec { get; init; }
+    public double? DurationSec { get; set; }
 
     /// <summary>ffmpeg map specifier for the selected audio track.</summary>
     public string AudioMapSpecifier { get; set; } = "0:a:0?";
     /// <summary>Human-readable description of the selected audio track for logs.</summary>
     public string AudioSelectionLabel { get; set; } = "first audio fallback";
-    /// <summary>Optional ffmpeg video filter fragment that burns a subtitle track into the video.</summary>
-    public string? SubtitleFilter { get; set; }
     /// <summary>Kind-relative subtitle stream ordinal selected for burning, e.g. 0 for 0:s:0.</summary>
     public int? SubtitleOrdinal { get; set; }
     /// <summary>Burn strategy for the selected subtitle stream: text uses libass, bitmap uses overlay.</summary>

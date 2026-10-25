@@ -139,7 +139,7 @@ public partial class ServerHub
         if (upload.StatusCode != StatusCodes.Status200OK || upload.NextOffset != upload.TotalSize)
             throw new HubException("The upload is not complete yet.");
 
-        _rtmpFileShareManager.MarkUploadComplete(roomId);
+        await _rtmpFileShareManager.MarkUploadCompleteAsync(roomId);
         await Clients.Group(roomId).rtmpFileShareMetadata(session.DurationSec, true);
     }
 

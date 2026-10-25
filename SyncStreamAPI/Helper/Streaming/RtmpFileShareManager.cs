@@ -232,17 +232,23 @@ public class RtmpFileShareManager : IDisposable
         return true;
     }
 
-    /// <summary>Records that the whole file is there; a share waiting for it plays on straight away.</summary>
-    public void MarkUploadComplete(string roomId)
+    /// <summary>
+    ///     Records that the whole file is there; a share waiting for it plays on straight away. A duration the
+    ///     first part of the file did not give away is probed again now.
+    /// </summary>
+    public async Task MarkUploadCompleteAsync(string roomId)
     {
         var session = Get(roomId);
         if (session == null) return;
+
+        var duration = session.DurationSec ?? await ProbeFileDurationAsync(session.FilePath);
 
         bool resume;
         lock (session.Gate)
         {
             if (session.UploadComplete) return;
             session.UploadComplete = true;
+            session.DurationSec ??= duration;
             resume = session.State == RtmpFileShareState.Buffering;
             if (resume)
             {
@@ -376,7 +382,7 @@ public class RtmpFileShareManager : IDisposable
                 $"{GetLogPrefix(session.RoomId)} ffmpeg started positionSec={session.PositionSec:F3} widthCap={_maxVideoWidth} " +
                 $"preset={_videoPreset} video={_videoBitrateKbps}/{_maxVideoBitrateKbps}k audio={_audioBitrateKbps}k " +
                 $"audioTrack=\"{session.AudioSelectionLabel}\" subtitleTrack=\"{session.SubtitleSelectionLabel ?? "none"}\" " +
-                $"subtitleBurn={session.SubtitleBurnMethod ?? "none"}");
+                $"subtitleBurn={session.SubtitleBurnMethod ?? "none"} subtitles={SubtitleSource(session)}");
         }
     }
 
@@ -397,6 +403,15 @@ public class RtmpFileShareManager : IDisposable
                       ?? addresses.First();
         url.Host = address.ToString();
         return url.Uri.ToString().TrimEnd('/');
+    }
+
+    /** Where burned-in text subtitles come from, for the log: the file the browser sent, or the media file itself. */
+    private static string SubtitleSource(RtmpFileShareSession session)
+    {
+        if (!session.SubtitleOrdinal.HasValue ||
+            !string.Equals(session.SubtitleBurnMethod, SubtitleBurnMethodText, StringComparison.OrdinalIgnoreCase))
+            return "none";
+        return SubtitleSidecars.SubtitleFor(session.UploadId, session.SubtitleOrdinal.Value) != null ? "sidecar" : "media";
     }
 
     private string BuildArguments(RtmpFileShareSession session, string rtmpBaseUrl)
@@ -654,9 +669,13 @@ public class RtmpFileShareManager : IDisposable
         var filters = new List<string>();
 
         if (session.SubtitleOrdinal.HasValue &&
-            string.Equals(session.SubtitleBurnMethod, SubtitleBurnMethodText, StringComparison.OrdinalIgnoreCase) &&
-            !string.IsNullOrWhiteSpace(session.SubtitleFilter))
+            string.Equals(session.SubtitleBurnMethod, SubtitleBurnMethodText, StringComparison.OrdinalIgnoreCase))
         {
+            var sidecar = SubtitleSidecars.SubtitleFor(session.UploadId, session.SubtitleOrdinal.Value);
+            var subtitleFilter = sidecar != null
+                ? SubtitleSidecars.FilterForSidecar(sidecar, RoomUploadPaths.SidecarDirectoryFor(session.UploadId))
+                : SubtitleSidecars.FilterForMedia(session.FilePath, session.SubtitleOrdinal.Value);
+
             // Seeking the input starts the frames' timestamps at zero, while the subtitles filter reads its
             // events from the file and places them by those timestamps. Without moving the frames back to where
             // they are in the file for the filter, a resumed or seeked share showed the subtitles of its first
@@ -665,7 +684,7 @@ public class RtmpFileShareManager : IDisposable
                 ? session.PositionSec.ToString("F3", CultureInfo.InvariantCulture)
                 : null;
             if (startedAt != null) filters.Add($"setpts=PTS+{startedAt}/TB");
-            filters.Add(session.SubtitleFilter);
+            filters.Add(subtitleFilter);
             if (startedAt != null) filters.Add("setpts=PTS-STARTPTS");
         }
 
@@ -701,7 +720,6 @@ public class RtmpFileShareManager : IDisposable
     {
         session.AudioMapSpecifier = playbackSelection.AudioMapSpecifier;
         session.AudioSelectionLabel = playbackSelection.AudioSelectionLabel;
-        session.SubtitleFilter = playbackSelection.SubtitleFilter;
         session.SubtitleOrdinal = playbackSelection.SubtitleOrdinal;
         session.SubtitleBurnMethod = playbackSelection.SubtitleBurnMethod;
         session.SubtitleSelectionLabel = playbackSelection.SubtitleSelectionLabel;
@@ -801,9 +819,6 @@ public class RtmpFileShareManager : IDisposable
                 HasVideo = parsedStreams.Any(s => string.Equals(s.CodecType, "video", StringComparison.OrdinalIgnoreCase)),
                 AudioMapSpecifier = BuildAudioMapSpecifier(audio),
                 AudioSelectionLabel = audio != null ? DescribeStream(audio) : "first audio fallback",
-                SubtitleFilter = string.Equals(subtitleBurnMethod, SubtitleBurnMethodText, StringComparison.OrdinalIgnoreCase)
-                    ? BuildSubtitleFilter(filePath, subtitle!.SubtitleOrdinal)
-                    : null,
                 SubtitleOrdinal = subtitle?.SubtitleOrdinal,
                 SubtitleBurnMethod = subtitleBurnMethod,
                 SubtitleSelectionLabel = subtitle != null ? DescribeStream(subtitle) : null,
@@ -853,9 +868,6 @@ public class RtmpFileShareManager : IDisposable
         {
             AudioMapSpecifier = audioMapSpecifier,
             AudioSelectionLabel = audioSelectionLabel,
-            SubtitleFilter = string.Equals(burnMethod, SubtitleBurnMethodText, StringComparison.OrdinalIgnoreCase)
-                ? BuildSubtitleFilter(filePath, subtitleOrdinal)
-                : null,
             SubtitleOrdinal = subtitleOrdinal,
             SubtitleBurnMethod = burnMethod,
             SubtitleSelectionLabel = $"client-selected subtitle ordinal={subtitleOrdinal} codec={playbackPreferences.SelectedSubtitleCodecName ?? "unknown"} ({reason})",
@@ -1159,18 +1171,6 @@ public class RtmpFileShareManager : IDisposable
         return $"stream={stream.StreamIndex} lang={stream.Language} codec={stream.CodecName}{titleSegment}{defaultSegment}{forcedSegment}";
     }
 
-    private static string BuildSubtitleFilter(string filePath, int subtitleOrdinal)
-        => $"subtitles='{EscapeSubtitleFilterPath(filePath)}':si={subtitleOrdinal}";
-
-    private static string EscapeSubtitleFilterPath(string path)
-        => path
-            .Replace("\\", "\\\\")
-            .Replace(":", "\\:")
-            .Replace("'", "\\'")
-            .Replace("[", "\\[")
-            .Replace("]", "\\]")
-            .Replace(",", "\\,");
-
     private static string? ReadString(JsonNode? node, string propertyName)
         => ReadJsonValue(node?[propertyName]);
 
@@ -1254,7 +1254,6 @@ public class RtmpFileShareManager : IDisposable
         public bool HasVideo { get; init; } = true;
         public string AudioMapSpecifier { get; init; } = "0:a:0?";
         public string AudioSelectionLabel { get; init; } = "first audio fallback";
-        public string? SubtitleFilter { get; init; }
         public int? SubtitleOrdinal { get; init; }
         public string? SubtitleBurnMethod { get; init; }
         public string? SubtitleSelectionLabel { get; init; }
